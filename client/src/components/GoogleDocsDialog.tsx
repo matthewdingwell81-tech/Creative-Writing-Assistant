@@ -1,15 +1,8 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { FileText, Download, Upload, Loader2, ExternalLink, Check } from 'lucide-react';
-
-interface GoogleDocsFile {
-  id: string;
-  name: string;
-  modifiedTime: string;
-}
+import { Input } from '@/components/ui/input';
+import { Download, Upload, Loader2, ExternalLink, Check, Link } from 'lucide-react';
 
 interface GoogleDocsDialogProps {
   open: boolean;
@@ -20,39 +13,55 @@ interface GoogleDocsDialogProps {
   onImported: (doc: any) => void;
 }
 
+function extractDocId(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  const urlMatch = trimmed.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
+  if (urlMatch) return urlMatch[1];
+
+  if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed)) return trimmed;
+
+  return null;
+}
+
 export default function GoogleDocsDialog({
   open, onOpenChange, mode, activeDocId, activeDocTitle, onImported
 }: GoogleDocsDialogProps) {
-  const [importing, setImporting] = useState<string | null>(null);
+  const [docInput, setDocInput] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportResult, setExportResult] = useState<{ url: string } | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
-  const { data, isLoading, error } = useQuery<{ files: GoogleDocsFile[] }>({
-    queryKey: ['/api/gdocs/list'],
-    queryFn: async () => {
-      const res = await fetch('/api/gdocs/list');
-      if (!res.ok) throw new Error('Failed to load Google Docs');
-      return res.json();
-    },
-    enabled: open && mode === 'import',
-  });
+  const handleImport = async () => {
+    const docId = extractDocId(docInput);
+    if (!docId) {
+      setImportError('Please enter a valid Google Docs URL or document ID.');
+      return;
+    }
 
-  const handleImport = async (fileId: string) => {
-    setImporting(fileId);
+    setImporting(true);
+    setImportError(null);
     try {
       const res = await fetch('/api/gdocs/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentId: fileId }),
+        body: JSON.stringify({ documentId: docId }),
       });
-      if (!res.ok) throw new Error('Import failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Import failed');
+      }
       const doc = await res.json();
       onImported(doc);
+      setDocInput('');
       onOpenChange(false);
-    } catch (e) {
-      console.error('Import failed:', e);
+    } catch (e: any) {
+      setImportError(e.message || 'Import failed. Please check the URL and try again.');
     } finally {
-      setImporting(null);
+      setImporting(false);
     }
   };
 
@@ -60,24 +69,38 @@ export default function GoogleDocsDialog({
     if (!activeDocId) return;
     setExporting(true);
     setExportResult(null);
+    setExportError(null);
     try {
       const res = await fetch('/api/gdocs/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ documentId: activeDocId, googleDocTitle: activeDocTitle }),
       });
-      if (!res.ok) throw new Error('Export failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Export failed');
+      }
       const result = await res.json();
       setExportResult(result);
-    } catch (e) {
-      console.error('Export failed:', e);
+    } catch (e: any) {
+      setExportError(e.message || 'Export failed. Please try again.');
     } finally {
       setExporting(false);
     }
   };
 
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      setDocInput('');
+      setImportError(null);
+      setExportResult(null);
+      setExportError(null);
+    }
+    onOpenChange(newOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -89,58 +112,44 @@ export default function GoogleDocsDialog({
           </DialogTitle>
           <DialogDescription>
             {mode === 'import'
-              ? 'Select a Google Doc to import into Lumina.'
+              ? 'Paste a Google Docs URL or document ID to import.'
               : `Export "${activeDocTitle}" as a new Google Doc.`}
           </DialogDescription>
         </DialogHeader>
 
         {mode === 'import' ? (
-          <div>
-            {isLoading && (
-              <div className="flex items-center justify-center py-8 text-muted-foreground">
-                <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                Loading your Google Docs...
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Link className="w-4 h-4 text-muted-foreground shrink-0" />
+                <Input
+                  placeholder="https://docs.google.com/document/d/... or document ID"
+                  value={docInput}
+                  onChange={(e) => { setDocInput(e.target.value); setImportError(null); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleImport(); }}
+                  disabled={importing}
+                  data-testid="input-gdoc-url"
+                />
               </div>
-            )}
-
-            {error && (
-              <div className="text-center py-6 text-sm text-destructive">
-                Failed to load Google Docs. Please check your connection.
-              </div>
-            )}
-
-            {data && data.files.length === 0 && (
-              <div className="text-center py-6 text-sm text-muted-foreground">
-                No Google Docs found in your account.
-              </div>
-            )}
-
-            {data && data.files.length > 0 && (
-              <ScrollArea className="max-h-[350px]">
-                <div className="space-y-1">
-                  {data.files.map((file) => (
-                    <button
-                      key={file.id}
-                      onClick={() => handleImport(file.id)}
-                      disabled={importing !== null}
-                      className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors text-left disabled:opacity-50"
-                      data-testid={`gdoc-import-${file.id}`}
-                    >
-                      <FileText className="w-4 h-4 text-blue-500 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{file.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(file.modifiedTime).toLocaleDateString()}
-                        </p>
-                      </div>
-                      {importing === file.id && (
-                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
+              {importError && (
+                <p className="text-sm text-destructive" data-testid="text-import-error">{importError}</p>
+              )}
+            </div>
+            <Button
+              onClick={handleImport}
+              disabled={importing || !docInput.trim()}
+              className="w-full bg-primary text-primary-foreground"
+              data-testid="btn-confirm-import-gdoc"
+            >
+              {importing ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importing...</>
+              ) : (
+                <><Download className="w-4 h-4 mr-2" /> Import Document</>
+              )}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              Make sure the document is accessible to your Google account.
+            </p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -149,6 +158,9 @@ export default function GoogleDocsDialog({
                 <p className="text-sm text-muted-foreground mb-4">
                   This will create a new Google Doc with your current document content.
                 </p>
+                {exportError && (
+                  <p className="text-sm text-destructive mb-3" data-testid="text-export-error">{exportError}</p>
+                )}
                 <Button
                   onClick={handleExport}
                   disabled={exporting || !activeDocId}

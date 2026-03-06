@@ -5,7 +5,6 @@ import { insertDocumentSchema } from "@shared/schema";
 import OpenAI from "openai";
 import {
   getUncachableGoogleDocsClient,
-  getUncachableGoogleDriveClient,
   googleDocsToHtml,
   htmlToGoogleDocsRequests,
 } from "./googleDocs";
@@ -149,22 +148,6 @@ Return 3-6 suggestions maximum. Be specific and actionable. Return ONLY valid JS
   });
 
   // === Google Docs Integration ===
-
-  app.get("/api/gdocs/list", async (_req, res) => {
-    try {
-      const drive = await getUncachableGoogleDriveClient();
-      const response = await drive.files.list({
-        q: "mimeType='application/vnd.google-apps.document' and trashed=false",
-        fields: "files(id, name, modifiedTime)",
-        orderBy: "modifiedTime desc",
-        pageSize: 30,
-      });
-      res.json({ files: response.data.files || [] });
-    } catch (error: any) {
-      console.error("Google Drive list error:", error?.message);
-      res.status(500).json({ error: "Failed to list Google Docs. Make sure Google Docs is connected." });
-    }
-  });
 
   app.post("/api/gdocs/import", async (req, res) => {
     const { documentId } = req.body;

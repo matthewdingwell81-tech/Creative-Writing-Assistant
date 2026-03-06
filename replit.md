@@ -29,8 +29,7 @@ A real-time AI writing assistant tailored for fiction writers. Uses OpenAI (via 
 - `GET/PATCH/DELETE /api/documents/:id` - Document CRUD
 - `POST /api/suggestions` - AI-powered writing suggestions
 - `POST /api/ideas` - Streaming AI idea generation
-- `GET /api/gdocs/list` - List user's Google Docs
-- `POST /api/gdocs/import` - Import a Google Doc into Lumina
+- `POST /api/gdocs/import` - Import a Google Doc by URL/ID into Lumina
 - `POST /api/gdocs/export` - Export a Lumina document to Google Docs
 
 ## File Structure

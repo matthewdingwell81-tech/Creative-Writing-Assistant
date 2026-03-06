@@ -50,18 +50,6 @@ export async function getUncachableGoogleDocsClient() {
   return google.docs({ version: 'v1', auth: oauth2Client });
 }
 
-// Also get a Drive client for listing files
-export async function getUncachableGoogleDriveClient() {
-  const accessToken = await getAccessToken();
-
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({
-    access_token: accessToken
-  });
-
-  return google.drive({ version: 'v3', auth: oauth2Client });
-}
-
 // Convert Google Docs document body to simple HTML
 export function googleDocsToHtml(document: any): string {
   const body = document.body;
