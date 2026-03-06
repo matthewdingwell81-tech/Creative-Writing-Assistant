@@ -74,7 +74,7 @@ export default function SuggestionsSidebar({
       <div className="p-4 border-b border-border/50 bg-card/50">
         <h2 className="font-medium flex items-center gap-2 text-foreground">
           <Sparkles className="w-4 h-4 text-primary" />
-          AI Co-Pilot
+          Creative Assistant
         </h2>
         <p className="text-xs text-muted-foreground mt-1">
           {loading ? (
@@ -142,10 +142,10 @@ export default function SuggestionsSidebar({
                             data-testid={`btn-apply-suggestion-${i}-${j}`}
                           >
                             <div className="flex flex-col gap-1 min-w-0 flex-1">
-                              <span className="line-through text-muted-foreground truncate">{sug.original}</span>
-                              <span className="text-foreground font-medium flex items-center gap-1">
-                                <Sparkles className="w-3 h-3 text-primary/70 shrink-0" />
-                                <span className="truncate">{alt}</span>
+                              <span className="line-through text-muted-foreground break-words">{sug.original}</span>
+                              <span className="text-foreground font-medium flex items-start gap-1">
+                                <Sparkles className="w-3 h-3 text-primary/70 shrink-0 mt-0.5" />
+                                <span className="break-words">{alt}</span>
                               </span>
                             </div>
                             {isApplied ? (
