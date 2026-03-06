@@ -7,6 +7,16 @@ import { Button } from '@/components/ui/button';
 export default function Home() {
   const [content, setContent] = useState('');
   
+  // Example function to handle accepting a suggestion
+  // In a real app, this would use a more robust way to target specific text nodes
+  const applySuggestion = (originalText: string, newText: string) => {
+    if (!content) return;
+    
+    // Simple string replacement for the prototype
+    const updatedContent = content.replace(originalText, newText);
+    setContent(updatedContent);
+  };
+  
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Header */}
@@ -42,7 +52,7 @@ export default function Home() {
 
         {/* AI Suggestions Sidebar */}
         <aside className="w-[380px] border-l border-border/50 bg-card/30 backdrop-blur flex flex-col">
-           <SuggestionsSidebar />
+           <SuggestionsSidebar onApplySuggestion={applySuggestion} />
         </aside>
       </main>
     </div>

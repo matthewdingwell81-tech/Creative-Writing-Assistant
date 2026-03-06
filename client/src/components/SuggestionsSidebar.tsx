@@ -1,11 +1,24 @@
-import React from 'react';
-import { Sparkles, BookOpen, AlertCircle, TrendingUp, CheckCircle2, ChevronRight, MessageSquareDashed } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sparkles, BookOpen, AlertCircle, TrendingUp, CheckCircle2, ChevronRight, MessageSquareDashed, Check } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-export default function SuggestionsSidebar() {
+interface SuggestionsSidebarProps {
+  onApplySuggestion?: (original: string, replacement: string) => void;
+}
+
+export default function SuggestionsSidebar({ onApplySuggestion }: SuggestionsSidebarProps) {
+  const [appliedSuggestions, setAppliedSuggestions] = useState<string[]>([]);
+
+  const handleApply = (id: string, original: string, replacement: string) => {
+    if (onApplySuggestion) {
+      onApplySuggestion(original, replacement);
+      setAppliedSuggestions(prev => [...prev, id]);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full h-[calc(100vh-3.5rem)]">
       <div className="p-4 border-b border-border/50 bg-card/50">
@@ -28,7 +41,7 @@ export default function SuggestionsSidebar() {
         <ScrollArea className="flex-1">
           <TabsContent value="suggestions" className="p-4 space-y-4 m-0">
             {/* Grammar Suggestion */}
-            <Card className="p-3 bg-card border-l-2 border-l-destructive/60 shadow-sm border-t-0 border-r-0 border-b-0 rounded-r-lg rounded-l-sm">
+            <Card className="p-3 bg-card border-l-2 border-l-destructive/60 shadow-sm border-t-0 border-r-0 border-b-0 rounded-r-lg rounded-l-sm relative overflow-hidden">
               <div className="flex items-start gap-2 mb-2">
                 <AlertCircle className="w-4 h-4 text-destructive/80 mt-0.5 shrink-0" />
                 <div>
@@ -39,14 +52,43 @@ export default function SuggestionsSidebar() {
                 </div>
               </div>
               <div className="pl-6 space-y-2 mt-3">
-                <div className="text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 cursor-pointer transition-colors">
-                  <span className="line-through text-muted-foreground mr-2">exactly the same, yet entirely different</span>
-                  <span className="text-foreground font-medium">familiar, yet subtly altered by time</span>
-                </div>
-                <div className="text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 cursor-pointer transition-colors">
-                  <span className="line-through text-muted-foreground mr-2">exactly the same, yet entirely different</span>
-                  <span className="text-foreground font-medium">frozen in time, though she had changed</span>
-                </div>
+                <button 
+                  onClick={() => handleApply('sug1', 'exactly the same, yet entirely different', 'familiar, yet subtly altered by time')}
+                  disabled={appliedSuggestions.includes('sug1')}
+                  className="w-full text-left text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="flex flex-col gap-1">
+                    <span className="line-through text-muted-foreground">exactly the same, yet entirely different</span>
+                    <span className="text-foreground font-medium flex items-center gap-1">
+                       <Sparkles className="w-3 h-3 text-primary/70" />
+                       familiar, yet subtly altered by time
+                    </span>
+                  </div>
+                  {appliedSuggestions.includes('sug1') ? (
+                     <Check className="w-4 h-4 text-primary" />
+                  ) : (
+                     <span className="opacity-0 group-hover:opacity-100 text-primary text-[10px] font-medium transition-opacity">Apply</span>
+                  )}
+                </button>
+                
+                <button 
+                  onClick={() => handleApply('sug2', 'exactly the same, yet entirely different', 'frozen in time, though she had changed')}
+                  disabled={appliedSuggestions.includes('sug2')}
+                  className="w-full text-left text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                   <div className="flex flex-col gap-1">
+                    <span className="line-through text-muted-foreground">exactly the same, yet entirely different</span>
+                    <span className="text-foreground font-medium flex items-center gap-1">
+                       <Sparkles className="w-3 h-3 text-primary/70" />
+                       frozen in time, though she had changed
+                    </span>
+                  </div>
+                  {appliedSuggestions.includes('sug2') ? (
+                     <Check className="w-4 h-4 text-primary" />
+                  ) : (
+                     <span className="opacity-0 group-hover:opacity-100 text-primary text-[10px] font-medium transition-opacity">Apply</span>
+                  )}
+                </button>
               </div>
             </Card>
 
@@ -61,10 +103,25 @@ export default function SuggestionsSidebar() {
                   </p>
                 </div>
               </div>
-              <div className="pl-6 mt-2 flex flex-wrap gap-2">
-                <Badge variant="outline" className="text-xs bg-primary/5 hover:bg-primary/10 cursor-pointer transition-colors text-primary border-primary/20">suffocating</Badge>
-                <Badge variant="outline" className="text-xs bg-primary/5 hover:bg-primary/10 cursor-pointer transition-colors text-primary border-primary/20">constricting</Badge>
-                <Badge variant="outline" className="text-xs bg-primary/5 hover:bg-primary/10 cursor-pointer transition-colors text-primary border-primary/20">like an iron band</Badge>
+              <div className="pl-6 mt-3 flex flex-wrap gap-2">
+                <button 
+                  onClick={() => handleApply('voc1', 'pressing against her chest', 'suffocating')}
+                  className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-primary/5 hover:bg-primary/15 text-primary border border-primary/20 transition-colors"
+                >
+                  suffocating
+                </button>
+                <button 
+                  onClick={() => handleApply('voc2', 'pressing against her chest', 'constricting')}
+                  className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-primary/5 hover:bg-primary/15 text-primary border border-primary/20 transition-colors"
+                >
+                  constricting
+                </button>
+                <button 
+                  onClick={() => handleApply('voc3', 'pressing against her chest', 'like an iron band')}
+                  className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-primary/5 hover:bg-primary/15 text-primary border border-primary/20 transition-colors"
+                >
+                  like an iron band
+                </button>
               </div>
             </Card>
             
@@ -157,14 +214,4 @@ export default function SuggestionsSidebar() {
       </Tabs>
     </div>
   );
-}
-
-// Temporary badge component since I didn't see one in the list immediately 
-// or it's faster to inline for this small thing
-function Badge({ children, className, variant = "default" }: { children: React.ReactNode, className?: string, variant?: "default" | "outline" }) {
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${variant === 'outline' ? 'border border-border' : 'border-transparent bg-primary text-primary-foreground'} ${className || ''}`}>
-      {children}
-    </span>
-  )
 }
