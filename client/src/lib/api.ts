@@ -1,0 +1,88 @@
+import { queryClient } from "./queryClient";
+
+export async function fetchDocuments() {
+  const res = await fetch("/api/documents");
+  if (!res.ok) throw new Error("Failed to fetch documents");
+  return res.json();
+}
+
+export async function fetchDocument(id: number) {
+  const res = await fetch(`/api/documents/${id}`);
+  if (!res.ok) throw new Error("Failed to fetch document");
+  return res.json();
+}
+
+export async function createDocument(data: { title?: string; content?: string; documentType?: string }) {
+  const res = await fetch("/api/documents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create document");
+  return res.json();
+}
+
+export async function updateDocument(id: number, data: { title?: string; content?: string; documentType?: string }) {
+  const res = await fetch(`/api/documents/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update document");
+  return res.json();
+}
+
+export async function deleteDocument(id: number) {
+  const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete document");
+}
+
+export async function fetchSuggestions(text: string, documentType: string = "fiction") {
+  const res = await fetch("/api/suggestions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, documentType }),
+  });
+  if (!res.ok) throw new Error("Failed to fetch suggestions");
+  return res.json();
+}
+
+export async function streamIdeas(
+  text: string,
+  prompt: string,
+  documentType: string,
+  onChunk: (content: string) => void,
+  onDone: () => void
+) {
+  const res = await fetch("/api/ideas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, prompt, documentType }),
+  });
+
+  if (!res.ok) throw new Error("Failed to generate ideas");
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      try {
+        const event = JSON.parse(line.slice(6));
+        if (event.content) onChunk(event.content);
+        if (event.done) onDone();
+      } catch {}
+    }
+  }
+}

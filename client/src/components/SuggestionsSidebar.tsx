@@ -1,213 +1,256 @@
 import React, { useState } from 'react';
-import { Sparkles, BookOpen, AlertCircle, TrendingUp, CheckCircle2, ChevronRight, MessageSquareDashed, Check } from 'lucide-react';
+import {
+  Sparkles, BookOpen, AlertCircle, TrendingUp, CheckCircle2,
+  ChevronRight, MessageSquareDashed, Check, Loader2, RefreshCw
+} from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { streamIdeas } from '@/lib/api';
+import type { Suggestion } from '@/hooks/useSuggestions';
 
 interface SuggestionsSidebarProps {
+  suggestions: Suggestion[];
+  loading: boolean;
   onApplySuggestion?: (original: string, replacement: string) => void;
+  documentContent: string;
+  documentType: string;
 }
 
-export default function SuggestionsSidebar({ onApplySuggestion }: SuggestionsSidebarProps) {
-  const [appliedSuggestions, setAppliedSuggestions] = useState<string[]>([]);
+const severityConfig = {
+  error: { icon: AlertCircle, borderColor: 'border-l-destructive/60', iconColor: 'text-destructive/80' },
+  warning: { icon: Sparkles, borderColor: 'border-l-amber-500/60', iconColor: 'text-amber-500' },
+  info: { icon: CheckCircle2, borderColor: 'border-l-primary/60', iconColor: 'text-primary' },
+};
+
+const typeLabels: Record<string, string> = {
+  grammar: 'Grammar',
+  vocabulary: 'Vocabulary',
+  style: 'Style',
+  pacing: 'Pacing',
+  story: 'Story Arc',
+  tone: 'Tone',
+};
+
+export default function SuggestionsSidebar({
+  suggestions, loading, onApplySuggestion, documentContent, documentType
+}: SuggestionsSidebarProps) {
+  const [appliedSuggestions, setAppliedSuggestions] = useState<Set<string>>(new Set());
+  const [ideaPrompt, setIdeaPrompt] = useState('');
+  const [ideaResponse, setIdeaResponse] = useState('');
+  const [ideaLoading, setIdeaLoading] = useState(false);
 
   const handleApply = (id: string, original: string, replacement: string) => {
     if (onApplySuggestion) {
       onApplySuggestion(original, replacement);
-      setAppliedSuggestions(prev => [...prev, id]);
+      setAppliedSuggestions(prev => new Set(prev).add(id));
     }
   };
 
+  const handleIdeaSubmit = async (prompt: string) => {
+    if (!prompt.trim()) return;
+    setIdeaLoading(true);
+    setIdeaResponse('');
+    try {
+      await streamIdeas(
+        documentContent,
+        prompt,
+        documentType,
+        (chunk) => setIdeaResponse(prev => prev + chunk),
+        () => setIdeaLoading(false)
+      );
+    } catch {
+      setIdeaResponse('Failed to generate ideas. Please try again.');
+      setIdeaLoading(false);
+    }
+  };
+
+  const reviewSuggestions = suggestions.filter(s => ['grammar', 'vocabulary', 'style', 'tone'].includes(s.type));
+  const storySuggestions = suggestions.filter(s => ['pacing', 'story'].includes(s.type));
+
   return (
-    <div className="flex flex-col h-full h-[calc(100vh-3.5rem)]">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
       <div className="p-4 border-b border-border/50 bg-card/50">
         <h2 className="font-medium flex items-center gap-2 text-foreground">
           <Sparkles className="w-4 h-4 text-primary" />
           AI Co-Pilot
         </h2>
-        <p className="text-xs text-muted-foreground mt-1">Real-time analysis active</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {loading ? (
+            <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Analyzing...</span>
+          ) : (
+            `${suggestions.length} suggestion${suggestions.length !== 1 ? 's' : ''} found`
+          )}
+        </p>
       </div>
 
       <Tabs defaultValue="suggestions" className="flex-1 flex flex-col w-full">
         <div className="px-4 pt-3 pb-0 border-b border-border/50">
           <TabsList className="w-full bg-muted/50 grid grid-cols-3 p-1 rounded-lg">
-            <TabsTrigger value="suggestions" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">Review</TabsTrigger>
-            <TabsTrigger value="story" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">Story</TabsTrigger>
-            <TabsTrigger value="ideas" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">Ideas</TabsTrigger>
+            <TabsTrigger value="suggestions" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-review">
+              Review {reviewSuggestions.length > 0 && `(${reviewSuggestions.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="story" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-story">
+              Story {storySuggestions.length > 0 && `(${storySuggestions.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="ideas" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-ideas">Ideas</TabsTrigger>
           </TabsList>
         </div>
 
         <ScrollArea className="flex-1">
           <TabsContent value="suggestions" className="p-4 space-y-4 m-0">
-            {/* Grammar Suggestion */}
-            <Card className="p-3 bg-card border-l-2 border-l-destructive/60 shadow-sm border-t-0 border-r-0 border-b-0 rounded-r-lg rounded-l-sm relative overflow-hidden">
-              <div className="flex items-start gap-2 mb-2">
-                <AlertCircle className="w-4 h-4 text-destructive/80 mt-0.5 shrink-0" />
-                <div>
-                  <h4 className="text-sm font-medium text-foreground">Repetitive Phrasing</h4>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    You used "exactly the same, yet entirely different" which is a bit cliché.
-                  </p>
-                </div>
+            {loading && (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                <span className="text-sm">Analyzing your writing...</span>
               </div>
-              <div className="pl-6 space-y-2 mt-3">
-                <button 
-                  onClick={() => handleApply('sug1', 'exactly the same, yet entirely different', 'familiar, yet subtly altered by time')}
-                  disabled={appliedSuggestions.includes('sug1')}
-                  className="w-full text-left text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <div className="flex flex-col gap-1">
-                    <span className="line-through text-muted-foreground">exactly the same, yet entirely different</span>
-                    <span className="text-foreground font-medium flex items-center gap-1">
-                       <Sparkles className="w-3 h-3 text-primary/70" />
-                       familiar, yet subtly altered by time
-                    </span>
-                  </div>
-                  {appliedSuggestions.includes('sug1') ? (
-                     <Check className="w-4 h-4 text-primary" />
-                  ) : (
-                     <span className="opacity-0 group-hover:opacity-100 text-primary text-[10px] font-medium transition-opacity">Apply</span>
-                  )}
-                </button>
-                
-                <button 
-                  onClick={() => handleApply('sug2', 'exactly the same, yet entirely different', 'frozen in time, though she had changed')}
-                  disabled={appliedSuggestions.includes('sug2')}
-                  className="w-full text-left text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                   <div className="flex flex-col gap-1">
-                    <span className="line-through text-muted-foreground">exactly the same, yet entirely different</span>
-                    <span className="text-foreground font-medium flex items-center gap-1">
-                       <Sparkles className="w-3 h-3 text-primary/70" />
-                       frozen in time, though she had changed
-                    </span>
-                  </div>
-                  {appliedSuggestions.includes('sug2') ? (
-                     <Check className="w-4 h-4 text-primary" />
-                  ) : (
-                     <span className="opacity-0 group-hover:opacity-100 text-primary text-[10px] font-medium transition-opacity">Apply</span>
-                  )}
-                </button>
+            )}
+            {!loading && reviewSuggestions.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground/60">
+                <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">Looking good! Keep writing and suggestions will appear here.</p>
               </div>
-            </Card>
+            )}
+            {reviewSuggestions.map((sug, i) => {
+              const config = severityConfig[sug.severity] || severityConfig.info;
+              const Icon = config.icon;
+              return (
+                <Card key={`review-${i}`} className={`p-3 bg-card border-l-2 ${config.borderColor} shadow-sm border-t-0 border-r-0 border-b-0 rounded-r-lg rounded-l-sm`}>
+                  <div className="flex items-start gap-2 mb-2">
+                    <Icon className={`w-4 h-4 ${config.iconColor} mt-0.5 shrink-0`} />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-medium text-foreground">{sug.title}</h4>
+                        <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{typeLabels[sug.type] || sug.type}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{sug.description}</p>
+                    </div>
+                  </div>
 
-            {/* Vocabulary Suggestion */}
-            <Card className="p-3 bg-card border-l-2 border-l-primary/60 shadow-sm border-t-0 border-r-0 border-b-0 rounded-r-lg rounded-l-sm">
-              <div className="flex items-start gap-2 mb-2">
-                <Sparkles className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                <div>
-                  <h4 className="text-sm font-medium text-foreground">Enhance Description</h4>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Instead of "pressing against her chest", try something more evocative for the gothic tone.
-                  </p>
-                </div>
-              </div>
-              <div className="pl-6 mt-3 flex flex-wrap gap-2">
-                <button 
-                  onClick={() => handleApply('voc1', 'pressing against her chest', 'suffocating')}
-                  className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-primary/5 hover:bg-primary/15 text-primary border border-primary/20 transition-colors"
-                >
-                  suffocating
-                </button>
-                <button 
-                  onClick={() => handleApply('voc2', 'pressing against her chest', 'constricting')}
-                  className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-primary/5 hover:bg-primary/15 text-primary border border-primary/20 transition-colors"
-                >
-                  constricting
-                </button>
-                <button 
-                  onClick={() => handleApply('voc3', 'pressing against her chest', 'like an iron band')}
-                  className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-primary/5 hover:bg-primary/15 text-primary border border-primary/20 transition-colors"
-                >
-                  like an iron band
-                </button>
-              </div>
-            </Card>
-            
-            {/* Tone Match */}
-            <Card className="p-3 bg-card border-l-2 border-l-accent-foreground/60 shadow-sm border-t-0 border-r-0 border-b-0 rounded-r-lg rounded-l-sm">
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-accent-foreground mt-0.5 shrink-0" />
-                <div>
-                  <h4 className="text-sm font-medium text-foreground">Tone Analysis</h4>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Great job maintaining the melancholic atmosphere in this paragraph. The imagery of "dust motes in pale moonlight" works perfectly.
-                  </p>
-                </div>
-              </div>
-            </Card>
+                  {sug.original && sug.alternatives.length > 0 && (
+                    <div className="pl-6 space-y-2 mt-3">
+                      {sug.alternatives.map((alt, j) => {
+                        const sugId = `sug-${i}-${j}`;
+                        const isApplied = appliedSuggestions.has(sugId);
+                        return (
+                          <button
+                            key={j}
+                            onClick={() => handleApply(sugId, sug.original!, alt)}
+                            disabled={isApplied}
+                            className="w-full text-left text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
+                            data-testid={`btn-apply-suggestion-${i}-${j}`}
+                          >
+                            <div className="flex flex-col gap-1 min-w-0 flex-1">
+                              <span className="line-through text-muted-foreground truncate">{sug.original}</span>
+                              <span className="text-foreground font-medium flex items-center gap-1">
+                                <Sparkles className="w-3 h-3 text-primary/70 shrink-0" />
+                                <span className="truncate">{alt}</span>
+                              </span>
+                            </div>
+                            {isApplied ? (
+                              <Check className="w-4 h-4 text-primary shrink-0 ml-2" />
+                            ) : (
+                              <span className="opacity-0 group-hover:opacity-100 text-primary text-[10px] font-medium transition-opacity shrink-0 ml-2">Apply</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
           </TabsContent>
 
           <TabsContent value="story" className="p-4 space-y-4 m-0">
-             <Card className="p-3 bg-card shadow-sm border border-border/60">
-              <h4 className="text-sm font-medium flex items-center gap-2 mb-3">
-                <TrendingUp className="w-4 h-4 text-primary" />
-                Pacing Alert
-              </h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                This chapter has been entirely introspective so far. You might want to introduce an action or dialogue soon to keep the pacing balanced.
-              </p>
-              <div className="mt-3 bg-muted/50 p-3 rounded-md">
-                <p className="text-xs font-medium mb-2">Consider:</p>
-                <ul className="text-xs text-muted-foreground space-y-2 list-disc pl-4">
-                  <li>A sudden noise from the floor above</li>
-                  <li>The housekeeper entering the room</li>
-                  <li>Discovering an out-of-place object on the table</li>
-                </ul>
+            {loading && (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                <span className="text-sm">Analyzing story structure...</span>
               </div>
-            </Card>
-
-            <Card className="p-3 bg-card shadow-sm border border-border/60">
-              <h4 className="text-sm font-medium flex items-center gap-2 mb-3">
-                <BookOpen className="w-4 h-4 text-primary" />
-                Arc Tracking
-              </h4>
-              <div className="space-y-3">
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-medium">Elara's Acceptance</span>
-                    <span className="text-muted-foreground">30%</span>
-                  </div>
-                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-primary w-[30%]"></div>
-                  </div>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  She is still showing strong resistance to returning home.
-                </p>
+            )}
+            {!loading && storySuggestions.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground/60">
+                <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">Write more and story-level analysis will appear here.</p>
               </div>
-            </Card>
+            )}
+            {storySuggestions.map((sug, i) => {
+              const Icon = sug.type === 'pacing' ? TrendingUp : BookOpen;
+              return (
+                <Card key={`story-${i}`} className="p-3 bg-card shadow-sm border border-border/60">
+                  <h4 className="text-sm font-medium flex items-center gap-2 mb-3">
+                    <Icon className="w-4 h-4 text-primary" />
+                    {sug.title}
+                  </h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{sug.description}</p>
+                  {sug.alternatives.length > 0 && (
+                    <div className="mt-3 bg-muted/50 p-3 rounded-md">
+                      <p className="text-xs font-medium mb-2">Consider:</p>
+                      <ul className="text-xs text-muted-foreground space-y-2 list-disc pl-4">
+                        {sug.alternatives.map((alt, j) => (
+                          <li key={j}>{alt}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
           </TabsContent>
 
           <TabsContent value="ideas" className="p-4 space-y-4 m-0">
-            <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-sm text-center text-primary/80 italic">
-              "What if the teacup belonged to someone who shouldn't be dead?"
-            </div>
-            
             <div className="bg-muted/50 rounded-lg p-3">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Prompt AI</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Ask AI</h4>
               <div className="relative">
-                <textarea 
+                <textarea
                   className="w-full bg-background border border-border/60 rounded-md p-2 text-xs min-h-[80px] focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
                   placeholder="Ask for ideas, character names, setting descriptions..."
-                ></textarea>
-                <Button size="icon" className="absolute bottom-1 right-1 h-6 w-6 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground">
-                  <ChevronRight className="w-4 h-4" />
+                  value={ideaPrompt}
+                  onChange={(e) => setIdeaPrompt(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleIdeaSubmit(ideaPrompt); } }}
+                  data-testid="textarea-idea-prompt"
+                />
+                <Button
+                  size="icon"
+                  className="absolute bottom-1 right-1 h-6 w-6 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground"
+                  onClick={() => handleIdeaSubmit(ideaPrompt)}
+                  disabled={ideaLoading}
+                  data-testid="btn-submit-idea"
+                >
+                  {ideaLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
                 </Button>
               </div>
             </div>
-            
+
+            {ideaResponse && (
+              <Card className="p-3 bg-card shadow-sm border border-border/60">
+                <div className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap" data-testid="idea-response">
+                  {ideaResponse}
+                </div>
+              </Card>
+            )}
+
             <div className="space-y-2">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Quick Prompts</h4>
-              <Button variant="outline" className="w-full justify-start text-left text-xs h-auto py-2 font-normal whitespace-normal bg-card">
-                <MessageSquareDashed className="w-3.5 h-3.5 mr-2 shrink-0 text-primary/70" />
-                Describe the grandfather clock in more detail
-              </Button>
-              <Button variant="outline" className="w-full justify-start text-left text-xs h-auto py-2 font-normal whitespace-normal bg-card">
-                <MessageSquareDashed className="w-3.5 h-3.5 mr-2 shrink-0 text-primary/70" />
-                Suggest 3 reasons Elara left the manor
-              </Button>
+              {[
+                "Suggest 3 ways to increase tension in this scene",
+                "Help me describe the setting in more vivid detail",
+                "What plot twist could happen next?",
+                "Suggest names for a mysterious character",
+              ].map((prompt, i) => (
+                <Button
+                  key={i}
+                  variant="outline"
+                  className="w-full justify-start text-left text-xs h-auto py-2 font-normal whitespace-normal bg-card"
+                  onClick={() => { setIdeaPrompt(prompt); handleIdeaSubmit(prompt); }}
+                  data-testid={`btn-quick-prompt-${i}`}
+                >
+                  <MessageSquareDashed className="w-3.5 h-3.5 mr-2 shrink-0 text-primary/70" />
+                  {prompt}
+                </Button>
+              ))}
             </div>
           </TabsContent>
         </ScrollArea>

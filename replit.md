@@ -1,0 +1,47 @@
+# Lumina - AI Writing Assistant
+
+## Overview
+A real-time AI writing assistant tailored for fiction writers. Uses OpenAI (via Replit AI Integrations) to provide grammar corrections, vocabulary enhancements, style improvements, pacing alerts, and creative story ideas as you write.
+
+## Architecture
+- **Frontend**: React + Vite + Tailwind CSS v4 + shadcn/ui components
+- **Backend**: Express.js with REST API
+- **Database**: PostgreSQL with Drizzle ORM
+- **AI**: OpenAI via Replit AI Integrations (gpt-5-mini for suggestions)
+- **Routing**: wouter (frontend), Express (backend)
+
+## Key Features
+- Distraction-free editor with auto-save
+- Real-time AI suggestions (grammar, vocabulary, style, tone)
+- Story-level analysis (pacing alerts, arc tracking)
+- AI idea generation with streaming responses
+- Document management (create, list, delete, export)
+- Multiple document types (fiction, non-fiction, essay, blog, script)
+
+## Data Model
+- `documents`: id, title, content, documentType, createdAt, updatedAt
+- `users`: id, username, password (from template, not actively used)
+
+## API Routes
+- `GET/POST /api/documents` - List/Create documents
+- `GET/PATCH/DELETE /api/documents/:id` - Document CRUD
+- `POST /api/suggestions` - AI-powered writing suggestions
+- `POST /api/ideas` - Streaming AI idea generation
+
+## File Structure
+- `client/src/pages/Home.tsx` - Main workspace page
+- `client/src/components/Editor.tsx` - ContentEditable editor
+- `client/src/components/SuggestionsSidebar.tsx` - AI suggestions panel
+- `client/src/components/DocumentList.tsx` - Document sidebar
+- `client/src/hooks/useSuggestions.ts` - Debounced AI suggestion hook
+- `client/src/hooks/useAutoSave.ts` - Auto-save hook
+- `client/src/lib/api.ts` - API client functions
+- `server/routes.ts` - API endpoints
+- `server/storage.ts` - Database storage interface
+- `server/db.ts` - Database connection
+- `shared/schema.ts` - Drizzle schema definitions
+
+## Design
+- Typography: Merriweather (serif, editor) + Inter (sans, UI)
+- Color: Warm neutral backgrounds with purple primary accents
+- Style: Clean, distraction-free writing environment
