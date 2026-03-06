@@ -3,9 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Editor from '@/components/Editor';
 import SuggestionsSidebar from '@/components/SuggestionsSidebar';
 import DocumentList from '@/components/DocumentList';
-import { Sparkles, BookOpen, Settings, PanelLeftClose, PanelLeft, FilePlus, Download } from 'lucide-react';
+import GoogleDocsDialog from '@/components/GoogleDocsDialog';
+import { Sparkles, BookOpen, Settings, PanelLeftClose, PanelLeft, FilePlus, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { fetchDocuments, fetchDocument, createDocument, updateDocument } from '@/lib/api';
 import { useSuggestions, type Suggestion } from '@/hooks/useSuggestions';
 import { useAutoSave } from '@/hooks/useAutoSave';
@@ -18,6 +20,8 @@ export default function Home() {
   const [title, setTitle] = useState('');
   const [documentType, setDocumentType] = useState('fiction');
   const [showDocList, setShowDocList] = useState(false);
+  const [gdocsMode, setGdocsMode] = useState<'import' | 'export'>('import');
+  const [gdocsOpen, setGdocsOpen] = useState(false);
 
   const { suggestions, loading: suggestionsLoading, requestSuggestions } = useSuggestions();
   const { save, saving, lastSaved } = useAutoSave(activeDocId);
@@ -144,19 +148,46 @@ export default function Home() {
             variant="ghost"
             size="icon"
             className="text-muted-foreground hover:text-foreground"
+            onClick={() => { setGdocsMode('import'); setGdocsOpen(true); }}
+            title="Import from Google Docs"
+            data-testid="btn-import-gdocs"
+          >
+            <Download className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
             onClick={handleNewDocument}
             data-testid="btn-new-doc"
           >
             <FilePlus className="w-4 h-4" />
           </Button>
-          <Button
-            onClick={handleExport}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-full px-6"
-            data-testid="btn-export"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-full px-6"
+                data-testid="btn-export-menu"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExport} data-testid="btn-export-txt">
+                <Download className="w-4 h-4 mr-2" />
+                Download as .txt
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => { setGdocsMode('export'); setGdocsOpen(true); }}
+                data-testid="btn-export-gdocs"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Export to Google Docs
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -211,6 +242,21 @@ export default function Home() {
           </aside>
         )}
       </main>
+
+      <GoogleDocsDialog
+        open={gdocsOpen}
+        onOpenChange={setGdocsOpen}
+        mode={gdocsMode}
+        activeDocId={activeDocId}
+        activeDocTitle={title}
+        onImported={(doc) => {
+          queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+          setActiveDocId(doc.id);
+          setContent(doc.content);
+          setTitle(doc.title);
+          setDocumentType(doc.documentType);
+        }}
+      />
     </div>
   );
 }

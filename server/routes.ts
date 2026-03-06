@@ -3,6 +3,12 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertDocumentSchema } from "@shared/schema";
 import OpenAI from "openai";
+import {
+  getUncachableGoogleDocsClient,
+  getUncachableGoogleDriveClient,
+  googleDocsToHtml,
+  htmlToGoogleDocsRequests,
+} from "./googleDocs";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -139,6 +145,84 @@ Return 3-6 suggestions maximum. Be specific and actionable. Return ONLY valid JS
       } else {
         res.status(500).json({ error: "Failed to generate ideas" });
       }
+    }
+  });
+
+  // === Google Docs Integration ===
+
+  app.get("/api/gdocs/list", async (_req, res) => {
+    try {
+      const drive = await getUncachableGoogleDriveClient();
+      const response = await drive.files.list({
+        q: "mimeType='application/vnd.google-apps.document' and trashed=false",
+        fields: "files(id, name, modifiedTime)",
+        orderBy: "modifiedTime desc",
+        pageSize: 30,
+      });
+      res.json({ files: response.data.files || [] });
+    } catch (error: any) {
+      console.error("Google Drive list error:", error?.message);
+      res.status(500).json({ error: "Failed to list Google Docs. Make sure Google Docs is connected." });
+    }
+  });
+
+  app.post("/api/gdocs/import", async (req, res) => {
+    const { documentId } = req.body;
+    if (!documentId) return res.status(400).json({ error: "documentId is required" });
+
+    try {
+      const docs = await getUncachableGoogleDocsClient();
+      const doc = await docs.documents.get({ documentId });
+
+      const title = doc.data.title || "Imported Document";
+      const content = googleDocsToHtml(doc.data);
+
+      const created = await storage.createDocument({
+        title,
+        content,
+        documentType: "fiction",
+      });
+
+      res.status(201).json(created);
+    } catch (error: any) {
+      console.error("Google Docs import error:", error?.message);
+      res.status(500).json({ error: "Failed to import Google Doc" });
+    }
+  });
+
+  app.post("/api/gdocs/export", async (req, res) => {
+    const { documentId: luminaDocId, googleDocTitle } = req.body;
+    if (!luminaDocId) return res.status(400).json({ error: "documentId is required" });
+
+    try {
+      const luminaDoc = await storage.getDocument(parseInt(luminaDocId));
+      if (!luminaDoc) return res.status(404).json({ error: "Document not found" });
+
+      const docs = await getUncachableGoogleDocsClient();
+      const title = googleDocTitle || luminaDoc.title || "Exported from Lumina";
+
+      const created = await docs.documents.create({
+        requestBody: { title },
+      });
+
+      const newDocId = created.data.documentId;
+      if (!newDocId) throw new Error("Failed to create Google Doc");
+
+      const requests = htmlToGoogleDocsRequests(luminaDoc.content);
+      if (requests.length > 0) {
+        await docs.documents.batchUpdate({
+          documentId: newDocId,
+          requestBody: { requests },
+        });
+      }
+
+      res.json({
+        googleDocId: newDocId,
+        url: `https://docs.google.com/document/d/${newDocId}/edit`,
+      });
+    } catch (error: any) {
+      console.error("Google Docs export error:", error?.message);
+      res.status(500).json({ error: "Failed to export to Google Docs" });
     }
   });
 
