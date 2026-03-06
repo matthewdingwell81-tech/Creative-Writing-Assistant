@@ -35,7 +35,9 @@ export async function registerRoutes(
   });
 
   app.patch("/api/documents/:id", async (req, res) => {
-    const doc = await storage.updateDocument(parseInt(req.params.id), req.body);
+    const parsed = insertDocumentSchema.partial().safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
+    const doc = await storage.updateDocument(parseInt(req.params.id), parsed.data);
     if (!doc) return res.status(404).json({ error: "Not found" });
     res.json(doc);
   });
