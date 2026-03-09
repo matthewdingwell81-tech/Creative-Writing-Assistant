@@ -12,9 +12,12 @@ A real-time AI writing assistant tailored for fiction writers. Uses OpenAI (via 
 
 ## Key Features
 - Distraction-free editor with auto-save
-- Real-time AI suggestions (grammar, vocabulary, style, tone)
-- Story-level analysis (pacing alerts, arc tracking)
-- AI idea generation with streaming responses
+- Real-time AI suggestions split across tabs:
+  - Grammar tab (dedicated grammar corrections)
+  - Review tab (vocabulary, style, tone)
+  - Story tab (pacing alerts, arc tracking)
+  - Ideas tab (AI idea generation with streaming responses)
+- Text selection review: select text in the editor to get targeted AI feedback on specific passages
 - Document management (create, list, delete, export)
 - Multiple document types (fiction, non-fiction, essay, blog, script)
 - Google Docs integration (import/export)

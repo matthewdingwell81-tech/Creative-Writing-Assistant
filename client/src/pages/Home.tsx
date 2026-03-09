@@ -22,6 +22,7 @@ export default function Home() {
   const [showDocList, setShowDocList] = useState(false);
   const [gdocsMode, setGdocsMode] = useState<'import' | 'export'>('import');
   const [gdocsOpen, setGdocsOpen] = useState(false);
+  const [selectedText, setSelectedText] = useState('');
 
   const { suggestions, loading: suggestionsLoading, requestSuggestions } = useSuggestions();
   const { save, saving, lastSaved } = useAutoSave(activeDocId);
@@ -50,6 +51,7 @@ export default function Home() {
       setContent(doc.content);
       setTitle(doc.title);
       setDocumentType(doc.documentType);
+      setSelectedText('');
     }
   }, [documents, activeDocId]);
 
@@ -61,6 +63,7 @@ export default function Home() {
       setTitle(doc.title);
       setDocumentType(doc.documentType);
       setShowDocList(false);
+      setSelectedText('');
     } catch (e) {
       console.error("Failed to load document:", e);
     }
@@ -211,6 +214,7 @@ export default function Home() {
                 setContent={handleContentChange}
                 title={title}
                 setTitle={handleTitleChange}
+                onSelectionChange={setSelectedText}
               />
             ) : (
               <div className="text-center py-32">
@@ -238,6 +242,7 @@ export default function Home() {
               onApplySuggestion={applySuggestion}
               documentContent={content}
               documentType={documentType}
+              selectedText={selectedText}
             />
           </aside>
         )}

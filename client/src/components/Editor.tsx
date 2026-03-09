@@ -5,9 +5,10 @@ interface EditorProps {
   setContent: (content: string) => void;
   title: string;
   setTitle: (title: string) => void;
+  onSelectionChange?: (selectedText: string) => void;
 }
 
-export default function Editor({ content, setContent, title, setTitle }: EditorProps) {
+export default function Editor({ content, setContent, title, setTitle, onSelectionChange }: EditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const isInternalUpdate = useRef(false);
@@ -20,6 +21,27 @@ export default function Editor({ content, setContent, title, setTitle }: EditorP
     }
     isInternalUpdate.current = false;
   }, [content]);
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      if (!onSelectionChange || !editorRef.current) return;
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) {
+        onSelectionChange('');
+        return;
+      }
+      if (
+        selection.anchorNode && editorRef.current.contains(selection.anchorNode) &&
+        selection.focusNode && editorRef.current.contains(selection.focusNode)
+      ) {
+        onSelectionChange(selection.toString().trim());
+      } else {
+        onSelectionChange('');
+      }
+    };
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, [onSelectionChange]);
 
   const handleInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
     isInternalUpdate.current = true;

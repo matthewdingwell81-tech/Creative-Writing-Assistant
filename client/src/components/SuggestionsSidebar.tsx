@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Sparkles, BookOpen, AlertCircle, TrendingUp, CheckCircle2,
-  ChevronRight, MessageSquareDashed, Check, Loader2, RefreshCw
+  ChevronRight, MessageSquareDashed, Check, Loader2, RefreshCw, Type, TextSelect
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
@@ -16,6 +16,7 @@ interface SuggestionsSidebarProps {
   onApplySuggestion?: (original: string, replacement: string) => void;
   documentContent: string;
   documentType: string;
+  selectedText?: string;
 }
 
 const severityConfig = {
@@ -33,13 +34,74 @@ const typeLabels: Record<string, string> = {
   tone: 'Tone',
 };
 
+function SuggestionCard({
+  sug,
+  index,
+  appliedSuggestions,
+  onApply,
+}: {
+  sug: Suggestion;
+  index: number;
+  appliedSuggestions: Set<string>;
+  onApply: (id: string, original: string, replacement: string) => void;
+}) {
+  const config = severityConfig[sug.severity] || severityConfig.info;
+  const Icon = config.icon;
+  return (
+    <Card className={`p-3 bg-card border-l-2 ${config.borderColor} shadow-sm border-t-0 border-r-0 border-b-0 rounded-r-lg rounded-l-sm`}>
+      <div className="flex items-start gap-2 mb-2">
+        <Icon className={`w-4 h-4 ${config.iconColor} mt-0.5 shrink-0`} />
+        <div>
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-medium text-foreground">{sug.title}</h4>
+            <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{typeLabels[sug.type] || sug.type}</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">{sug.description}</p>
+        </div>
+      </div>
+
+      {sug.original && sug.alternatives.length > 0 && (
+        <div className="pl-6 space-y-2 mt-3">
+          {sug.alternatives.map((alt, j) => {
+            const sugId = `sug-${index}-${j}`;
+            const isApplied = appliedSuggestions.has(sugId);
+            return (
+              <button
+                key={j}
+                onClick={() => onApply(sugId, sug.original!, alt)}
+                disabled={isApplied}
+                className="w-full text-left text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid={`btn-apply-suggestion-${index}-${j}`}
+              >
+                <div className="flex flex-col gap-1 min-w-0 flex-1">
+                  <span className="line-through text-muted-foreground break-words">{sug.original}</span>
+                  <span className="text-foreground font-medium flex items-start gap-1">
+                    <Sparkles className="w-3 h-3 text-primary/70 shrink-0 mt-0.5" />
+                    <span className="break-words">{alt}</span>
+                  </span>
+                </div>
+                {isApplied ? (
+                  <Check className="w-4 h-4 text-primary shrink-0 ml-2" />
+                ) : (
+                  <span className="opacity-0 group-hover:opacity-100 text-primary text-[10px] font-medium transition-opacity shrink-0 ml-2">Apply</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function SuggestionsSidebar({
-  suggestions, loading, onApplySuggestion, documentContent, documentType
+  suggestions, loading, onApplySuggestion, documentContent, documentType, selectedText
 }: SuggestionsSidebarProps) {
   const [appliedSuggestions, setAppliedSuggestions] = useState<Set<string>>(new Set());
   const [ideaPrompt, setIdeaPrompt] = useState('');
   const [ideaResponse, setIdeaResponse] = useState('');
   const [ideaLoading, setIdeaLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('grammar');
 
   const handleApply = (id: string, original: string, replacement: string) => {
     if (onApplySuggestion) {
@@ -66,8 +128,21 @@ export default function SuggestionsSidebar({
     }
   };
 
-  const reviewSuggestions = suggestions.filter(s => ['grammar', 'vocabulary', 'style', 'tone'].includes(s.type));
+  const handleReviewSelection = () => {
+    if (!selectedText) return;
+    const prompt = `Please provide detailed feedback on this specific passage I've selected from my writing. Analyze it for clarity, impact, word choice, rhythm, and any improvements you'd suggest:\n\n"${selectedText}"`;
+    setActiveTab('ideas');
+    setIdeaPrompt('');
+    handleIdeaSubmit(prompt);
+  };
+
+  const grammarSuggestions = suggestions.filter(s => s.type === 'grammar');
+  const reviewSuggestions = suggestions.filter(s => ['vocabulary', 'style', 'tone'].includes(s.type));
   const storySuggestions = suggestions.filter(s => ['pacing', 'story'].includes(s.type));
+
+  const truncatedSelection = selectedText && selectedText.length > 80
+    ? selectedText.slice(0, 80) + '…'
+    : selectedText;
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
@@ -85,9 +160,34 @@ export default function SuggestionsSidebar({
         </p>
       </div>
 
-      <Tabs defaultValue="suggestions" className="flex-1 flex flex-col w-full">
+      {selectedText && (
+        <div className="px-4 py-3 border-b border-border/50 bg-primary/5">
+          <div className="flex items-start gap-2">
+            <TextSelect className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-foreground mb-1">Text Selected</p>
+              <p className="text-xs text-muted-foreground italic truncate" data-testid="text-selected-preview">"{truncatedSelection}"</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="w-full mt-2 h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
+            onClick={handleReviewSelection}
+            disabled={ideaLoading}
+            data-testid="btn-review-selection"
+          >
+            {ideaLoading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Sparkles className="w-3 h-3 mr-1" />}
+            Review This Selection
+          </Button>
+        </div>
+      )}
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col w-full">
         <div className="px-4 pt-3 pb-0 border-b border-border/50">
-          <TabsList className="w-full bg-muted/50 grid grid-cols-3 p-1 rounded-lg">
+          <TabsList className="w-full bg-muted/50 grid grid-cols-4 p-1 rounded-lg">
+            <TabsTrigger value="grammar" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-grammar">
+              Grammar {grammarSuggestions.length > 0 && `(${grammarSuggestions.length})`}
+            </TabsTrigger>
             <TabsTrigger value="suggestions" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-review">
               Review {reviewSuggestions.length > 0 && `(${reviewSuggestions.length})`}
             </TabsTrigger>
@@ -99,6 +199,30 @@ export default function SuggestionsSidebar({
         </div>
 
         <ScrollArea className="flex-1">
+          <TabsContent value="grammar" className="p-4 space-y-4 m-0">
+            {loading && (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                <span className="text-sm">Checking grammar...</span>
+              </div>
+            )}
+            {!loading && grammarSuggestions.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground/60">
+                <Type className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No grammar issues found. Nice work!</p>
+              </div>
+            )}
+            {grammarSuggestions.map((sug, i) => (
+              <SuggestionCard
+                key={`grammar-${i}`}
+                sug={sug}
+                index={i}
+                appliedSuggestions={appliedSuggestions}
+                onApply={handleApply}
+              />
+            ))}
+          </TabsContent>
+
           <TabsContent value="suggestions" className="p-4 space-y-4 m-0">
             {loading && (
               <div className="flex items-center justify-center py-8 text-muted-foreground">
@@ -112,55 +236,15 @@ export default function SuggestionsSidebar({
                 <p className="text-sm">Looking good! Keep writing and suggestions will appear here.</p>
               </div>
             )}
-            {reviewSuggestions.map((sug, i) => {
-              const config = severityConfig[sug.severity] || severityConfig.info;
-              const Icon = config.icon;
-              return (
-                <Card key={`review-${i}`} className={`p-3 bg-card border-l-2 ${config.borderColor} shadow-sm border-t-0 border-r-0 border-b-0 rounded-r-lg rounded-l-sm`}>
-                  <div className="flex items-start gap-2 mb-2">
-                    <Icon className={`w-4 h-4 ${config.iconColor} mt-0.5 shrink-0`} />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-medium text-foreground">{sug.title}</h4>
-                        <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{typeLabels[sug.type] || sug.type}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">{sug.description}</p>
-                    </div>
-                  </div>
-
-                  {sug.original && sug.alternatives.length > 0 && (
-                    <div className="pl-6 space-y-2 mt-3">
-                      {sug.alternatives.map((alt, j) => {
-                        const sugId = `sug-${i}-${j}`;
-                        const isApplied = appliedSuggestions.has(sugId);
-                        return (
-                          <button
-                            key={j}
-                            onClick={() => handleApply(sugId, sug.original!, alt)}
-                            disabled={isApplied}
-                            className="w-full text-left text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
-                            data-testid={`btn-apply-suggestion-${i}-${j}`}
-                          >
-                            <div className="flex flex-col gap-1 min-w-0 flex-1">
-                              <span className="line-through text-muted-foreground break-words">{sug.original}</span>
-                              <span className="text-foreground font-medium flex items-start gap-1">
-                                <Sparkles className="w-3 h-3 text-primary/70 shrink-0 mt-0.5" />
-                                <span className="break-words">{alt}</span>
-                              </span>
-                            </div>
-                            {isApplied ? (
-                              <Check className="w-4 h-4 text-primary shrink-0 ml-2" />
-                            ) : (
-                              <span className="opacity-0 group-hover:opacity-100 text-primary text-[10px] font-medium transition-opacity shrink-0 ml-2">Apply</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
+            {reviewSuggestions.map((sug, i) => (
+              <SuggestionCard
+                key={`review-${i}`}
+                sug={sug}
+                index={i + grammarSuggestions.length}
+                appliedSuggestions={appliedSuggestions}
+                onApply={handleApply}
+              />
+            ))}
           </TabsContent>
 
           <TabsContent value="story" className="p-4 space-y-4 m-0">
