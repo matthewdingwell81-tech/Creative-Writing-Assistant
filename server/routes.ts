@@ -70,14 +70,20 @@ Analyze the provided text and return a JSON array of suggestions. Each suggestio
 - "original": the exact text fragment being referenced (if applicable, otherwise null)
 - "alternatives": an array of replacement strings (1-3 options, if applicable, otherwise empty array)
 
+CRITICAL RULES for the "original" field:
+- Each suggestion MUST target exactly ONE contiguous word or short phrase (1-6 words) from the text.
+- The "original" field MUST be an EXACT copy of the text as it appears in the document — do NOT combine multiple errors with semicolons, ellipses, or any separator.
+- If there are multiple spelling errors, return a SEPARATE suggestion object for EACH individual misspelled word.
+- Never use null for "original" when there is a specific word or phrase to reference.
+
 Focus on:
-1. Grammar and spelling corrections
+1. Grammar and spelling corrections (one suggestion per individual misspelled word)
 2. Vocabulary enhancements (thesaurus-style suggestions for overused or weak words)
 3. Style improvements (sentence structure, flow, readability)
 4. For fiction: pacing alerts, tone consistency, story arc suggestions, chapter structure advice
 5. Positive reinforcement for things done well
 
-Return 3-6 suggestions maximum. Be specific and actionable. Return ONLY valid JSON array, no markdown.`;
+Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JSON array, no markdown.`;
 
     try {
       const response = await openai.chat.completions.create({

@@ -88,8 +88,10 @@ export default function Home() {
   const applySuggestion = useCallback((suggestionId: string, originalText: string, newText: string) => {
     if (!content) return;
 
+    const cleanContent = content.replace(/<span[^>]*data-spell-highlight[^>]*>([\s\S]*?)<\/span>/gi, '$1');
+
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = content;
+    tempDiv.innerHTML = cleanContent;
 
     const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null);
     const textNodes: Text[] = [];
@@ -99,10 +101,12 @@ export default function Home() {
     }
 
     let replaced = false;
-    const searchLower = originalText.toLowerCase();
+    const normalizeSpaces = (s: string) => s.replace(/\u00A0/g, ' ');
+    const searchLower = normalizeSpaces(originalText).toLowerCase();
     for (const textNode of textNodes) {
       const nodeText = textNode.textContent || '';
-      const idx = nodeText.toLowerCase().indexOf(searchLower);
+      const normalizedNodeText = normalizeSpaces(nodeText);
+      const idx = normalizedNodeText.toLowerCase().indexOf(searchLower);
       if (idx !== -1) {
         textNode.textContent = nodeText.slice(0, idx) + newText + nodeText.slice(idx + originalText.length);
         replaced = true;
@@ -110,11 +114,11 @@ export default function Home() {
       }
     }
 
-    let updatedContent = content;
+    let updatedContent = cleanContent;
     if (replaced) {
       updatedContent = tempDiv.innerHTML;
-    } else if (content.includes(originalText)) {
-      updatedContent = content.replace(originalText, newText);
+    } else if (normalizeSpaces(cleanContent).includes(normalizeSpaces(originalText))) {
+      updatedContent = cleanContent.replace(originalText, newText);
       replaced = true;
     }
 

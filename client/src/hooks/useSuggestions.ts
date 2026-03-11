@@ -41,7 +41,18 @@ export function useSuggestions() {
   const lastTextRef = useRef("");
 
   const requestSuggestions = useCallback((text: string, documentType: string = "fiction") => {
-    const plainText = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    const plainText = text
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/&mdash;/gi, "—")
+      .replace(/&ndash;/gi, "–")
+      .replace(/\s+/g, " ")
+      .trim();
 
     if (plainText === lastTextRef.current) return;
     if (plainText.length < 30) return;

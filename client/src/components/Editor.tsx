@@ -127,6 +127,8 @@ export default function Editor({
       span.parentNode?.replaceChild(textNode, span);
       textNode.parentNode?.normalize();
 
+      clearHighlights(editorRef.current);
+
       isInternalUpdate.current = true;
       const newHtml = editorRef.current.innerHTML;
       setContent(newHtml);
@@ -244,11 +246,13 @@ function applyHighlights(el: HTMLElement, highlights: GrammarHighlight[]) {
     textNodes.push(node as Text);
   }
 
+  const normalizeSpaces = (s: string) => s.replace(/\u00A0/g, ' ');
+
   for (const highlight of highlights) {
     const searchText = highlight.original;
     if (!searchText) continue;
 
-    const searchLower = searchText.toLowerCase();
+    const searchLower = normalizeSpaces(searchText).toLowerCase();
 
     for (let i = 0; i < textNodes.length; i++) {
       const textNode = textNodes[i];
@@ -256,7 +260,8 @@ function applyHighlights(el: HTMLElement, highlights: GrammarHighlight[]) {
       if ((textNode.parentNode as HTMLElement).hasAttribute?.('data-spell-highlight')) continue;
 
       const nodeText = textNode.textContent || '';
-      const idx = nodeText.toLowerCase().indexOf(searchLower);
+      const normalizedNodeText = normalizeSpaces(nodeText);
+      const idx = normalizedNodeText.toLowerCase().indexOf(searchLower);
       if (idx === -1) continue;
 
       const beforeBoundary = idx === 0 || /\W/.test(nodeText[idx - 1]);
