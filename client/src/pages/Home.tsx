@@ -11,10 +11,81 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { fetchDocuments, fetchDocument, createDocument, updateDocument } from '@/lib/api';
 import { useSuggestions, type Suggestion } from '@/hooks/useSuggestions';
 import { useAutoSave } from '@/hooks/useAutoSave';
+import { useToast } from '@/hooks/use-toast';
 import type { Document } from '@shared/schema';
+
+function normalizeNbsp(s: string): string {
+  return s.replace(/\u00A0/g, ' ');
+}
+
+function replaceTextInHtml(html: string, originalText: string, newText: string): string | null {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+
+  const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null);
+  const textNodes: Text[] = [];
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    textNodes.push(node as Text);
+  }
+
+  const searchLower = normalizeNbsp(originalText).toLowerCase();
+
+  for (const textNode of textNodes) {
+    const nodeText = textNode.textContent || '';
+    const idx = normalizeNbsp(nodeText).toLowerCase().indexOf(searchLower);
+    if (idx !== -1) {
+      textNode.textContent = nodeText.slice(0, idx) + newText + nodeText.slice(idx + searchLower.length);
+      return tempDiv.innerHTML;
+    }
+  }
+
+  if (textNodes.length < 2) return null;
+  let concatenated = '';
+  const nodeRanges: { node: Text; start: number; end: number }[] = [];
+  for (const tn of textNodes) {
+    const text = tn.textContent || '';
+    const start = concatenated.length;
+    concatenated += text;
+    nodeRanges.push({ node: tn, start, end: concatenated.length });
+  }
+
+  const idx = normalizeNbsp(concatenated).toLowerCase().indexOf(searchLower);
+  if (idx === -1) return null;
+
+  const matchEnd = idx + searchLower.length;
+
+  const affectedNodes = nodeRanges.filter(
+    (nr) => nr.end > idx && nr.start < matchEnd
+  );
+  if (affectedNodes.length === 0) return null;
+
+  const firstNode = affectedNodes[0];
+  const localStart = idx - firstNode.start;
+  const firstNodeText = firstNode.node.textContent || '';
+
+  if (affectedNodes.length === 1) {
+    const localEnd = matchEnd - firstNode.start;
+    firstNode.node.textContent = firstNodeText.slice(0, localStart) + newText + firstNodeText.slice(localEnd);
+  } else {
+    firstNode.node.textContent = firstNodeText.slice(0, localStart) + newText;
+    for (let i = 1; i < affectedNodes.length; i++) {
+      const an = affectedNodes[i];
+      if (i === affectedNodes.length - 1) {
+        const localEnd = matchEnd - an.start;
+        an.node.textContent = (an.node.textContent || '').slice(localEnd);
+      } else {
+        an.node.textContent = '';
+      }
+    }
+  }
+
+  return tempDiv.innerHTML;
+}
 
 export default function Home() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [activeDocId, setActiveDocId] = useState<number | null>(null);
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
@@ -90,45 +161,22 @@ export default function Home() {
 
     const cleanContent = content.replace(/<span[^>]*data-spell-highlight[^>]*>([\s\S]*?)<\/span>/gi, '$1');
 
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = cleanContent;
+    const updatedContent = replaceTextInHtml(cleanContent, originalText, newText);
 
-    const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null);
-    const textNodes: Text[] = [];
-    let node: Node | null;
-    while ((node = walker.nextNode())) {
-      textNodes.push(node as Text);
+    if (updatedContent === null) {
+      toast({
+        title: "Could not apply change",
+        description: "The text may have already been modified. Try refreshing suggestions.",
+        variant: "destructive",
+      });
+      return;
     }
-
-    let replaced = false;
-    const normalizeSpaces = (s: string) => s.replace(/\u00A0/g, ' ');
-    const searchLower = normalizeSpaces(originalText).toLowerCase();
-    for (const textNode of textNodes) {
-      const nodeText = textNode.textContent || '';
-      const normalizedNodeText = normalizeSpaces(nodeText);
-      const idx = normalizedNodeText.toLowerCase().indexOf(searchLower);
-      if (idx !== -1) {
-        textNode.textContent = nodeText.slice(0, idx) + newText + nodeText.slice(idx + originalText.length);
-        replaced = true;
-        break;
-      }
-    }
-
-    let updatedContent = cleanContent;
-    if (replaced) {
-      updatedContent = tempDiv.innerHTML;
-    } else if (normalizeSpaces(cleanContent).includes(normalizeSpaces(originalText))) {
-      updatedContent = cleanContent.replace(originalText, newText);
-      replaced = true;
-    }
-
-    if (!replaced) return;
 
     setContent(updatedContent);
     save(updatedContent, title);
     applySuggestionById(suggestionId, originalText, newText);
     setTimeout(() => requestSuggestions(updatedContent, documentType), 500);
-  }, [content, save, title, requestSuggestions, documentType, applySuggestionById]);
+  }, [content, save, title, requestSuggestions, documentType, applySuggestionById, toast]);
 
   const handleInlineCorrection = useCallback((_original: string, _replacement: string) => {
     setTimeout(() => {

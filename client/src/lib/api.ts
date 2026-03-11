@@ -37,11 +37,12 @@ export async function deleteDocument(id: number) {
   if (!res.ok) throw new Error("Failed to delete document");
 }
 
-export async function fetchSuggestions(text: string, documentType: string = "fiction") {
+export async function fetchSuggestions(text: string, documentType: string = "fiction", signal?: AbortSignal) {
   const res = await fetch("/api/suggestions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, documentType }),
+    signal,
   });
   if (!res.ok) throw new Error("Failed to fetch suggestions");
   return res.json();

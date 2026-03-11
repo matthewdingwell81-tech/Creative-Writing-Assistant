@@ -39,6 +39,7 @@ export function useSuggestions() {
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTextRef = useRef("");
+  const abortRef = useRef<AbortController | null>(null);
 
   const requestSuggestions = useCallback((text: string, documentType: string = "fiction") => {
     const plainText = text
@@ -61,16 +62,27 @@ export function useSuggestions() {
 
     debounceRef.current = setTimeout(async () => {
       lastTextRef.current = plainText;
+
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       setLoading(true);
       try {
-        const result = await fetchSuggestions(plainText, documentType);
+        const result = await fetchSuggestions(plainText, documentType, controller.signal);
+        if (controller.signal.aborted) return;
         const raw: Omit<Suggestion, "id">[] = result.suggestions || [];
         const withIds = raw.map((s) => ({ ...s, id: generateSuggestionId(s) }));
         setSuggestions(withIds);
-      } catch (e) {
+      } catch (e: any) {
+        if (e?.name === "AbortError") return;
         console.error("Failed to get suggestions:", e);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }, 2000);
   }, []);
