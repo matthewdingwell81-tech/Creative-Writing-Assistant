@@ -90,9 +90,18 @@ export default function Home() {
     const updatedContent = content.replace(originalText, newText);
     setContent(updatedContent);
     save(updatedContent, title);
-    // Re-trigger suggestions after applying
     setTimeout(() => requestSuggestions(updatedContent, documentType), 500);
   }, [content, save, title, requestSuggestions, documentType]);
+
+  const handleInlineCorrection = useCallback((_original: string, _replacement: string) => {
+    setTimeout(() => {
+      setContent(prev => {
+        save(prev, title);
+        requestSuggestions(prev, documentType);
+        return prev;
+      });
+    }, 100);
+  }, [save, title, requestSuggestions, documentType]);
 
   const handleNewDocument = useCallback(() => {
     createMutation.mutate({ title: 'Untitled', content: '', documentType: 'fiction' });
@@ -108,6 +117,10 @@ export default function Home() {
     a.click();
     URL.revokeObjectURL(url);
   }, [content, title]);
+
+  const grammarHighlights = suggestions
+    .filter(s => s.type === 'grammar' && s.original && s.alternatives.length > 0)
+    .map(s => ({ original: s.original!, alternatives: s.alternatives, id: s.id }));
 
   const wordCount = content.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length;
 
@@ -218,6 +231,8 @@ export default function Home() {
                 title={title}
                 setTitle={handleTitleChange}
                 onSelectionChange={setSelectedText}
+                grammarHighlights={grammarHighlights}
+                onApplyCorrection={handleInlineCorrection}
               />
             ) : (
               <div className="text-center py-32">
