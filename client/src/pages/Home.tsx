@@ -25,8 +25,8 @@ export default function Home() {
   const [selectedText, setSelectedText] = useState('');
 
   const {
-    suggestions, savedSuggestions, savedCount, loading: suggestionsLoading,
-    requestSuggestions, dismissSuggestion, saveSuggestion, removeSaved
+    suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
+    requestSuggestions, dismissSuggestion, applySuggestionById, saveSuggestion, removeSaved, clearHistory
   } = useSuggestions();
   const { save, saving, lastSaved } = useAutoSave(activeDocId);
 
@@ -85,13 +85,46 @@ export default function Home() {
     }
   }, [activeDocId]);
 
-  const applySuggestion = useCallback((originalText: string, newText: string) => {
+  const applySuggestion = useCallback((suggestionId: string, originalText: string, newText: string) => {
     if (!content) return;
-    const updatedContent = content.replace(originalText, newText);
+
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+
+    const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null);
+    const textNodes: Text[] = [];
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      textNodes.push(node as Text);
+    }
+
+    let replaced = false;
+    const searchLower = originalText.toLowerCase();
+    for (const textNode of textNodes) {
+      const nodeText = textNode.textContent || '';
+      const idx = nodeText.toLowerCase().indexOf(searchLower);
+      if (idx !== -1) {
+        textNode.textContent = nodeText.slice(0, idx) + newText + nodeText.slice(idx + originalText.length);
+        replaced = true;
+        break;
+      }
+    }
+
+    let updatedContent = content;
+    if (replaced) {
+      updatedContent = tempDiv.innerHTML;
+    } else if (content.includes(originalText)) {
+      updatedContent = content.replace(originalText, newText);
+      replaced = true;
+    }
+
+    if (!replaced) return;
+
     setContent(updatedContent);
     save(updatedContent, title);
+    applySuggestionById(suggestionId, originalText, newText);
     setTimeout(() => requestSuggestions(updatedContent, documentType), 500);
-  }, [content, save, title, requestSuggestions, documentType]);
+  }, [content, save, title, requestSuggestions, documentType, applySuggestionById]);
 
   const handleInlineCorrection = useCallback((_original: string, _replacement: string) => {
     setTimeout(() => {
@@ -258,11 +291,13 @@ export default function Home() {
               suggestions={suggestions}
               savedSuggestions={savedSuggestions}
               savedCount={savedCount}
+              changeHistory={changeHistory}
               loading={suggestionsLoading}
               onApplySuggestion={applySuggestion}
               onDismiss={dismissSuggestion}
               onSave={saveSuggestion}
               onRemoveSaved={removeSaved}
+              onClearHistory={clearHistory}
               documentContent={content}
               documentType={documentType}
               selectedText={selectedText}

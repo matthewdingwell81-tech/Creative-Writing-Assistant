@@ -11,6 +11,16 @@ export interface Suggestion {
   alternatives: string[];
 }
 
+export interface ChangeHistoryEntry {
+  id: string;
+  suggestionId: string;
+  type: string;
+  title: string;
+  original: string;
+  replacement: string;
+  timestamp: number;
+}
+
 function generateSuggestionId(sug: Omit<Suggestion, "id">): string {
   const raw = `${sug.type}|${sug.severity}|${sug.title}|${sug.original || ""}|${sug.description.slice(0, 60)}`;
   let hash = 0;
@@ -23,7 +33,9 @@ function generateSuggestionId(sug: Omit<Suggestion, "id">): string {
 export function useSuggestions() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
   const [savedSuggestions, setSavedSuggestions] = useState<Suggestion[]>([]);
+  const [changeHistory, setChangeHistory] = useState<ChangeHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTextRef = useRef("");
@@ -57,6 +69,28 @@ export function useSuggestions() {
     setSavedSuggestions((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
+  const applySuggestionById = useCallback((suggestionId: string, original: string, replacement: string) => {
+    setAppliedIds((prev) => new Set(prev).add(suggestionId));
+
+    setSuggestions((current) => {
+      setSavedSuggestions((saved) => {
+        const found = current.find((s) => s.id === suggestionId) || saved.find((s) => s.id === suggestionId);
+        const entry: ChangeHistoryEntry = {
+          id: `change-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          suggestionId,
+          type: found?.type || "grammar",
+          title: found?.title || "Applied change",
+          original,
+          replacement,
+          timestamp: Date.now(),
+        };
+        setChangeHistory((prev) => [entry, ...prev]);
+        return saved.filter((s) => s.id !== suggestionId);
+      });
+      return current;
+    });
+  }, []);
+
   const saveSuggestion = useCallback((id: string) => {
     setSuggestions((current) => {
       const found = current.find((s) => s.id === id);
@@ -74,20 +108,27 @@ export function useSuggestions() {
     setSavedSuggestions((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
+  const clearHistory = useCallback(() => {
+    setChangeHistory([]);
+  }, []);
+
   const savedIdSet = new Set(savedSuggestions.map((s) => s.id));
   const visibleSuggestions = suggestions.filter(
-    (s) => !dismissedIds.has(s.id) && !savedIdSet.has(s.id)
+    (s) => !dismissedIds.has(s.id) && !savedIdSet.has(s.id) && !appliedIds.has(s.id)
   );
 
   return {
     suggestions: visibleSuggestions,
     savedSuggestions,
     savedCount: savedSuggestions.length,
+    changeHistory,
     loading,
     requestSuggestions,
     setSuggestions,
     dismissSuggestion,
+    applySuggestionById,
     saveSuggestion,
     removeSaved,
+    clearHistory,
   };
 }

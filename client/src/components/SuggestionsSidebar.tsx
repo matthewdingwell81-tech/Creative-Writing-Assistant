@@ -2,24 +2,26 @@ import React, { useState } from 'react';
 import {
   Sparkles, BookOpen, AlertCircle, TrendingUp, CheckCircle2,
   ChevronRight, MessageSquareDashed, Check, Loader2, RefreshCw, Type, TextSelect,
-  X, Bookmark, BookmarkCheck
+  X, Bookmark, BookmarkCheck, History, Trash2, ArrowRight
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { streamIdeas } from '@/lib/api';
-import type { Suggestion } from '@/hooks/useSuggestions';
+import type { Suggestion, ChangeHistoryEntry } from '@/hooks/useSuggestions';
 
 interface SuggestionsSidebarProps {
   suggestions: Suggestion[];
   savedSuggestions: Suggestion[];
   savedCount: number;
+  changeHistory: ChangeHistoryEntry[];
   loading: boolean;
-  onApplySuggestion?: (original: string, replacement: string) => void;
+  onApplySuggestion?: (suggestionId: string, original: string, replacement: string) => void;
   onDismiss: (id: string) => void;
   onSave: (id: string) => void;
   onRemoveSaved: (id: string) => void;
+  onClearHistory: () => void;
   documentContent: string;
   documentType: string;
   selectedText?: string;
@@ -42,15 +44,13 @@ const typeLabels: Record<string, string> = {
 
 function SuggestionCard({
   sug,
-  appliedSuggestions,
   onApply,
   onDismiss,
   onSave,
   isSaved,
 }: {
   sug: Suggestion;
-  appliedSuggestions: Set<string>;
-  onApply: (id: string, original: string, replacement: string) => void;
+  onApply: (suggestionId: string, original: string, replacement: string) => void;
   onDismiss: (id: string) => void;
   onSave: (id: string) => void;
   isSaved?: boolean;
@@ -94,32 +94,23 @@ function SuggestionCard({
 
       {sug.original && sug.alternatives.length > 0 && (
         <div className="pl-6 space-y-2 mt-3">
-          {sug.alternatives.map((alt, j) => {
-            const sugId = `${sug.id}-alt-${j}`;
-            const isApplied = appliedSuggestions.has(sugId);
-            return (
-              <button
-                key={j}
-                onClick={() => onApply(sugId, sug.original!, alt)}
-                disabled={isApplied}
-                className="w-full text-left text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
-                data-testid={`btn-apply-suggestion-${sug.id}-${j}`}
-              >
-                <div className="flex flex-col gap-1 min-w-0 flex-1">
-                  <span className="line-through text-muted-foreground break-words">{sug.original}</span>
-                  <span className="text-foreground font-medium flex items-start gap-1">
-                    <Sparkles className="w-3 h-3 text-primary/70 shrink-0 mt-0.5" />
-                    <span className="break-words">{alt}</span>
-                  </span>
-                </div>
-                {isApplied ? (
-                  <Check className="w-4 h-4 text-primary shrink-0 ml-2" />
-                ) : (
-                  <span className="opacity-0 group-hover:opacity-100 text-primary text-[10px] font-medium transition-opacity shrink-0 ml-2">Apply</span>
-                )}
-              </button>
-            );
-          })}
+          {sug.alternatives.map((alt, j) => (
+            <button
+              key={j}
+              onClick={() => onApply(sug.id, sug.original!, alt)}
+              className="w-full text-left text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 transition-all flex items-center justify-between group"
+              data-testid={`btn-apply-suggestion-${sug.id}-${j}`}
+            >
+              <div className="flex flex-col gap-1 min-w-0 flex-1">
+                <span className="line-through text-muted-foreground break-words">{sug.original}</span>
+                <span className="text-foreground font-medium flex items-start gap-1">
+                  <Sparkles className="w-3 h-3 text-primary/70 shrink-0 mt-0.5" />
+                  <span className="break-words">{alt}</span>
+                </span>
+              </div>
+              <span className="opacity-0 group-hover:opacity-100 text-primary text-[10px] font-medium transition-opacity shrink-0 ml-2">Apply</span>
+            </button>
+          ))}
         </div>
       )}
     </Card>
@@ -181,21 +172,29 @@ function StoryCard({
   );
 }
 
+function formatTimeAgo(timestamp: number): string {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export default function SuggestionsSidebar({
-  suggestions, savedSuggestions, savedCount, loading, onApplySuggestion,
-  onDismiss, onSave, onRemoveSaved, documentContent, documentType, selectedText
+  suggestions, savedSuggestions, savedCount, changeHistory, loading, onApplySuggestion,
+  onDismiss, onSave, onRemoveSaved, onClearHistory, documentContent, documentType, selectedText
 }: SuggestionsSidebarProps) {
-  const [appliedSuggestions, setAppliedSuggestions] = useState<Set<string>>(new Set());
   const [ideaPrompt, setIdeaPrompt] = useState('');
   const [ideaResponse, setIdeaResponse] = useState('');
   const [ideaLoading, setIdeaLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('grammar');
   const [showSaved, setShowSaved] = useState(false);
 
-  const handleApply = (id: string, original: string, replacement: string) => {
+  const handleApply = (suggestionId: string, original: string, replacement: string) => {
     if (onApplySuggestion) {
-      onApplySuggestion(original, replacement);
-      setAppliedSuggestions(prev => new Set(prev).add(id));
+      onApplySuggestion(suggestionId, original, replacement);
     }
   };
 
@@ -232,7 +231,7 @@ export default function SuggestionsSidebar({
   const savedIds = new Set(savedSuggestions.map(s => s.id));
 
   const truncatedSelection = selectedText && selectedText.length > 80
-    ? selectedText.slice(0, 80) + '…'
+    ? selectedText.slice(0, 80) + '\u2026'
     : selectedText;
 
   return (
@@ -292,7 +291,6 @@ export default function SuggestionsSidebar({
                   <SuggestionCard
                     key={sug.id}
                     sug={sug}
-                    appliedSuggestions={appliedSuggestions}
                     onApply={handleApply}
                     onDismiss={onDismiss}
                     onSave={onRemoveSaved}
@@ -329,7 +327,7 @@ export default function SuggestionsSidebar({
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col w-full">
         <div className="px-4 pt-3 pb-0 border-b border-border/50">
-          <TabsList className="w-full bg-muted/50 grid grid-cols-4 p-1 rounded-lg">
+          <TabsList className="w-full bg-muted/50 grid grid-cols-5 p-1 rounded-lg">
             <TabsTrigger value="grammar" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-grammar">
               Grammar {grammarSuggestions.length > 0 && `(${grammarSuggestions.length})`}
             </TabsTrigger>
@@ -338,6 +336,9 @@ export default function SuggestionsSidebar({
             </TabsTrigger>
             <TabsTrigger value="story" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-story">
               Story {storySuggestions.length > 0 && `(${storySuggestions.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="history" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-history">
+              History {changeHistory.length > 0 && `(${changeHistory.length})`}
             </TabsTrigger>
             <TabsTrigger value="ideas" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-ideas">Ideas</TabsTrigger>
           </TabsList>
@@ -361,7 +362,6 @@ export default function SuggestionsSidebar({
               <SuggestionCard
                 key={sug.id}
                 sug={sug}
-                appliedSuggestions={appliedSuggestions}
                 onApply={handleApply}
                 onDismiss={onDismiss}
                 onSave={onSave}
@@ -387,7 +387,6 @@ export default function SuggestionsSidebar({
               <SuggestionCard
                 key={sug.id}
                 sug={sug}
-                appliedSuggestions={appliedSuggestions}
                 onApply={handleApply}
                 onDismiss={onDismiss}
                 onSave={onSave}
@@ -418,6 +417,54 @@ export default function SuggestionsSidebar({
                 isSaved={savedIds.has(sug.id)}
               />
             ))}
+          </TabsContent>
+
+          <TabsContent value="history" className="p-4 space-y-4 m-0">
+            {changeHistory.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground/60">
+                <History className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No changes applied yet.</p>
+                <p className="text-xs mt-1">Applied suggestions will appear here.</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <History className="w-3.5 h-3.5" />
+                    Change History
+                  </h4>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[10px] text-muted-foreground hover:text-destructive gap-1"
+                    onClick={onClearHistory}
+                    data-testid="btn-clear-history"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Clear
+                  </Button>
+                </div>
+                {changeHistory.map((entry) => (
+                  <Card key={entry.id} className="p-3 bg-card shadow-sm border border-border/60" data-testid={`history-entry-${entry.id}`}>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                        <span className="text-xs font-medium text-foreground">{entry.title}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{typeLabels[entry.type] || entry.type}</span>
+                        <span className="text-[10px] text-muted-foreground">{formatTimeAgo(entry.timestamp)}</span>
+                      </div>
+                    </div>
+                    <div className="pl-5 flex items-center gap-2 text-xs">
+                      <span className="line-through text-muted-foreground break-words">{entry.original}</span>
+                      <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                      <span className="text-foreground font-medium break-words">{entry.replacement}</span>
+                    </div>
+                  </Card>
+                ))}
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="ideas" className="p-4 space-y-4 m-0">
