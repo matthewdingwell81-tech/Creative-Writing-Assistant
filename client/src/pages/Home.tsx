@@ -24,7 +24,10 @@ export default function Home() {
   const [gdocsOpen, setGdocsOpen] = useState(false);
   const [selectedText, setSelectedText] = useState('');
 
-  const { suggestions, loading: suggestionsLoading, requestSuggestions } = useSuggestions();
+  const {
+    suggestions, savedSuggestions, savedCount, loading: suggestionsLoading,
+    requestSuggestions, dismissSuggestion, saveSuggestion, removeSaved
+  } = useSuggestions();
   const { save, saving, lastSaved } = useAutoSave(activeDocId);
 
   const { data: documents = [] } = useQuery<Document[]>({
@@ -238,8 +241,13 @@ export default function Home() {
           <aside className="w-[380px] border-l border-border/50 bg-card/30 backdrop-blur flex flex-col">
             <SuggestionsSidebar
               suggestions={suggestions}
+              savedSuggestions={savedSuggestions}
+              savedCount={savedCount}
               loading={suggestionsLoading}
               onApplySuggestion={applySuggestion}
+              onDismiss={dismissSuggestion}
+              onSave={saveSuggestion}
+              onRemoveSaved={removeSaved}
               documentContent={content}
               documentType={documentType}
               selectedText={selectedText}

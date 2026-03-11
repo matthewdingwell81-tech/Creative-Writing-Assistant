@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   Sparkles, BookOpen, AlertCircle, TrendingUp, CheckCircle2,
-  ChevronRight, MessageSquareDashed, Check, Loader2, RefreshCw, Type, TextSelect
+  ChevronRight, MessageSquareDashed, Check, Loader2, RefreshCw, Type, TextSelect,
+  X, Bookmark, BookmarkCheck
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
@@ -12,8 +13,13 @@ import type { Suggestion } from '@/hooks/useSuggestions';
 
 interface SuggestionsSidebarProps {
   suggestions: Suggestion[];
+  savedSuggestions: Suggestion[];
+  savedCount: number;
   loading: boolean;
   onApplySuggestion?: (original: string, replacement: string) => void;
+  onDismiss: (id: string) => void;
+  onSave: (id: string) => void;
+  onRemoveSaved: (id: string) => void;
   documentContent: string;
   documentType: string;
   selectedText?: string;
@@ -36,14 +42,18 @@ const typeLabels: Record<string, string> = {
 
 function SuggestionCard({
   sug,
-  index,
   appliedSuggestions,
   onApply,
+  onDismiss,
+  onSave,
+  isSaved,
 }: {
   sug: Suggestion;
-  index: number;
   appliedSuggestions: Set<string>;
   onApply: (id: string, original: string, replacement: string) => void;
+  onDismiss: (id: string) => void;
+  onSave: (id: string) => void;
+  isSaved?: boolean;
 }) {
   const config = severityConfig[sug.severity] || severityConfig.info;
   const Icon = config.icon;
@@ -51,19 +61,41 @@ function SuggestionCard({
     <Card className={`p-3 bg-card border-l-2 ${config.borderColor} shadow-sm border-t-0 border-r-0 border-b-0 rounded-r-lg rounded-l-sm`}>
       <div className="flex items-start gap-2 mb-2">
         <Icon className={`w-4 h-4 ${config.iconColor} mt-0.5 shrink-0`} />
-        <div>
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h4 className="text-sm font-medium text-foreground">{sug.title}</h4>
             <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{typeLabels[sug.type] || sug.type}</span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">{sug.description}</p>
         </div>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            onClick={() => onSave(sug.id)}
+            className="p-1 rounded hover:bg-muted transition-colors"
+            title={isSaved ? "Saved" : "Save for later"}
+            data-testid={`btn-save-suggestion-${sug.id}`}
+          >
+            {isSaved ? (
+              <BookmarkCheck className="w-3.5 h-3.5 text-primary" />
+            ) : (
+              <Bookmark className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
+            )}
+          </button>
+          <button
+            onClick={() => onDismiss(sug.id)}
+            className="p-1 rounded hover:bg-muted transition-colors"
+            title="Dismiss"
+            data-testid={`btn-dismiss-suggestion-${sug.id}`}
+          >
+            <X className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
+          </button>
+        </div>
       </div>
 
       {sug.original && sug.alternatives.length > 0 && (
         <div className="pl-6 space-y-2 mt-3">
           {sug.alternatives.map((alt, j) => {
-            const sugId = `sug-${index}-${j}`;
+            const sugId = `${sug.id}-alt-${j}`;
             const isApplied = appliedSuggestions.has(sugId);
             return (
               <button
@@ -71,7 +103,7 @@ function SuggestionCard({
                 onClick={() => onApply(sugId, sug.original!, alt)}
                 disabled={isApplied}
                 className="w-full text-left text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 transition-all flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed"
-                data-testid={`btn-apply-suggestion-${index}-${j}`}
+                data-testid={`btn-apply-suggestion-${sug.id}-${j}`}
               >
                 <div className="flex flex-col gap-1 min-w-0 flex-1">
                   <span className="line-through text-muted-foreground break-words">{sug.original}</span>
@@ -94,14 +126,71 @@ function SuggestionCard({
   );
 }
 
+function StoryCard({
+  sug,
+  onDismiss,
+  onSave,
+  isSaved,
+}: {
+  sug: Suggestion;
+  onDismiss: (id: string) => void;
+  onSave: (id: string) => void;
+  isSaved?: boolean;
+}) {
+  const Icon = sug.type === 'pacing' ? TrendingUp : BookOpen;
+  return (
+    <Card className="p-3 bg-card shadow-sm border border-border/60">
+      <div className="flex items-start gap-2 mb-3">
+        <Icon className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+        <h4 className="text-sm font-medium flex-1">{sug.title}</h4>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            onClick={() => onSave(sug.id)}
+            className="p-1 rounded hover:bg-muted transition-colors"
+            title={isSaved ? "Saved" : "Save for later"}
+            data-testid={`btn-save-suggestion-${sug.id}`}
+          >
+            {isSaved ? (
+              <BookmarkCheck className="w-3.5 h-3.5 text-primary" />
+            ) : (
+              <Bookmark className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
+            )}
+          </button>
+          <button
+            onClick={() => onDismiss(sug.id)}
+            className="p-1 rounded hover:bg-muted transition-colors"
+            title="Dismiss"
+            data-testid={`btn-dismiss-suggestion-${sug.id}`}
+          >
+            <X className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground leading-relaxed">{sug.description}</p>
+      {sug.alternatives.length > 0 && (
+        <div className="mt-3 bg-muted/50 p-3 rounded-md">
+          <p className="text-xs font-medium mb-2">Consider:</p>
+          <ul className="text-xs text-muted-foreground space-y-2 list-disc pl-4">
+            {sug.alternatives.map((alt, j) => (
+              <li key={j}>{alt}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function SuggestionsSidebar({
-  suggestions, loading, onApplySuggestion, documentContent, documentType, selectedText
+  suggestions, savedSuggestions, savedCount, loading, onApplySuggestion,
+  onDismiss, onSave, onRemoveSaved, documentContent, documentType, selectedText
 }: SuggestionsSidebarProps) {
   const [appliedSuggestions, setAppliedSuggestions] = useState<Set<string>>(new Set());
   const [ideaPrompt, setIdeaPrompt] = useState('');
   const [ideaResponse, setIdeaResponse] = useState('');
   const [ideaLoading, setIdeaLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('grammar');
+  const [showSaved, setShowSaved] = useState(false);
 
   const handleApply = (id: string, original: string, replacement: string) => {
     if (onApplySuggestion) {
@@ -140,6 +229,8 @@ export default function SuggestionsSidebar({
   const reviewSuggestions = suggestions.filter(s => ['vocabulary', 'style', 'tone'].includes(s.type));
   const storySuggestions = suggestions.filter(s => ['pacing', 'story'].includes(s.type));
 
+  const savedIds = new Set(savedSuggestions.map(s => s.id));
+
   const truncatedSelection = selectedText && selectedText.length > 80
     ? selectedText.slice(0, 80) + '…'
     : selectedText;
@@ -147,10 +238,24 @@ export default function SuggestionsSidebar({
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
       <div className="p-4 border-b border-border/50 bg-card/50">
-        <h2 className="font-medium flex items-center gap-2 text-foreground">
-          <Sparkles className="w-4 h-4 text-primary" />
-          Creative Assistant
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="font-medium flex items-center gap-2 text-foreground">
+            <Sparkles className="w-4 h-4 text-primary" />
+            Creative Assistant
+          </h2>
+          {savedCount > 0 && (
+            <Button
+              variant={showSaved ? "default" : "outline"}
+              size="sm"
+              className="h-7 text-xs gap-1.5"
+              onClick={() => setShowSaved(!showSaved)}
+              data-testid="btn-toggle-saved"
+            >
+              <BookmarkCheck className="w-3.5 h-3.5" />
+              Saved ({savedCount})
+            </Button>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground mt-1">
           {loading ? (
             <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Analyzing...</span>
@@ -159,6 +264,46 @@ export default function SuggestionsSidebar({
           )}
         </p>
       </div>
+
+      {showSaved && savedSuggestions.length > 0 && (
+        <div className="border-b border-border/50 bg-primary/5">
+          <div className="px-4 py-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+              <BookmarkCheck className="w-3.5 h-3.5" />
+              Saved Suggestions
+            </h3>
+          </div>
+          <ScrollArea className="max-h-[300px]">
+            <div className="px-4 pb-3 space-y-3">
+              {savedSuggestions.map((sug) => {
+                const isStoryType = ['pacing', 'story'].includes(sug.type);
+                if (isStoryType) {
+                  return (
+                    <StoryCard
+                      key={sug.id}
+                      sug={sug}
+                      onDismiss={onDismiss}
+                      onSave={onRemoveSaved}
+                      isSaved={true}
+                    />
+                  );
+                }
+                return (
+                  <SuggestionCard
+                    key={sug.id}
+                    sug={sug}
+                    appliedSuggestions={appliedSuggestions}
+                    onApply={handleApply}
+                    onDismiss={onDismiss}
+                    onSave={onRemoveSaved}
+                    isSaved={true}
+                  />
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
 
       {selectedText && (
         <div className="px-4 py-3 border-b border-border/50 bg-primary/5">
@@ -212,13 +357,15 @@ export default function SuggestionsSidebar({
                 <p className="text-sm">No grammar issues found. Nice work!</p>
               </div>
             )}
-            {grammarSuggestions.map((sug, i) => (
+            {grammarSuggestions.map((sug) => (
               <SuggestionCard
-                key={`grammar-${i}`}
+                key={sug.id}
                 sug={sug}
-                index={i}
                 appliedSuggestions={appliedSuggestions}
                 onApply={handleApply}
+                onDismiss={onDismiss}
+                onSave={onSave}
+                isSaved={savedIds.has(sug.id)}
               />
             ))}
           </TabsContent>
@@ -236,13 +383,15 @@ export default function SuggestionsSidebar({
                 <p className="text-sm">Looking good! Keep writing and suggestions will appear here.</p>
               </div>
             )}
-            {reviewSuggestions.map((sug, i) => (
+            {reviewSuggestions.map((sug) => (
               <SuggestionCard
-                key={`review-${i}`}
+                key={sug.id}
                 sug={sug}
-                index={i + grammarSuggestions.length}
                 appliedSuggestions={appliedSuggestions}
                 onApply={handleApply}
+                onDismiss={onDismiss}
+                onSave={onSave}
+                isSaved={savedIds.has(sug.id)}
               />
             ))}
           </TabsContent>
@@ -260,28 +409,15 @@ export default function SuggestionsSidebar({
                 <p className="text-sm">Write more and story-level analysis will appear here.</p>
               </div>
             )}
-            {storySuggestions.map((sug, i) => {
-              const Icon = sug.type === 'pacing' ? TrendingUp : BookOpen;
-              return (
-                <Card key={`story-${i}`} className="p-3 bg-card shadow-sm border border-border/60">
-                  <h4 className="text-sm font-medium flex items-center gap-2 mb-3">
-                    <Icon className="w-4 h-4 text-primary" />
-                    {sug.title}
-                  </h4>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{sug.description}</p>
-                  {sug.alternatives.length > 0 && (
-                    <div className="mt-3 bg-muted/50 p-3 rounded-md">
-                      <p className="text-xs font-medium mb-2">Consider:</p>
-                      <ul className="text-xs text-muted-foreground space-y-2 list-disc pl-4">
-                        {sug.alternatives.map((alt, j) => (
-                          <li key={j}>{alt}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
+            {storySuggestions.map((sug) => (
+              <StoryCard
+                key={sug.id}
+                sug={sug}
+                onDismiss={onDismiss}
+                onSave={onSave}
+                isSaved={savedIds.has(sug.id)}
+              />
+            ))}
           </TabsContent>
 
           <TabsContent value="ideas" className="p-4 space-y-4 m-0">

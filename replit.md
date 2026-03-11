@@ -17,6 +17,7 @@ A real-time AI writing assistant tailored for fiction writers. Uses OpenAI (via 
   - Review tab (vocabulary, style, tone)
   - Story tab (pacing alerts, arc tracking)
   - Ideas tab (AI idea generation with streaming responses)
+- Suggestion management: dismiss suggestions you don't want, save them for later review; saved suggestions persist across re-analysis and are viewable in a dedicated panel accessible from all tabs
 - Text selection review: select text in the editor to get targeted AI feedback on specific passages
 - Document management (create, list, delete, export)
 - Multiple document types (fiction, non-fiction, essay, blog, script)
