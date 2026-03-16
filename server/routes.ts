@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertDocumentSchema } from "@shared/schema";
+import { insertDocumentSchema, insertIdeaSchema } from "@shared/schema";
 import OpenAI from "openai";
 import {
   getUncachableGoogleDocsClient,
@@ -151,6 +151,33 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
         res.status(500).json({ error: "Failed to generate ideas" });
       }
     }
+  });
+
+  // === Ideas Scratchpad CRUD ===
+
+  app.get("/api/documents/:docId/ideas", async (req, res) => {
+    const docId = parseInt(req.params.docId);
+    if (isNaN(docId)) return res.status(400).json({ error: "Invalid document ID" });
+    const ideasList = await storage.getIdeasByDocument(docId);
+    res.json(ideasList);
+  });
+
+  app.post("/api/documents/:docId/ideas", async (req, res) => {
+    const docId = parseInt(req.params.docId);
+    if (isNaN(docId)) return res.status(400).json({ error: "Invalid document ID" });
+    const doc = await storage.getDocument(docId);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    const parsed = insertIdeaSchema.safeParse({ ...req.body, documentId: docId });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
+    const idea = await storage.createIdea(parsed.data);
+    res.status(201).json(idea);
+  });
+
+  app.delete("/api/ideas/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid idea ID" });
+    await storage.deleteIdea(id);
+    res.status(204).send();
   });
 
   // === Google Docs Integration ===

@@ -48,6 +48,27 @@ export async function fetchSuggestions(text: string, documentType: string = "fic
   return res.json();
 }
 
+export async function fetchIdeas(documentId: number) {
+  const res = await fetch(`/api/documents/${documentId}/ideas`);
+  if (!res.ok) throw new Error("Failed to fetch ideas");
+  return res.json();
+}
+
+export async function createIdea(documentId: number, content: string) {
+  const res = await fetch(`/api/documents/${documentId}/ideas`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) throw new Error("Failed to create idea");
+  return res.json();
+}
+
+export async function deleteIdea(id: number) {
+  const res = await fetch(`/api/ideas/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete idea");
+}
+
 export async function streamIdeas(
   text: string,
   prompt: string,

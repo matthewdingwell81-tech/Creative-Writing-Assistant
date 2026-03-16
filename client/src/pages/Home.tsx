@@ -4,6 +4,7 @@ import Editor from '@/components/Editor';
 import SuggestionsSidebar from '@/components/SuggestionsSidebar';
 import DocumentList from '@/components/DocumentList';
 import GoogleDocsDialog from '@/components/GoogleDocsDialog';
+import IdeasPanel from '@/components/IdeasPanel';
 import { Sparkles, BookOpen, Settings, PanelLeftClose, PanelLeft, FilePlus, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -307,34 +308,37 @@ export default function Home() {
           </aside>
         )}
 
-        <div className="flex-1 overflow-y-auto relative">
-          <div className="max-w-3xl mx-auto px-8 py-12">
-            {activeDocId ? (
-              <Editor
-                content={content}
-                setContent={handleContentChange}
-                title={title}
-                setTitle={handleTitleChange}
-                onSelectionChange={setSelectedText}
-                grammarHighlights={grammarHighlights}
-                onApplyCorrection={handleInlineCorrection}
-              />
-            ) : (
-              <div className="text-center py-32">
-                <Sparkles className="w-12 h-12 text-primary/30 mx-auto mb-4" />
-                <h2 className="text-xl font-medium text-muted-foreground mb-2">Welcome to Lumina</h2>
-                <p className="text-sm text-muted-foreground/70 mb-6">Create a new document to start writing</p>
-                <Button onClick={handleNewDocument} className="bg-primary text-primary-foreground" data-testid="btn-create-first">
-                  <FilePlus className="w-4 h-4 mr-2" /> New Document
-                </Button>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto relative">
+            <div className="max-w-3xl mx-auto px-8 py-12">
+              {activeDocId ? (
+                <Editor
+                  content={content}
+                  setContent={handleContentChange}
+                  title={title}
+                  setTitle={handleTitleChange}
+                  onSelectionChange={setSelectedText}
+                  grammarHighlights={grammarHighlights}
+                  onApplyCorrection={handleInlineCorrection}
+                />
+              ) : (
+                <div className="text-center py-32">
+                  <Sparkles className="w-12 h-12 text-primary/30 mx-auto mb-4" />
+                  <h2 className="text-xl font-medium text-muted-foreground mb-2">Welcome to Lumina</h2>
+                  <p className="text-sm text-muted-foreground/70 mb-6">Create a new document to start writing</p>
+                  <Button onClick={handleNewDocument} className="bg-primary text-primary-foreground" data-testid="btn-create-first">
+                    <FilePlus className="w-4 h-4 mr-2" /> New Document
+                  </Button>
+                </div>
+              )}
+            </div>
+            {activeDocId && (
+              <div className="fixed bottom-6 left-1/2 -translate-x-[calc(50%+190px)] text-xs text-muted-foreground/60 font-medium tracking-wide" data-testid="word-count">
+                {wordCount} words
               </div>
             )}
           </div>
-          {activeDocId && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-[calc(50%+190px)] text-xs text-muted-foreground/60 font-medium tracking-wide" data-testid="word-count">
-              {wordCount} words
-            </div>
-          )}
+          {activeDocId && <IdeasPanel documentId={activeDocId} />}
         </div>
 
         {activeDocId && (

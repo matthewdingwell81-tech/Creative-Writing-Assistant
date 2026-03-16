@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { documents, type Document, type InsertDocument } from "@shared/schema";
+import { documents, ideas, type Document, type InsertDocument, type Idea, type InsertIdea } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -9,6 +9,9 @@ export interface IStorage {
   createDocument(doc: InsertDocument): Promise<Document>;
   updateDocument(id: number, updates: Partial<InsertDocument>): Promise<Document | undefined>;
   deleteDocument(id: number): Promise<void>;
+  getIdeasByDocument(documentId: number): Promise<Idea[]>;
+  createIdea(idea: InsertIdea): Promise<Idea>;
+  deleteIdea(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -37,6 +40,19 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocument(id: number): Promise<void> {
     await db.delete(documents).where(eq(documents.id, id));
+  }
+
+  async getIdeasByDocument(documentId: number): Promise<Idea[]> {
+    return db.select().from(ideas).where(eq(ideas.documentId, documentId)).orderBy(desc(ideas.createdAt));
+  }
+
+  async createIdea(idea: InsertIdea): Promise<Idea> {
+    const [created] = await db.insert(ideas).values(idea).returning();
+    return created;
+  }
+
+  async deleteIdea(id: number): Promise<void> {
+    await db.delete(ideas).where(eq(ideas.id, id));
   }
 }
 
