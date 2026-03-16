@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles, BookOpen, AlertCircle, TrendingUp, CheckCircle2,
   ChevronRight, MessageSquareDashed, Check, Loader2, RefreshCw, Type, TextSelect,
@@ -25,6 +25,8 @@ interface SuggestionsSidebarProps {
   documentContent: string;
   documentType: string;
   selectedText?: string;
+  externalIdeaPrompt?: { prompt: string; id: number } | null;
+  onExternalIdeaHandled?: () => void;
 }
 
 const severityConfig = {
@@ -184,13 +186,24 @@ function formatTimeAgo(timestamp: number): string {
 
 export default function SuggestionsSidebar({
   suggestions, savedSuggestions, savedCount, changeHistory, loading, onApplySuggestion,
-  onDismiss, onSave, onRemoveSaved, onClearHistory, documentContent, documentType, selectedText
+  onDismiss, onSave, onRemoveSaved, onClearHistory, documentContent, documentType, selectedText,
+  externalIdeaPrompt, onExternalIdeaHandled
 }: SuggestionsSidebarProps) {
   const [ideaPrompt, setIdeaPrompt] = useState('');
   const [ideaResponse, setIdeaResponse] = useState('');
   const [ideaLoading, setIdeaLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('grammar');
   const [showSaved, setShowSaved] = useState(false);
+  const externalPromptHandled = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (externalIdeaPrompt && externalIdeaPrompt.id !== externalPromptHandled.current) {
+      externalPromptHandled.current = externalIdeaPrompt.id;
+      setActiveTab('ideas');
+      setIdeaPrompt('');
+      handleIdeaSubmitExternal(externalIdeaPrompt.prompt);
+    }
+  }, [externalIdeaPrompt]);
 
   const handleApply = (suggestionId: string, original: string, replacement: string) => {
     if (onApplySuggestion) {
@@ -198,7 +211,7 @@ export default function SuggestionsSidebar({
     }
   };
 
-  const handleIdeaSubmit = async (prompt: string) => {
+  const handleIdeaSubmitDirect = async (prompt: string) => {
     if (!prompt.trim()) return;
     setIdeaLoading(true);
     setIdeaResponse('');
@@ -216,12 +229,34 @@ export default function SuggestionsSidebar({
     }
   };
 
+  const handleIdeaSubmitExternal = async (prompt: string) => {
+    if (!prompt.trim()) return;
+    setIdeaLoading(true);
+    setIdeaResponse('');
+    try {
+      await streamIdeas(
+        documentContent,
+        prompt,
+        documentType,
+        (chunk) => setIdeaResponse(prev => prev + chunk),
+        () => {
+          setIdeaLoading(false);
+          onExternalIdeaHandled?.();
+        }
+      );
+    } catch {
+      setIdeaResponse('Failed to generate ideas. Please try again.');
+      setIdeaLoading(false);
+      onExternalIdeaHandled?.();
+    }
+  };
+
   const handleReviewSelection = () => {
     if (!selectedText) return;
     const prompt = `Please provide detailed feedback on this specific passage I've selected from my writing. Analyze it for clarity, impact, word choice, rhythm, and any improvements you'd suggest:\n\n"${selectedText}"`;
     setActiveTab('ideas');
     setIdeaPrompt('');
-    handleIdeaSubmit(prompt);
+    handleIdeaSubmitDirect(prompt);
   };
 
   const grammarSuggestions = suggestions.filter(s => s.type === 'grammar');
@@ -476,13 +511,13 @@ export default function SuggestionsSidebar({
                   placeholder="Ask for ideas, character names, setting descriptions..."
                   value={ideaPrompt}
                   onChange={(e) => setIdeaPrompt(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleIdeaSubmit(ideaPrompt); } }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleIdeaSubmitDirect(ideaPrompt); } }}
                   data-testid="textarea-idea-prompt"
                 />
                 <Button
                   size="icon"
                   className="absolute bottom-1 right-1 h-6 w-6 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground"
-                  onClick={() => handleIdeaSubmit(ideaPrompt)}
+                  onClick={() => handleIdeaSubmitDirect(ideaPrompt)}
                   disabled={ideaLoading}
                   data-testid="btn-submit-idea"
                 >
@@ -511,7 +546,7 @@ export default function SuggestionsSidebar({
                   key={i}
                   variant="outline"
                   className="w-full justify-start text-left text-xs h-auto py-2 font-normal whitespace-normal bg-card"
-                  onClick={() => { setIdeaPrompt(prompt); handleIdeaSubmit(prompt); }}
+                  onClick={() => { setIdeaPrompt(prompt); handleIdeaSubmitDirect(prompt); }}
                   data-testid={`btn-quick-prompt-${i}`}
                 >
                   <MessageSquareDashed className="w-3.5 h-3.5 mr-2 shrink-0 text-primary/70" />

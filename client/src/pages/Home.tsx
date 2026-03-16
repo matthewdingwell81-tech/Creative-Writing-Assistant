@@ -95,6 +95,9 @@ export default function Home() {
   const [gdocsMode, setGdocsMode] = useState<'import' | 'export'>('import');
   const [gdocsOpen, setGdocsOpen] = useState(false);
   const [selectedText, setSelectedText] = useState('');
+  const [ideaAssistantPrompt, setIdeaAssistantPrompt] = useState<{ prompt: string; id: number } | null>(null);
+  const [ideaAssistantLoading, setIdeaAssistantLoading] = useState(false);
+  const ideaAssistantCounter = React.useRef(0);
 
   const {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
@@ -203,6 +206,13 @@ export default function Home() {
     a.click();
     URL.revokeObjectURL(url);
   }, [content, title]);
+
+  const handleAskAssistantForIdea = useCallback((ideaContent: string) => {
+    const prompt = `I have the following idea in my scratchpad that I'd like help developing. Please review this idea in the context of my current document and provide exactly 3 specific, actionable suggestions for how I could implement or develop this thought in my writing:\n\nIdea: "${ideaContent}"`;
+    ideaAssistantCounter.current += 1;
+    setIdeaAssistantLoading(true);
+    setIdeaAssistantPrompt({ prompt, id: ideaAssistantCounter.current });
+  }, []);
 
   const grammarHighlights = suggestions
     .filter(s => s.type === 'grammar' && s.original && s.alternatives.length > 0)
@@ -338,7 +348,13 @@ export default function Home() {
               </div>
             )}
           </div>
-          {activeDocId && <IdeasPanel documentId={activeDocId} />}
+          {activeDocId && (
+            <IdeasPanel
+              documentId={activeDocId}
+              onAskAssistant={handleAskAssistantForIdea}
+              assistantLoading={ideaAssistantLoading}
+            />
+          )}
         </div>
 
         {activeDocId && (
@@ -357,6 +373,11 @@ export default function Home() {
               documentContent={content}
               documentType={documentType}
               selectedText={selectedText}
+              externalIdeaPrompt={ideaAssistantPrompt}
+              onExternalIdeaHandled={() => {
+                setIdeaAssistantPrompt(null);
+                setIdeaAssistantLoading(false);
+              }}
             />
           </aside>
         )}

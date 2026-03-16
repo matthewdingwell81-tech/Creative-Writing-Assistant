@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchIdeas, createIdea, deleteIdea } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Lightbulb, ChevronUp, ChevronDown, X, Plus } from 'lucide-react';
+import { Lightbulb, ChevronUp, ChevronDown, X, Plus, Sparkles } from 'lucide-react';
 import type { Idea } from '@shared/schema';
 
 interface IdeasPanelProps {
   documentId: number;
+  onAskAssistant?: (ideaContent: string) => void;
+  assistantLoading?: boolean;
 }
 
-export default function IdeasPanel({ documentId }: IdeasPanelProps) {
+export default function IdeasPanel({ documentId, onAskAssistant, assistantLoading }: IdeasPanelProps) {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [newIdea, setNewIdea] = useState('');
@@ -106,9 +108,24 @@ export default function IdeasPanel({ documentId }: IdeasPanelProps) {
                   className="group flex items-start gap-2 rounded-md bg-background/30 border border-border/30 px-3 py-2"
                   data-testid={`idea-item-${idea.id}`}
                 >
-                  <p className="flex-1 text-sm text-foreground/80 whitespace-pre-wrap break-words">
-                    {idea.content}
-                  </p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words">
+                      {idea.content}
+                    </p>
+                    {onAskAssistant && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-1.5 h-6 text-[11px] text-primary/70 hover:text-primary hover:bg-primary/10 gap-1 px-2"
+                        onClick={() => onAskAssistant(idea.content)}
+                        disabled={assistantLoading}
+                        data-testid={`btn-ask-assistant-${idea.id}`}
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        Ask Assistant
+                      </Button>
+                    )}
+                  </div>
                   <button
                     onClick={() => deleteMutation.mutate(idea.id)}
                     className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground/50 hover:text-destructive transition-opacity mt-0.5"
