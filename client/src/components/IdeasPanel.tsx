@@ -19,7 +19,6 @@ export default function IdeasPanel({ documentId }: IdeasPanelProps) {
   const { data: ideasList = [] } = useQuery<Idea[]>({
     queryKey,
     queryFn: () => fetchIdeas(documentId),
-    enabled: expanded,
   });
 
   const createMutation = useMutation({
