@@ -393,12 +393,12 @@ export default function Home() {
         {activeDocId && showScratchpad && (
           <>
             <div
-              className="fixed inset-0 z-20"
+              className="fixed inset-0 z-20 animate-in fade-in duration-150"
               onClick={() => setShowScratchpad(false)}
               data-testid="scratchpad-backdrop"
             />
             <div
-              className="fixed left-0 top-14 bottom-0 z-20 w-[300px] bg-card/95 backdrop-blur-sm border-r border-border/50 shadow-xl flex flex-col"
+              className="fixed left-0 top-14 bottom-0 z-20 w-[300px] bg-card/95 backdrop-blur-sm border-r border-border/50 shadow-xl flex flex-col animate-in slide-in-from-left duration-200"
               data-testid="scratchpad-drawer"
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 shrink-0">
