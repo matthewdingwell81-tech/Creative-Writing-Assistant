@@ -5,7 +5,7 @@ import SuggestionsSidebar from '@/components/SuggestionsSidebar';
 import DocumentList from '@/components/DocumentList';
 import GoogleDocsDialog from '@/components/GoogleDocsDialog';
 import IdeasPanel from '@/components/IdeasPanel';
-import { Sparkles, BookOpen, Settings, PanelLeftClose, PanelLeft, FilePlus, Download, Upload } from 'lucide-react';
+import { Sparkles, BookOpen, Settings, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -98,6 +98,7 @@ export default function Home() {
   const [ideaAssistantPrompt, setIdeaAssistantPrompt] = useState<{ prompt: string; id: number } | null>(null);
   const [ideaAssistantLoading, setIdeaAssistantLoading] = useState(false);
   const ideaAssistantCounter = React.useRef(0);
+  const [showScratchpad, setShowScratchpad] = useState(false);
 
   const {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
@@ -306,7 +307,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="flex-1 flex overflow-hidden">
+      <main className="flex-1 flex overflow-hidden relative">
         {showDocList && (
           <aside className="w-[260px] border-r border-border/50 bg-card/30 overflow-y-auto">
             <DocumentList
@@ -348,13 +349,6 @@ export default function Home() {
               </div>
             )}
           </div>
-          {activeDocId && (
-            <IdeasPanel
-              documentId={activeDocId}
-              onAskAssistant={handleAskAssistantForIdea}
-              assistantLoading={ideaAssistantLoading}
-            />
-          )}
         </div>
 
         {activeDocId && (
@@ -380,6 +374,58 @@ export default function Home() {
               }}
             />
           </aside>
+        )}
+
+        {activeDocId && (
+          <button
+            onClick={() => setShowScratchpad(!showScratchpad)}
+            className="fixed left-0 top-1/2 -translate-y-1/2 z-30 bg-card border border-border/50 border-l-0 rounded-r-lg px-1.5 py-3 flex flex-col items-center gap-1.5 text-muted-foreground hover:text-foreground hover:bg-card/90 shadow-md transition-all"
+            data-testid="btn-toggle-scratchpad"
+            title="Ideas Scratchpad"
+          >
+            <Lightbulb className="w-4 h-4" />
+            <span className="text-[10px] font-medium" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+              Ideas
+            </span>
+          </button>
+        )}
+
+        {activeDocId && showScratchpad && (
+          <>
+            <div
+              className="fixed inset-0 z-20"
+              onClick={() => setShowScratchpad(false)}
+              data-testid="scratchpad-backdrop"
+            />
+            <div
+              className="fixed left-0 top-14 bottom-0 z-20 w-[300px] bg-card/95 backdrop-blur-sm border-r border-border/50 shadow-xl flex flex-col"
+              data-testid="scratchpad-drawer"
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 shrink-0">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Lightbulb className="w-4 h-4 text-primary" />
+                  <span>Ideas Scratchpad</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowScratchpad(false)}
+                  data-testid="btn-close-scratchpad"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <IdeasPanel
+                  documentId={activeDocId}
+                  onAskAssistant={handleAskAssistantForIdea}
+                  assistantLoading={ideaAssistantLoading}
+                  drawerMode
+                />
+              </div>
+            </div>
+          </>
         )}
       </main>
 
