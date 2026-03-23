@@ -1,8 +1,9 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertDocumentSchema, insertIdeaSchema } from "@shared/schema";
+import { insertDocumentSchema, insertIdeaSchema, insertUserSchema } from "@shared/schema";
 import OpenAI from "openai";
+import bcrypt from "bcrypt";
 import {
   getUncachableGoogleDocsClient,
   googleDocsToHtml,
@@ -14,47 +15,99 @@ const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
 
-  // === Document CRUD ===
+  // === Auth Routes ===
 
-  app.get("/api/documents", async (_req, res) => {
-    const docs = await storage.getDocuments();
+  app.post("/api/auth/register", async (req, res) => {
+    const parsed = insertUserSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid input" });
+
+    const { username, password } = parsed.data;
+    const existing = await storage.getUserByUsername(username);
+    if (existing) return res.status(409).json({ error: "Username already taken" });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await storage.createUser({ username, password: hashedPassword });
+
+    req.session.userId = user.id;
+    res.status(201).json({ id: user.id, username: user.username });
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    const parsed = insertUserSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid input" });
+
+    const { username, password } = parsed.data;
+    const user = await storage.getUserByUsername(username);
+    if (!user) return res.status(401).json({ error: "Invalid username or password" });
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(401).json({ error: "Invalid username or password" });
+
+    req.session.userId = user.id;
+    res.json({ id: user.id, username: user.username });
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy(() => {
+      res.json({ ok: true });
+    });
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ error: "Not authenticated" });
+    const user = await storage.getUserById(req.session.userId);
+    if (!user) return res.status(401).json({ error: "Not authenticated" });
+    res.json({ id: user.id, username: user.username });
+  });
+
+  // === Document CRUD (protected) ===
+
+  app.get("/api/documents", requireAuth, async (req, res) => {
+    const docs = await storage.getDocuments(req.session.userId!);
     res.json(docs);
   });
 
-  app.get("/api/documents/:id", async (req, res) => {
-    const doc = await storage.getDocument(parseInt(req.params.id));
+  app.get("/api/documents/:id", requireAuth, async (req, res) => {
+    const doc = await storage.getDocument(parseInt(req.params.id), req.session.userId!);
     if (!doc) return res.status(404).json({ error: "Not found" });
     res.json(doc);
   });
 
-  app.post("/api/documents", async (req, res) => {
-    const parsed = insertDocumentSchema.safeParse(req.body);
+  app.post("/api/documents", requireAuth, async (req, res) => {
+    const parsed = insertDocumentSchema.safeParse({ ...req.body, userId: req.session.userId });
     if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
     const doc = await storage.createDocument(parsed.data);
     res.status(201).json(doc);
   });
 
-  app.patch("/api/documents/:id", async (req, res) => {
+  app.patch("/api/documents/:id", requireAuth, async (req, res) => {
     const parsed = insertDocumentSchema.partial().safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
-    const doc = await storage.updateDocument(parseInt(req.params.id), parsed.data);
+    const doc = await storage.updateDocument(parseInt(req.params.id), req.session.userId!, parsed.data);
     if (!doc) return res.status(404).json({ error: "Not found" });
     res.json(doc);
   });
 
-  app.delete("/api/documents/:id", async (req, res) => {
-    await storage.deleteDocument(parseInt(req.params.id));
+  app.delete("/api/documents/:id", requireAuth, async (req, res) => {
+    await storage.deleteDocument(parseInt(req.params.id), req.session.userId!);
     res.status(204).send();
   });
 
   // === AI Suggestions (streaming) ===
 
-  app.post("/api/suggestions", async (req, res) => {
+  app.post("/api/suggestions", requireAuth, async (req, res) => {
     const { text, documentType = "fiction" } = req.body;
     if (!text || text.trim().length < 10) {
       return res.json({ suggestions: [] });
@@ -113,7 +166,7 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
 
   // === AI Ideas (streaming) ===
 
-  app.post("/api/ideas", async (req, res) => {
+  app.post("/api/ideas", requireAuth, async (req, res) => {
     const { text, prompt: userPrompt, documentType = "fiction" } = req.body;
 
     const systemPrompt = `You are a creative writing assistant helping with a ${documentType} document. The user will provide their current text and a specific request. Respond helpfully and creatively. Keep responses concise (2-4 paragraphs max).`;
@@ -155,17 +208,17 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
 
   // === Ideas Scratchpad CRUD ===
 
-  app.get("/api/documents/:docId/ideas", async (req, res) => {
+  app.get("/api/documents/:docId/ideas", requireAuth, async (req, res) => {
     const docId = parseInt(req.params.docId);
     if (isNaN(docId)) return res.status(400).json({ error: "Invalid document ID" });
     const ideasList = await storage.getIdeasByDocument(docId);
     res.json(ideasList);
   });
 
-  app.post("/api/documents/:docId/ideas", async (req, res) => {
+  app.post("/api/documents/:docId/ideas", requireAuth, async (req, res) => {
     const docId = parseInt(req.params.docId);
     if (isNaN(docId)) return res.status(400).json({ error: "Invalid document ID" });
-    const doc = await storage.getDocument(docId);
+    const doc = await storage.getDocument(docId, req.session.userId!);
     if (!doc) return res.status(404).json({ error: "Document not found" });
     const parsed = insertIdeaSchema.safeParse({ ...req.body, documentId: docId });
     if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
@@ -173,7 +226,7 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
     res.status(201).json(idea);
   });
 
-  app.delete("/api/ideas/:id", async (req, res) => {
+  app.delete("/api/ideas/:id", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid idea ID" });
     await storage.deleteIdea(id);
@@ -182,7 +235,7 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
 
   // === Google Docs Integration ===
 
-  app.post("/api/gdocs/import", async (req, res) => {
+  app.post("/api/gdocs/import", requireAuth, async (req, res) => {
     const { documentId } = req.body;
     if (!documentId) return res.status(400).json({ error: "documentId is required" });
 
@@ -194,6 +247,7 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
       const content = googleDocsToHtml(doc.data);
 
       const created = await storage.createDocument({
+        userId: req.session.userId!,
         title,
         content,
         documentType: "fiction",
@@ -206,12 +260,12 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
     }
   });
 
-  app.post("/api/gdocs/export", async (req, res) => {
+  app.post("/api/gdocs/export", requireAuth, async (req, res) => {
     const { documentId: luminaDocId, googleDocTitle } = req.body;
     if (!luminaDocId) return res.status(400).json({ error: "documentId is required" });
 
     try {
-      const luminaDoc = await storage.getDocument(parseInt(luminaDocId));
+      const luminaDoc = await storage.getDocument(parseInt(luminaDocId), req.session.userId!);
       if (!luminaDoc) return res.status(404).json({ error: "Document not found" });
 
       const docs = await getUncachableGoogleDocsClient();

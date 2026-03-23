@@ -5,7 +5,7 @@ import SuggestionsSidebar from '@/components/SuggestionsSidebar';
 import DocumentList from '@/components/DocumentList';
 import GoogleDocsDialog from '@/components/GoogleDocsDialog';
 import IdeasPanel from '@/components/IdeasPanel';
-import { Sparkles, BookOpen, Settings, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X } from 'lucide-react';
+import { Sparkles, BookOpen, Settings, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -13,6 +13,7 @@ import { fetchDocuments, fetchDocument, createDocument, updateDocument } from '@
 import { useSuggestions, type Suggestion } from '@/hooks/useSuggestions';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import type { Document } from '@shared/schema';
 
 function normalizeNbsp(s: string): string {
@@ -87,6 +88,7 @@ function replaceTextInHtml(html: string, originalText: string, newText: string):
 export default function Home() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user, logout } = useAuth();
   const [activeDocId, setActiveDocId] = useState<number | null>(null);
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
@@ -301,6 +303,33 @@ export default function Home() {
               >
                 <Upload className="w-4 h-4 mr-2" />
                 Export to Google Docs
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground"
+                data-testid="btn-user-menu"
+                title={user?.username}
+              >
+                <User className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <div className="px-2 py-1.5 text-xs text-muted-foreground border-b border-border mb-1">
+                Signed in as <span className="font-medium text-foreground" data-testid="text-username">{user?.username}</span>
+              </div>
+              <DropdownMenuItem
+                onClick={() => logout()}
+                data-testid="btn-logout"
+                className="text-red-500 focus:text-red-500"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -1,26 +1,54 @@
 import { db } from "./db";
-import { documents, ideas, type Document, type InsertDocument, type Idea, type InsertIdea } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import {
+  documents,
+  ideas,
+  users,
+  type Document,
+  type InsertDocument,
+  type Idea,
+  type InsertIdea,
+  type User,
+  type InsertUser,
+} from "@shared/schema";
+import { eq, desc, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 export interface IStorage {
-  getDocuments(): Promise<Document[]>;
-  getDocument(id: number): Promise<Document | undefined>;
+  getUserById(id: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  getDocuments(userId: string): Promise<Document[]>;
+  getDocument(id: number, userId: string): Promise<Document | undefined>;
   createDocument(doc: InsertDocument): Promise<Document>;
-  updateDocument(id: number, updates: Partial<InsertDocument>): Promise<Document | undefined>;
-  deleteDocument(id: number): Promise<void>;
+  updateDocument(id: number, userId: string, updates: Partial<InsertDocument>): Promise<Document | undefined>;
+  deleteDocument(id: number, userId: string): Promise<void>;
   getIdeasByDocument(documentId: number): Promise<Idea[]>;
   createIdea(idea: InsertIdea): Promise<Idea>;
   deleteIdea(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
-  async getDocuments(): Promise<Document[]> {
-    return db.select().from(documents).orderBy(desc(documents.updatedAt));
+  async getUserById(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
-  async getDocument(id: number): Promise<Document | undefined> {
-    const [doc] = await db.select().from(documents).where(eq(documents.id, id));
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const [created] = await db.insert(users).values(user).returning();
+    return created;
+  }
+
+  async getDocuments(userId: string): Promise<Document[]> {
+    return db.select().from(documents).where(eq(documents.userId, userId)).orderBy(desc(documents.updatedAt));
+  }
+
+  async getDocument(id: number, userId: string): Promise<Document | undefined> {
+    const [doc] = await db.select().from(documents).where(and(eq(documents.id, id), eq(documents.userId, userId)));
     return doc;
   }
 
@@ -29,17 +57,17 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateDocument(id: number, updates: Partial<InsertDocument>): Promise<Document | undefined> {
+  async updateDocument(id: number, userId: string, updates: Partial<InsertDocument>): Promise<Document | undefined> {
     const [updated] = await db
       .update(documents)
       .set({ ...updates, updatedAt: sql`CURRENT_TIMESTAMP` })
-      .where(eq(documents.id, id))
+      .where(and(eq(documents.id, id), eq(documents.userId, userId)))
       .returning();
     return updated;
   }
 
-  async deleteDocument(id: number): Promise<void> {
-    await db.delete(documents).where(eq(documents.id, id));
+  async deleteDocument(id: number, userId: string): Promise<void> {
+    await db.delete(documents).where(and(eq(documents.id, id), eq(documents.userId, userId)));
   }
 
   async getIdeasByDocument(documentId: number): Promise<Idea[]> {

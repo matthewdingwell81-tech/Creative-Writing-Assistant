@@ -19,6 +19,7 @@ export type User = typeof users.$inferSelect;
 
 export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   title: text("title").notNull().default("Untitled"),
   content: text("content").notNull().default(""),
   documentType: text("document_type").notNull().default("fiction"),
