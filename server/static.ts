@@ -10,10 +10,21 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  app.use(
+    express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (path.basename(filePath) === "index.html") {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        }
+      },
+    }),
+  );
 
-  // Serve index.html for all SPA routes with no-cache headers so browsers
-  // always fetch the latest version after a new deployment.
+  // SPA fallback: serve index.html for any path that doesn't match a static file.
+  // Also sends no-cache headers so browsers always fetch the latest HTML after
+  // a new deployment.
   app.use("/{*path}", (_req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
