@@ -180,6 +180,7 @@ export default function Home() {
     if (activeChapterId) {
       try {
         await updateChapterApi(activeChapterId, { content });
+        setDocChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, content } : c));
       } catch (e) {
         console.error("Failed to save chapter:", e);
       }
@@ -197,6 +198,7 @@ export default function Home() {
     if (activeChapterId) {
       try {
         await updateChapterApi(activeChapterId, { content });
+        setDocChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, content } : c));
       } catch (e) {
         console.error("Failed to save chapter:", e);
       }

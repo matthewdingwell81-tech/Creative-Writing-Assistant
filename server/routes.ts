@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertDocumentSchema, insertIdeaSchema, insertUserSchema, insertChapterSchema } from "@shared/schema";
+import { z } from "zod";
 import OpenAI from "openai";
 import bcrypt from "bcrypt";
 import {
@@ -255,10 +256,20 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
     res.status(201).json(chapter);
   });
 
+  const chapterUpdateSchema = z.object({
+    title: z.string().optional(),
+    content: z.string().optional(),
+    position: z.number().int().optional(),
+  });
+
   app.patch("/api/chapters/:id", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid chapter ID" });
-    const parsed = insertChapterSchema.partial().safeParse(req.body);
+    const existing = await storage.getChapter(id);
+    if (!existing) return res.status(404).json({ error: "Chapter not found" });
+    const doc = await storage.getDocument(existing.documentId, req.session.userId!);
+    if (!doc) return res.status(403).json({ error: "Forbidden" });
+    const parsed = chapterUpdateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
     const chapter = await storage.updateChapter(id, parsed.data);
     if (!chapter) return res.status(404).json({ error: "Chapter not found" });
@@ -268,6 +279,10 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
   app.delete("/api/chapters/:id", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid chapter ID" });
+    const existing = await storage.getChapter(id);
+    if (!existing) return res.status(404).json({ error: "Chapter not found" });
+    const doc = await storage.getDocument(existing.documentId, req.session.userId!);
+    if (!doc) return res.status(403).json({ error: "Forbidden" });
     await storage.deleteChapter(id);
     res.status(204).send();
   });
