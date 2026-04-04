@@ -105,7 +105,7 @@
 }
 
 .suggestion-flash {
-  animation: suggestion-flash 1.8s ease-in-out;
+  animation: suggestion-flash 1.8s ease-in-out forwards;
 }
 
 @layer base {
