@@ -3,14 +3,17 @@ import {
   documents,
   ideas,
   users,
+  chapters,
   type Document,
   type InsertDocument,
   type Idea,
   type InsertIdea,
   type User,
   type InsertUser,
+  type Chapter,
+  type InsertChapter,
 } from "@shared/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, asc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 export interface IStorage {
@@ -25,6 +28,11 @@ export interface IStorage {
   getIdeasByDocument(documentId: number): Promise<Idea[]>;
   createIdea(idea: InsertIdea): Promise<Idea>;
   deleteIdea(id: number): Promise<void>;
+  getChapters(documentId: number): Promise<Chapter[]>;
+  getChapter(id: number): Promise<Chapter | undefined>;
+  createChapter(chapter: InsertChapter): Promise<Chapter>;
+  updateChapter(id: number, updates: Partial<InsertChapter>): Promise<Chapter | undefined>;
+  deleteChapter(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -81,6 +89,33 @@ export class DatabaseStorage implements IStorage {
 
   async deleteIdea(id: number): Promise<void> {
     await db.delete(ideas).where(eq(ideas.id, id));
+  }
+
+  async getChapters(documentId: number): Promise<Chapter[]> {
+    return db.select().from(chapters).where(eq(chapters.documentId, documentId)).orderBy(asc(chapters.position));
+  }
+
+  async getChapter(id: number): Promise<Chapter | undefined> {
+    const [chapter] = await db.select().from(chapters).where(eq(chapters.id, id));
+    return chapter;
+  }
+
+  async createChapter(chapter: InsertChapter): Promise<Chapter> {
+    const [created] = await db.insert(chapters).values(chapter).returning();
+    return created;
+  }
+
+  async updateChapter(id: number, updates: Partial<InsertChapter>): Promise<Chapter | undefined> {
+    const [updated] = await db
+      .update(chapters)
+      .set(updates)
+      .where(eq(chapters.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteChapter(id: number): Promise<void> {
+    await db.delete(chapters).where(eq(chapters.id, id));
   }
 }
 

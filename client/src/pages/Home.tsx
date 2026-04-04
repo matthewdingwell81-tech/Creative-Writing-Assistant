@@ -5,16 +5,16 @@ import SuggestionsSidebar from '@/components/SuggestionsSidebar';
 import DocumentList from '@/components/DocumentList';
 import GoogleDocsDialog from '@/components/GoogleDocsDialog';
 import IdeasPanel from '@/components/IdeasPanel';
-import { Sparkles, BookOpen, Settings, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus } from 'lucide-react';
+import { Sparkles, BookOpen, Settings, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus, Pencil, Plus, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { fetchDocuments, fetchDocument, createDocument, updateDocument } from '@/lib/api';
+import { fetchDocuments, fetchDocument, createDocument, updateDocument, fetchChapters, createChapter, updateChapter as updateChapterApi } from '@/lib/api';
 import { useSuggestions, type Suggestion } from '@/hooks/useSuggestions';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import type { Document } from '@shared/schema';
+import type { Document, Chapter } from '@shared/schema';
 
 function normalizeNbsp(s: string): string {
   return s.replace(/\u00A0/g, ' ');
@@ -102,26 +102,49 @@ export default function Home() {
   const ideaAssistantCounter = React.useRef(0);
   const [showScratchpad, setShowScratchpad] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [docChapters, setDocChapters] = useState<Chapter[]>([]);
+  const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
+  const [renamingChapterId, setRenamingChapterId] = useState<number | null>(null);
+  const [chapterTitleInput, setChapterTitleInput] = useState('');
+  const chapterTitleInputRef = React.useRef<HTMLInputElement>(null);
 
   const {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
     requestSuggestions, cancelPending, dismissSuggestion, applySuggestionById, saveSuggestion, removeSaved, clearHistory
   } = useSuggestions();
-  const { save, saving, lastSaved } = useAutoSave(activeDocId);
+  const { save, saving, lastSaved } = useAutoSave(activeDocId, activeChapterId);
 
   const { data: documents = [] } = useQuery<Document[]>({
     queryKey: ['/api/documents'],
     queryFn: fetchDocuments,
   });
 
+  const loadChaptersForDoc = useCallback(async (docId: number, docContent: string) => {
+    try {
+      const chapterList: Chapter[] = await fetchChapters(docId);
+      if (chapterList.length === 0) {
+        const chapter = await createChapter(docId, { title: 'Chapter 1', content: docContent, position: 0 });
+        setDocChapters([chapter]);
+        setActiveChapterId(chapter.id);
+        setContent(chapter.content);
+      } else {
+        setDocChapters(chapterList);
+        setActiveChapterId(chapterList[0].id);
+        setContent(chapterList[0].content);
+      }
+    } catch (e) {
+      console.error("Failed to load chapters:", e);
+    }
+  }, []);
+
   const createMutation = useMutation({
     mutationFn: createDocument,
-    onSuccess: (doc: Document) => {
+    onSuccess: async (doc: Document) => {
       queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
       setActiveDocId(doc.id);
-      setContent(doc.content);
       setTitle(doc.title);
       setDocumentType(doc.documentType);
+      await loadChaptersForDoc(doc.id, doc.content);
     },
   });
 
@@ -130,10 +153,10 @@ export default function Home() {
     if (!activeDocId && documents.length > 0) {
       const doc = documents[0];
       setActiveDocId(doc.id);
-      setContent(doc.content);
       setTitle(doc.title);
       setDocumentType(doc.documentType);
       setSelectedText('');
+      loadChaptersForDoc(doc.id, doc.content);
     }
   }, [documents, activeDocId]);
 
@@ -141,15 +164,66 @@ export default function Home() {
     try {
       const doc = await fetchDocument(id);
       setActiveDocId(doc.id);
-      setContent(doc.content);
       setTitle(doc.title);
       setDocumentType(doc.documentType);
       setShowDocList(false);
       setSelectedText('');
+      setRenamingChapterId(null);
+      await loadChaptersForDoc(doc.id, doc.content);
     } catch (e) {
       console.error("Failed to load document:", e);
     }
-  }, []);
+  }, [loadChaptersForDoc]);
+
+  const handleSwitchChapter = useCallback(async (chapterId: number) => {
+    if (chapterId === activeChapterId) return;
+    if (activeChapterId) {
+      try {
+        await updateChapterApi(activeChapterId, { content });
+      } catch (e) {
+        console.error("Failed to save chapter:", e);
+      }
+    }
+    const chapter = docChapters.find(c => c.id === chapterId);
+    if (chapter) {
+      setActiveChapterId(chapter.id);
+      setContent(chapter.content);
+      setRenamingChapterId(null);
+    }
+  }, [activeChapterId, content, docChapters]);
+
+  const handleAddChapter = useCallback(async () => {
+    if (!activeDocId) return;
+    if (activeChapterId) {
+      try {
+        await updateChapterApi(activeChapterId, { content });
+      } catch (e) {
+        console.error("Failed to save chapter:", e);
+      }
+    }
+    const position = docChapters.length;
+    const newTitle = `Chapter ${position + 1}`;
+    const chapter = await createChapter(activeDocId, { title: newTitle, content: '', position });
+    setDocChapters(prev => [...prev, chapter]);
+    setActiveChapterId(chapter.id);
+    setContent('');
+    setRenamingChapterId(null);
+  }, [activeDocId, activeChapterId, content, docChapters]);
+
+  const handleSaveChapterTitle = useCallback(async () => {
+    if (!renamingChapterId || !chapterTitleInput.trim()) {
+      setRenamingChapterId(null);
+      return;
+    }
+    const trimmed = chapterTitleInput.trim();
+    try {
+      await updateChapterApi(renamingChapterId, { title: trimmed });
+      setDocChapters(prev => prev.map(c => c.id === renamingChapterId ? { ...c, title: trimmed } : c));
+    } catch (e) {
+      console.error("Failed to rename chapter:", e);
+    }
+    setRenamingChapterId(null);
+  }, [renamingChapterId, chapterTitleInput]);
 
   const handleContentChange = useCallback((newContent: string) => {
     setContent(newContent);
@@ -245,7 +319,7 @@ export default function Home() {
           </div>
         </div>
         
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Select value={documentType} onValueChange={(v) => { setDocumentType(v); if (activeDocId) updateDocument(activeDocId, { documentType: v }); }}>
             <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-doc-type">
               <SelectValue />
@@ -259,6 +333,85 @@ export default function Home() {
               <SelectItem value="general">General</SelectItem>
             </SelectContent>
           </Select>
+
+          {activeDocId && docChapters.length > 0 && (
+            <div className="flex items-center gap-1">
+              {renamingChapterId === activeChapterId ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    ref={chapterTitleInputRef}
+                    className="h-8 w-[130px] rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                    value={chapterTitleInput}
+                    autoFocus
+                    onChange={(e) => setChapterTitleInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveChapterTitle();
+                      if (e.key === 'Escape') setRenamingChapterId(null);
+                    }}
+                    onBlur={handleSaveChapterTitle}
+                    data-testid="input-chapter-title"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                    onMouseDown={(e) => { e.preventDefault(); handleSaveChapterTitle(); }}
+                    data-testid="btn-save-chapter-title"
+                  >
+                    <Check className="w-3 h-3" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Select
+                    value={activeChapterId?.toString() ?? ''}
+                    onValueChange={(v) => {
+                      if (v === '__new__') {
+                        handleAddChapter();
+                      } else {
+                        handleSwitchChapter(parseInt(v));
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-chapter">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {docChapters.map((ch) => (
+                        <SelectItem key={ch.id} value={ch.id.toString()}>
+                          {ch.title}
+                        </SelectItem>
+                      ))}
+                      <SelectSeparator />
+                      <SelectItem value="__new__" className="text-primary">
+                        <span className="flex items-center gap-1.5">
+                          <Plus className="w-3 h-3" />
+                          Add Chapter
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      const chapter = docChapters.find(c => c.id === activeChapterId);
+                      if (chapter) {
+                        setRenamingChapterId(chapter.id);
+                        setChapterTitleInput(chapter.title);
+                      }
+                    }}
+                    title="Rename chapter"
+                    data-testid="btn-rename-chapter"
+                  >
+                    <Pencil className="w-3 h-3" />
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+
           <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs font-medium" data-testid="save-status">
             {saving ? 'Saving...' : lastSaved ? 'Saved' : 'Ready'}
           </span>

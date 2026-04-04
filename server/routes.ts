@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertDocumentSchema, insertIdeaSchema, insertUserSchema } from "@shared/schema";
+import { insertDocumentSchema, insertIdeaSchema, insertUserSchema, insertChapterSchema } from "@shared/schema";
 import OpenAI from "openai";
 import bcrypt from "bcrypt";
 import {
@@ -230,6 +230,45 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid idea ID" });
     await storage.deleteIdea(id);
+    res.status(204).send();
+  });
+
+  // === Chapters CRUD ===
+
+  app.get("/api/documents/:docId/chapters", requireAuth, async (req, res) => {
+    const docId = parseInt(req.params.docId);
+    if (isNaN(docId)) return res.status(400).json({ error: "Invalid document ID" });
+    const doc = await storage.getDocument(docId, req.session.userId!);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    const chapterList = await storage.getChapters(docId);
+    res.json(chapterList);
+  });
+
+  app.post("/api/documents/:docId/chapters", requireAuth, async (req, res) => {
+    const docId = parseInt(req.params.docId);
+    if (isNaN(docId)) return res.status(400).json({ error: "Invalid document ID" });
+    const doc = await storage.getDocument(docId, req.session.userId!);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    const parsed = insertChapterSchema.safeParse({ ...req.body, documentId: docId });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
+    const chapter = await storage.createChapter(parsed.data);
+    res.status(201).json(chapter);
+  });
+
+  app.patch("/api/chapters/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid chapter ID" });
+    const parsed = insertChapterSchema.partial().safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
+    const chapter = await storage.updateChapter(id, parsed.data);
+    if (!chapter) return res.status(404).json({ error: "Chapter not found" });
+    res.json(chapter);
+  });
+
+  app.delete("/api/chapters/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid chapter ID" });
+    await storage.deleteChapter(id);
     res.status(204).send();
   });
 

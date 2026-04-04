@@ -69,6 +69,37 @@ export async function deleteIdea(id: number) {
   if (!res.ok) throw new Error("Failed to delete idea");
 }
 
+export async function fetchChapters(documentId: number) {
+  const res = await fetch(`/api/documents/${documentId}/chapters`);
+  if (!res.ok) throw new Error("Failed to fetch chapters");
+  return res.json();
+}
+
+export async function createChapter(documentId: number, data: { title: string; content?: string; position?: number }) {
+  const res = await fetch(`/api/documents/${documentId}/chapters`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create chapter");
+  return res.json();
+}
+
+export async function updateChapter(id: number, data: { title?: string; content?: string; position?: number }) {
+  const res = await fetch(`/api/chapters/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update chapter");
+  return res.json();
+}
+
+export async function deleteChapter(id: number) {
+  const res = await fetch(`/api/chapters/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete chapter");
+}
+
 export async function streamIdeas(
   text: string,
   prompt: string,

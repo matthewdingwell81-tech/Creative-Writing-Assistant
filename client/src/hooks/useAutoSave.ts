@@ -1,7 +1,7 @@
 import { useRef, useCallback, useState } from "react";
-import { updateDocument } from "@/lib/api";
+import { updateDocument, updateChapter } from "@/lib/api";
 
-export function useAutoSave(documentId: number | null) {
+export function useAutoSave(documentId: number | null, chapterId?: number | null) {
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -18,9 +18,14 @@ export function useAutoSave(documentId: number | null) {
         lastContentRef.current = content;
         setSaving(true);
         try {
-          const updates: any = { content };
-          if (title) updates.title = title;
-          await updateDocument(documentId, updates);
+          if (chapterId) {
+            await updateChapter(chapterId, { content });
+            if (title) await updateDocument(documentId, { title });
+          } else {
+            const updates: any = { content };
+            if (title) updates.title = title;
+            await updateDocument(documentId, updates);
+          }
           setLastSaved(new Date());
         } catch (e) {
           console.error("Auto-save failed:", e);
@@ -29,7 +34,7 @@ export function useAutoSave(documentId: number | null) {
         }
       }, 1500);
     },
-    [documentId]
+    [documentId, chapterId]
   );
 
   return { save, saving, lastSaved };

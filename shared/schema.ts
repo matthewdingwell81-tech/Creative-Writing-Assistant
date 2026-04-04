@@ -51,4 +51,19 @@ export const insertIdeaSchema = createInsertSchema(ideas).omit({
 export type Idea = typeof ideas.$inferSelect;
 export type InsertIdea = z.infer<typeof insertIdeaSchema>;
 
+export const chapters = pgTable("chapters", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+  title: text("title").notNull().default("Chapter 1"),
+  content: text("content").notNull().default(""),
+  position: integer("position").notNull().default(0),
+});
+
+export const insertChapterSchema = createInsertSchema(chapters).omit({
+  id: true,
+});
+
+export type Chapter = typeof chapters.$inferSelect;
+export type InsertChapter = z.infer<typeof insertChapterSchema>;
+
 export { conversations, messages } from "./models/chat";
