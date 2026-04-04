@@ -106,7 +106,6 @@ export default function Home() {
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
   const [renamingChapterId, setRenamingChapterId] = useState<number | null>(null);
   const [chapterTitleInput, setChapterTitleInput] = useState('');
-  const chapterTitleInputRef = React.useRef<HTMLInputElement>(null);
 
   const {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
@@ -134,8 +133,9 @@ export default function Home() {
       }
     } catch (e) {
       console.error("Failed to load chapters:", e);
+      toast({ title: "Could not load chapters", description: "Your document sections failed to load.", variant: "destructive" });
     }
-  }, []);
+  }, [toast]);
 
   const createMutation = useMutation({
     mutationFn: createDocument,
@@ -183,6 +183,7 @@ export default function Home() {
         setDocChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, content } : c));
       } catch (e) {
         console.error("Failed to save chapter:", e);
+        toast({ title: "Could not save chapter", description: "Your changes may not have been saved.", variant: "destructive" });
       }
     }
     const chapter = docChapters.find(c => c.id === chapterId);
@@ -191,7 +192,7 @@ export default function Home() {
       setContent(chapter.content);
       setRenamingChapterId(null);
     }
-  }, [activeChapterId, content, docChapters]);
+  }, [activeChapterId, content, docChapters, toast]);
 
   const handleAddChapter = useCallback(async () => {
     if (!activeDocId) return;
@@ -201,16 +202,22 @@ export default function Home() {
         setDocChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, content } : c));
       } catch (e) {
         console.error("Failed to save chapter:", e);
+        toast({ title: "Could not save chapter", description: "Your changes may not have been saved.", variant: "destructive" });
       }
     }
-    const position = docChapters.length;
-    const newTitle = `Chapter ${position + 1}`;
-    const chapter = await createChapter(activeDocId, { title: newTitle, content: '', position });
-    setDocChapters(prev => [...prev, chapter]);
-    setActiveChapterId(chapter.id);
-    setContent('');
-    setRenamingChapterId(null);
-  }, [activeDocId, activeChapterId, content, docChapters]);
+    try {
+      const position = docChapters.length;
+      const newTitle = `Chapter ${position + 1}`;
+      const chapter = await createChapter(activeDocId, { title: newTitle, content: '', position });
+      setDocChapters(prev => [...prev, chapter]);
+      setActiveChapterId(chapter.id);
+      setContent('');
+      setRenamingChapterId(null);
+    } catch (e) {
+      console.error("Failed to add chapter:", e);
+      toast({ title: "Could not add chapter", description: "Please try again.", variant: "destructive" });
+    }
+  }, [activeDocId, activeChapterId, content, docChapters, toast]);
 
   const handleSaveChapterTitle = useCallback(async () => {
     if (!renamingChapterId || !chapterTitleInput.trim()) {
@@ -223,9 +230,10 @@ export default function Home() {
       setDocChapters(prev => prev.map(c => c.id === renamingChapterId ? { ...c, title: trimmed } : c));
     } catch (e) {
       console.error("Failed to rename chapter:", e);
+      toast({ title: "Could not rename chapter", description: "Please try again.", variant: "destructive" });
     }
     setRenamingChapterId(null);
-  }, [renamingChapterId, chapterTitleInput]);
+  }, [renamingChapterId, chapterTitleInput, toast]);
 
   const handleContentChange = useCallback((newContent: string) => {
     setContent(newContent);
@@ -341,7 +349,6 @@ export default function Home() {
               {renamingChapterId === activeChapterId ? (
                 <div className="flex items-center gap-1">
                   <input
-                    ref={chapterTitleInputRef}
                     className="h-8 w-[130px] rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
                     value={chapterTitleInput}
                     autoFocus
