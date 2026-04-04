@@ -5,7 +5,7 @@ import SuggestionsSidebar from '@/components/SuggestionsSidebar';
 import DocumentList from '@/components/DocumentList';
 import GoogleDocsDialog from '@/components/GoogleDocsDialog';
 import IdeasPanel from '@/components/IdeasPanel';
-import { Sparkles, BookOpen, Settings, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User } from 'lucide-react';
+import { Sparkles, BookOpen, Settings, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -101,6 +101,7 @@ export default function Home() {
   const [ideaAssistantLoading, setIdeaAssistantLoading] = useState(false);
   const ideaAssistantCounter = React.useRef(0);
   const [showScratchpad, setShowScratchpad] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
 
   const {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
@@ -153,8 +154,10 @@ export default function Home() {
   const handleContentChange = useCallback((newContent: string) => {
     setContent(newContent);
     save(newContent, title);
-    requestSuggestions(newContent, documentType);
-  }, [save, title, requestSuggestions, documentType]);
+    if (!focusMode) {
+      requestSuggestions(newContent, documentType);
+    }
+  }, [save, title, requestSuggestions, documentType, focusMode]);
 
   const handleTitleChange = useCallback((newTitle: string) => {
     setTitle(newTitle);
@@ -262,6 +265,16 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={focusMode ? "text-primary bg-primary/10 hover:bg-primary/20 hover:text-primary" : "text-muted-foreground hover:text-foreground"}
+            onClick={() => setFocusMode(!focusMode)}
+            title={focusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
+            data-testid="btn-toggle-focus-mode"
+          >
+            <Focus className="w-4 h-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -380,7 +393,7 @@ export default function Home() {
           </div>
         </div>
 
-        {activeDocId && (
+        {activeDocId && !focusMode && (
           <aside className="w-[380px] border-l border-border/50 bg-card/30 backdrop-blur flex flex-col">
             <SuggestionsSidebar
               suggestions={suggestions}
