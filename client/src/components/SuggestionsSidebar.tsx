@@ -65,24 +65,28 @@ function SuggestionCard({
   const Icon = config.icon;
   const selectedAlt = sug.alternatives[selectedAltIndex] ?? sug.alternatives[0];
 
+  const handleCardClick = () => {
+    if (sug.original) onScrollToSuggestion?.(sug.original);
+  };
+
   return (
-    <Card className={`p-3 bg-card border-l-2 ${config.borderColor} shadow-sm border-t-0 border-r-0 border-b-0 rounded-r-lg rounded-l-sm`}>
-      <div
-        className="flex items-start gap-2 mb-2 cursor-pointer group/header"
-        onClick={() => sug.original && onScrollToSuggestion?.(sug.original)}
-        data-testid={`card-suggestion-${sug.id}`}
-      >
+    <Card
+      className={`p-3 bg-card border-l-2 ${config.borderColor} shadow-sm border-t-0 border-r-0 border-b-0 rounded-r-lg rounded-l-sm cursor-pointer`}
+      onClick={handleCardClick}
+      data-testid={`card-suggestion-${sug.id}`}
+    >
+      <div className="flex items-start gap-2 mb-2">
         <Icon className={`w-4 h-4 ${config.iconColor} mt-0.5 shrink-0`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h4 className="text-sm font-medium text-foreground group-hover/header:text-primary transition-colors">{sug.title}</h4>
+            <h4 className="text-sm font-medium text-foreground">{sug.title}</h4>
             <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{typeLabels[sug.type] || sug.type}</span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">{sug.description}</p>
         </div>
-        <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-0.5 shrink-0">
           <button
-            onClick={() => onSave(sug.id)}
+            onClick={(e) => { e.stopPropagation(); onSave(sug.id); }}
             className="p-1 rounded hover:bg-muted transition-colors"
             title={isSaved ? "Saved" : "Save for later"}
             data-testid={`btn-save-suggestion-${sug.id}`}
@@ -94,7 +98,7 @@ function SuggestionCard({
             )}
           </button>
           <button
-            onClick={() => onDismiss(sug.id)}
+            onClick={(e) => { e.stopPropagation(); onDismiss(sug.id); }}
             className="p-1 rounded hover:bg-muted transition-colors"
             title="Dismiss"
             data-testid={`btn-dismiss-suggestion-${sug.id}`}
@@ -109,7 +113,7 @@ function SuggestionCard({
           {sug.alternatives.map((alt, j) => (
             <button
               key={j}
-              onClick={() => setSelectedAltIndex(j)}
+              onClick={(e) => { e.stopPropagation(); setSelectedAltIndex(j); }}
               className={`w-full text-left text-xs p-2 bg-muted/50 rounded-md border transition-all flex items-center justify-between group ${
                 selectedAltIndex === j
                   ? 'border-primary/50 ring-1 ring-primary/25 bg-primary/5'
@@ -130,7 +134,7 @@ function SuggestionCard({
           <Button
             size="sm"
             className="w-full h-7 text-xs mt-1 bg-primary hover:bg-primary/90 text-primary-foreground"
-            onClick={() => onApply(sug.id, sug.original!, selectedAlt)}
+            onClick={(e) => { e.stopPropagation(); onApply(sug.id, sug.original!, selectedAlt); }}
             data-testid={`btn-apply-suggestion-${sug.id}`}
           >
             Apply Change
