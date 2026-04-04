@@ -98,14 +98,14 @@
 }
 
 @keyframes suggestion-flash {
-  0%   { background-color: transparent; border-radius: 2px; }
-  25%  { background-color: rgba(250, 204, 21, 0.55); border-radius: 2px; }
-  75%  { background-color: rgba(250, 204, 21, 0.35); border-radius: 2px; }
-  100% { background-color: transparent; border-radius: 2px; }
+  0%   { background-color: rgba(251, 191, 36, 0); outline: 2px solid rgba(251, 191, 36, 0); border-radius: 3px; }
+  15%  { background-color: rgba(251, 191, 36, 0.9); outline: 2px solid rgba(245, 158, 11, 0.9); border-radius: 3px; }
+  55%  { background-color: rgba(251, 191, 36, 0.85); outline: 2px solid rgba(245, 158, 11, 0.85); border-radius: 3px; }
+  100% { background-color: rgba(251, 191, 36, 0); outline: 2px solid rgba(251, 191, 36, 0); border-radius: 3px; }
 }
 
 .suggestion-flash {
-  animation: suggestion-flash 1.4s ease-in-out;
+  animation: suggestion-flash 1.8s ease-in-out;
 }
 
 @layer base {

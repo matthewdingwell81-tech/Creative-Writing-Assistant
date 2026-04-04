@@ -40,6 +40,8 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
   const isTyping = useRef(false);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const grammarHighlightsRef = useRef<GrammarHighlight[]>(grammarHighlights);
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashedSpellElemRef = useRef<HTMLElement | null>(null);
   const [popover, setPopover] = useState<PopoverState>({ visible: false, x: 0, y: 0, original: '', alternatives: [], targetSpan: null });
 
   grammarHighlightsRef.current = grammarHighlights;
@@ -54,27 +56,62 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
       const el = editorRef.current;
       const normalizeSpaces = (s: string) => s.replace(/\u00A0/g, ' ');
       const searchLower = normalizeSpaces(text).toLowerCase();
+      const FLASH_DURATION = 1800;
 
-      const flashElement = (elem: HTMLElement) => {
+      // Cancel any in-flight flash and clean up stale flash spans immediately
+      if (flashTimeoutRef.current !== null) {
+        clearTimeout(flashTimeoutRef.current);
+        flashTimeoutRef.current = null;
+      }
+
+      // Remove the animation class from the previously flashed spell-highlight element
+      if (flashedSpellElemRef.current) {
+        flashedSpellElemRef.current.classList.remove('suggestion-flash');
+        flashedSpellElemRef.current = null;
+      }
+
+      // Remove any stale data-jump-flash spans, restoring their text content
+      el.querySelectorAll('[data-jump-flash]').forEach(span => {
+        if (span.parentNode) {
+          const textReplace = document.createTextNode(span.textContent || '');
+          span.parentNode.replaceChild(textReplace, span);
+          span.parentNode.normalize();
+        }
+      });
+
+      const startFlashOnSpellElem = (elem: HTMLElement) => {
         elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Force a reflow so the browser treats this as a fresh animation start
+        elem.classList.remove('suggestion-flash');
+        void elem.offsetWidth;
         elem.classList.add('suggestion-flash');
-        setTimeout(() => elem.classList.remove('suggestion-flash'), 1500);
+        flashedSpellElemRef.current = elem;
+        flashTimeoutRef.current = setTimeout(() => {
+          elem.classList.remove('suggestion-flash');
+          flashedSpellElemRef.current = null;
+          flashTimeoutRef.current = null;
+        }, FLASH_DURATION);
       };
 
+      // Check existing data-spell-highlight spans first
       const spellSpans = el.querySelectorAll('[data-spell-highlight]');
       for (const span of Array.from(spellSpans)) {
         const spanText = normalizeSpaces(span.textContent || '').toLowerCase();
         if (spanText === searchLower || spanText.includes(searchLower)) {
-          flashElement(span as HTMLElement);
+          startFlashOnSpellElem(span as HTMLElement);
           return;
         }
       }
 
+      // Fall back to TreeWalker on text nodes
       const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
       let node: Node | null;
       while ((node = walker.nextNode())) {
         const textNode = node as Text;
-        if ((textNode.parentElement as HTMLElement)?.hasAttribute?.('data-spell-highlight')) continue;
+        const parentEl = textNode.parentElement as HTMLElement | null;
+        if (parentEl?.hasAttribute('data-spell-highlight')) continue;
+        if (parentEl?.hasAttribute('data-jump-flash')) continue;
+
         const nodeText = textNode.textContent || '';
         const normalizedNodeText = normalizeSpaces(nodeText);
         const idx = normalizedNodeText.toLowerCase().indexOf(searchLower);
@@ -91,22 +128,22 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
           flashSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
           flashSpan.classList.add('suggestion-flash');
 
-          setTimeout(() => {
+          flashTimeoutRef.current = setTimeout(() => {
             if (flashSpan.parentNode) {
               const textReplace = document.createTextNode(flashSpan.textContent || '');
               flashSpan.parentNode.replaceChild(textReplace, flashSpan);
               flashSpan.parentNode.normalize();
             }
+            flashTimeoutRef.current = null;
             lastHighlightKey.current = '';
             if (editorRef.current) {
               clearHighlights(editorRef.current);
               applyHighlights(editorRef.current, grammarHighlightsRef.current);
               lastHighlightKey.current = grammarHighlightsRef.current.map(h => h.id).sort().join(',');
             }
-          }, 1500);
+          }, FLASH_DURATION);
         } catch {
-          const parentEl = textNode.parentElement;
-          if (parentEl) flashElement(parentEl);
+          if (parentEl) startFlashOnSpellElem(parentEl);
         }
         break;
       }
