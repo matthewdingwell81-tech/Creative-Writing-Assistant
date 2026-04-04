@@ -1,9 +1,13 @@
-import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useCallback, useState, useMemo, useImperativeHandle, forwardRef } from 'react';
 
 export interface GrammarHighlight {
   original: string;
   alternatives: string[];
   id: string;
+}
+
+export interface EditorHandle {
+  scrollToSuggestion: (text: string) => void;
 }
 
 interface EditorProps {
@@ -25,21 +29,89 @@ interface PopoverState {
   targetSpan: HTMLElement | null;
 }
 
-export default function Editor({
+const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
   content, setContent, title, setTitle, onSelectionChange,
   grammarHighlights = [], onApplyCorrection
-}: EditorProps) {
+}, ref) {
   const editorRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const isInternalUpdate = useRef(false);
   const lastHighlightKey = useRef('');
   const isTyping = useRef(false);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const grammarHighlightsRef = useRef<GrammarHighlight[]>(grammarHighlights);
   const [popover, setPopover] = useState<PopoverState>({ visible: false, x: 0, y: 0, original: '', alternatives: [], targetSpan: null });
+
+  grammarHighlightsRef.current = grammarHighlights;
 
   const highlightKey = useMemo(() => {
     return grammarHighlights.map(h => h.id).sort().join(',');
   }, [grammarHighlights]);
+
+  useImperativeHandle(ref, () => ({
+    scrollToSuggestion: (text: string) => {
+      if (!editorRef.current || !text) return;
+      const el = editorRef.current;
+      const normalizeSpaces = (s: string) => s.replace(/\u00A0/g, ' ');
+      const searchLower = normalizeSpaces(text).toLowerCase();
+
+      const flashElement = (elem: HTMLElement) => {
+        elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        elem.classList.add('suggestion-flash');
+        setTimeout(() => elem.classList.remove('suggestion-flash'), 1500);
+      };
+
+      const spellSpans = el.querySelectorAll('[data-spell-highlight]');
+      for (const span of Array.from(spellSpans)) {
+        const spanText = normalizeSpaces(span.textContent || '').toLowerCase();
+        if (spanText === searchLower || spanText.includes(searchLower)) {
+          flashElement(span as HTMLElement);
+          return;
+        }
+      }
+
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        const textNode = node as Text;
+        if ((textNode.parentElement as HTMLElement)?.hasAttribute?.('data-spell-highlight')) continue;
+        const nodeText = textNode.textContent || '';
+        const normalizedNodeText = normalizeSpaces(nodeText);
+        const idx = normalizedNodeText.toLowerCase().indexOf(searchLower);
+        if (idx === -1) continue;
+
+        try {
+          const range = document.createRange();
+          range.setStart(textNode, idx);
+          range.setEnd(textNode, idx + text.length);
+
+          const flashSpan = document.createElement('span');
+          flashSpan.setAttribute('data-jump-flash', 'true');
+          range.surroundContents(flashSpan);
+          flashSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          flashSpan.classList.add('suggestion-flash');
+
+          setTimeout(() => {
+            if (flashSpan.parentNode) {
+              const textReplace = document.createTextNode(flashSpan.textContent || '');
+              flashSpan.parentNode.replaceChild(textReplace, flashSpan);
+              flashSpan.parentNode.normalize();
+            }
+            lastHighlightKey.current = '';
+            if (editorRef.current) {
+              clearHighlights(editorRef.current);
+              applyHighlights(editorRef.current, grammarHighlightsRef.current);
+              lastHighlightKey.current = grammarHighlightsRef.current.map(h => h.id).sort().join(',');
+            }
+          }, 1500);
+        } catch {
+          const parentEl = textNode.parentElement;
+          if (parentEl) flashElement(parentEl);
+        }
+        break;
+      }
+    }
+  }));
 
   useEffect(() => {
     if (editorRef.current && !isInternalUpdate.current) {
@@ -222,7 +294,9 @@ export default function Editor({
       )}
     </div>
   );
-}
+});
+
+export default Editor;
 
 function clearHighlights(el: HTMLElement) {
   const spans = el.querySelectorAll('[data-spell-highlight]');

@@ -27,6 +27,7 @@ interface SuggestionsSidebarProps {
   selectedText?: string;
   externalIdeaPrompt?: { prompt: string; id: number } | null;
   onExternalIdeaHandled?: () => void;
+  onScrollToSuggestion?: (original: string) => void;
 }
 
 const severityConfig = {
@@ -49,28 +50,37 @@ function SuggestionCard({
   onApply,
   onDismiss,
   onSave,
+  onScrollToSuggestion,
   isSaved,
 }: {
   sug: Suggestion;
   onApply: (suggestionId: string, original: string, replacement: string) => void;
   onDismiss: (id: string) => void;
   onSave: (id: string) => void;
+  onScrollToSuggestion?: (original: string) => void;
   isSaved?: boolean;
 }) {
+  const [selectedAltIndex, setSelectedAltIndex] = useState(0);
   const config = severityConfig[sug.severity] || severityConfig.info;
   const Icon = config.icon;
+  const selectedAlt = sug.alternatives[selectedAltIndex] ?? sug.alternatives[0];
+
   return (
     <Card className={`p-3 bg-card border-l-2 ${config.borderColor} shadow-sm border-t-0 border-r-0 border-b-0 rounded-r-lg rounded-l-sm`}>
-      <div className="flex items-start gap-2 mb-2">
+      <div
+        className="flex items-start gap-2 mb-2 cursor-pointer group/header"
+        onClick={() => sug.original && onScrollToSuggestion?.(sug.original)}
+        data-testid={`card-suggestion-${sug.id}`}
+      >
         <Icon className={`w-4 h-4 ${config.iconColor} mt-0.5 shrink-0`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h4 className="text-sm font-medium text-foreground">{sug.title}</h4>
+            <h4 className="text-sm font-medium text-foreground group-hover/header:text-primary transition-colors">{sug.title}</h4>
             <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{typeLabels[sug.type] || sug.type}</span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">{sug.description}</p>
         </div>
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => onSave(sug.id)}
             className="p-1 rounded hover:bg-muted transition-colors"
@@ -95,13 +105,17 @@ function SuggestionCard({
       </div>
 
       {sug.original && sug.alternatives.length > 0 && (
-        <div className="pl-6 space-y-2 mt-3">
+        <div className="pl-6 space-y-1.5 mt-3">
           {sug.alternatives.map((alt, j) => (
             <button
               key={j}
-              onClick={() => onApply(sug.id, sug.original!, alt)}
-              className="w-full text-left text-xs p-2 bg-muted/50 rounded-md border border-border/50 hover:border-primary/40 transition-all flex items-center justify-between group"
-              data-testid={`btn-apply-suggestion-${sug.id}-${j}`}
+              onClick={() => setSelectedAltIndex(j)}
+              className={`w-full text-left text-xs p-2 bg-muted/50 rounded-md border transition-all flex items-center justify-between group ${
+                selectedAltIndex === j
+                  ? 'border-primary/50 ring-1 ring-primary/25 bg-primary/5'
+                  : 'border-border/50 hover:border-primary/30'
+              }`}
+              data-testid={`btn-select-alt-${sug.id}-${j}`}
             >
               <div className="flex flex-col gap-1 min-w-0 flex-1">
                 <span className="line-through text-muted-foreground break-words">{sug.original}</span>
@@ -110,9 +124,17 @@ function SuggestionCard({
                   <span className="break-words">{alt}</span>
                 </span>
               </div>
-              <span className="opacity-0 group-hover:opacity-100 text-primary text-[10px] font-medium transition-opacity shrink-0 ml-2">Apply</span>
+              {selectedAltIndex === j && <Check className="w-3.5 h-3.5 text-primary shrink-0 ml-2" />}
             </button>
           ))}
+          <Button
+            size="sm"
+            className="w-full h-7 text-xs mt-1 bg-primary hover:bg-primary/90 text-primary-foreground"
+            onClick={() => onApply(sug.id, sug.original!, selectedAlt)}
+            data-testid={`btn-apply-suggestion-${sug.id}`}
+          >
+            Apply Change
+          </Button>
         </div>
       )}
     </Card>
@@ -187,7 +209,7 @@ function formatTimeAgo(timestamp: number): string {
 export default function SuggestionsSidebar({
   suggestions, savedSuggestions, savedCount, changeHistory, loading, onApplySuggestion,
   onDismiss, onSave, onRemoveSaved, onClearHistory, documentContent, documentType, selectedText,
-  externalIdeaPrompt, onExternalIdeaHandled
+  externalIdeaPrompt, onExternalIdeaHandled, onScrollToSuggestion
 }: SuggestionsSidebarProps) {
   const [ideaPrompt, setIdeaPrompt] = useState('');
   const [ideaResponse, setIdeaResponse] = useState('');
@@ -329,6 +351,7 @@ export default function SuggestionsSidebar({
                     onApply={handleApply}
                     onDismiss={onDismiss}
                     onSave={onRemoveSaved}
+                    onScrollToSuggestion={onScrollToSuggestion}
                     isSaved={true}
                   />
                 );
@@ -400,6 +423,7 @@ export default function SuggestionsSidebar({
                 onApply={handleApply}
                 onDismiss={onDismiss}
                 onSave={onSave}
+                onScrollToSuggestion={onScrollToSuggestion}
                 isSaved={savedIds.has(sug.id)}
               />
             ))}
@@ -425,6 +449,7 @@ export default function SuggestionsSidebar({
                 onApply={handleApply}
                 onDismiss={onDismiss}
                 onSave={onSave}
+                onScrollToSuggestion={onScrollToSuggestion}
                 isSaved={savedIds.has(sug.id)}
               />
             ))}

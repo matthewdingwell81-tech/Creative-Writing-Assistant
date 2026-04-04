@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Editor from '@/components/Editor';
+import Editor, { type EditorHandle } from '@/components/Editor';
 import SuggestionsSidebar from '@/components/SuggestionsSidebar';
 import DocumentList from '@/components/DocumentList';
 import GoogleDocsDialog from '@/components/GoogleDocsDialog';
@@ -100,6 +100,7 @@ export default function Home() {
   const [ideaAssistantPrompt, setIdeaAssistantPrompt] = useState<{ prompt: string; id: number } | null>(null);
   const [ideaAssistantLoading, setIdeaAssistantLoading] = useState(false);
   const ideaAssistantCounter = React.useRef(0);
+  const editorHandle = useRef<EditorHandle>(null);
   const [showScratchpad, setShowScratchpad] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [docChapters, setDocChapters] = useState<Chapter[]>([]);
@@ -528,6 +529,7 @@ export default function Home() {
             <div className="max-w-3xl mx-auto px-8 py-12">
               {activeDocId ? (
                 <Editor
+                  ref={editorHandle}
                   content={content}
                   setContent={handleContentChange}
                   title={title}
@@ -576,6 +578,7 @@ export default function Home() {
                 setIdeaAssistantPrompt(null);
                 setIdeaAssistantLoading(false);
               }}
+              onScrollToSuggestion={(text) => editorHandle.current?.scrollToSuggestion(text)}
             />
           </aside>
         )}
