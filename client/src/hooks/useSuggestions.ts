@@ -135,6 +135,18 @@ export function useSuggestions() {
     setChangeHistory([]);
   }, []);
 
+  const cancelPending = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setLoading(false);
+  }, []);
+
   const savedIdSet = new Set(savedSuggestions.map((s) => s.id));
   const visibleSuggestions = suggestions.filter(
     (s) => !dismissedIds.has(s.id) && !savedIdSet.has(s.id) && !appliedIds.has(s.id)
@@ -147,6 +159,7 @@ export function useSuggestions() {
     changeHistory,
     loading,
     requestSuggestions,
+    cancelPending,
     setSuggestions,
     dismissSuggestion,
     applySuggestionById,

@@ -105,7 +105,7 @@ export default function Home() {
 
   const {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
-    requestSuggestions, dismissSuggestion, applySuggestionById, saveSuggestion, removeSaved, clearHistory
+    requestSuggestions, cancelPending, dismissSuggestion, applySuggestionById, saveSuggestion, removeSaved, clearHistory
   } = useSuggestions();
   const { save, saving, lastSaved } = useAutoSave(activeDocId);
 
@@ -269,7 +269,7 @@ export default function Home() {
             variant="ghost"
             size="icon"
             className={focusMode ? "text-primary bg-primary/10 hover:bg-primary/20 hover:text-primary" : "text-muted-foreground hover:text-foreground"}
-            onClick={() => setFocusMode(!focusMode)}
+            onClick={() => { if (!focusMode) cancelPending(); setFocusMode(!focusMode); }}
             title={focusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
             data-testid="btn-toggle-focus-mode"
           >
