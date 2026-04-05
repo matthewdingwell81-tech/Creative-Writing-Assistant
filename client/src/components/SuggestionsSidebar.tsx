@@ -387,7 +387,7 @@ export default function SuggestionsSidebar({
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col w-full min-h-0">
         <div className="px-4 pt-3 pb-0 border-b border-border/50">
           <TabsList className="w-full bg-muted/50 grid grid-cols-5 p-1 rounded-lg">
             <TabsTrigger value="grammar" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-grammar">
@@ -406,7 +406,7 @@ export default function SuggestionsSidebar({
           </TabsList>
         </div>
 
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           <TabsContent value="grammar" className="p-4 space-y-4 m-0">
             {loading && (
               <div className="flex items-center justify-center py-8 text-muted-foreground">

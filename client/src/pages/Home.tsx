@@ -558,7 +558,7 @@ export default function Home() {
         </div>
 
         {activeDocId && !focusMode && (
-          <aside className="w-[380px] border-l border-border/50 bg-card/30 backdrop-blur flex flex-col">
+          <aside className="w-[380px] border-l border-border/50 bg-card/30 backdrop-blur flex flex-col overflow-hidden">
             <SuggestionsSidebar
               suggestions={suggestions}
               savedSuggestions={savedSuggestions}
