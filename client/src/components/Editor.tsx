@@ -387,9 +387,9 @@ function applyHighlights(el: HTMLElement, highlights: GrammarHighlight[]) {
       span.setAttribute('data-spell-highlight', 'true');
       span.setAttribute('data-spell-original', nodeText.slice(idx, idx + searchText.length));
       span.setAttribute('data-spell-alternatives', highlight.alternatives.join('|||'));
-      span.style.textDecoration = 'underline wavy';
-      span.style.textDecorationColor = 'rgba(220, 38, 38, 0.5)';
-      span.style.textUnderlineOffset = '3px';
+      span.style.backgroundColor = 'rgba(239, 68, 68, 0.35)';
+      span.style.borderRadius = '3px';
+      span.style.padding = '1px 0';
       span.style.cursor = 'pointer';
 
       range.surroundContents(span);
