@@ -309,7 +309,7 @@ export default function Home() {
   }, []);
 
   const grammarHighlights = suggestions
-    .filter(s => s.type === 'grammar' && s.original && s.alternatives.length > 0)
+    .filter(s => s.original && s.alternatives.length > 0)
     .map(s => ({ original: s.original!, alternatives: s.alternatives, id: s.id }));
 
   const wordCount = content.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length;
