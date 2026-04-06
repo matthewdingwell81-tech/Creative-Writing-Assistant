@@ -254,7 +254,10 @@ export default function Home() {
   const applySuggestion = useCallback((suggestionId: string, originalText: string, newText: string) => {
     if (!content) return;
 
-    const cleanContent = content.replace(/<span[^>]*data-spell-highlight[^>]*>([\s\S]*?)<\/span>/gi, '$1');
+    const liveClean = editorHandle.current?.getCleanContent();
+    const cleanContent = liveClean !== undefined && liveClean !== ''
+      ? liveClean
+      : content.replace(/<span[^>]*data-spell-highlight[^>]*>([\s\S]*?)<\/span>/gi, '$1');
 
     const updatedContent = replaceTextInHtml(cleanContent, originalText, newText);
 

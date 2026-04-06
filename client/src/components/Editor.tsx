@@ -8,6 +8,7 @@ export interface GrammarHighlight {
 
 export interface EditorHandle {
   scrollToSuggestion: (text: string) => void;
+  getCleanContent: () => string;
 }
 
 interface EditorProps {
@@ -42,6 +43,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
   const grammarHighlightsRef = useRef<GrammarHighlight[]>(grammarHighlights);
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashedSpellElemRef = useRef<HTMLElement | null>(null);
+  const [isTypingState, setIsTypingState] = useState(false);
   const [popover, setPopover] = useState<PopoverState>({ visible: false, x: 0, y: 0, original: '', alternatives: [], targetSpan: null });
 
   grammarHighlightsRef.current = grammarHighlights;
@@ -51,6 +53,19 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
   }, [grammarHighlights]);
 
   useImperativeHandle(ref, () => ({
+    getCleanContent: () => {
+      if (!editorRef.current) return '';
+      const clone = editorRef.current.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll('[data-spell-highlight]').forEach(span => {
+        const parent = span.parentNode;
+        if (parent) {
+          const text = document.createTextNode(span.textContent || '');
+          parent.replaceChild(text, span);
+          parent.normalize();
+        }
+      });
+      return clone.innerHTML;
+    },
     scrollToSuggestion: (text: string) => {
       if (!editorRef.current || !text) return;
       const el = editorRef.current;
@@ -162,7 +177,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
 
   useEffect(() => {
     if (!editorRef.current) return;
-    if (isTyping.current) return;
+    if (isTypingState) return;
     if (highlightKey === lastHighlightKey.current) return;
 
     const el = editorRef.current;
@@ -173,7 +188,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
     }
 
     lastHighlightKey.current = highlightKey;
-  }, [highlightKey, grammarHighlights]);
+  }, [highlightKey, grammarHighlights, isTypingState]);
 
   useEffect(() => {
     const handleSelectionChange = () => {
@@ -256,11 +271,13 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
   const handleInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
     isInternalUpdate.current = true;
     isTyping.current = true;
+    setIsTypingState(true);
 
     if (typingTimer.current) clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(() => {
       isTyping.current = false;
       lastHighlightKey.current = '';
+      setIsTypingState(false);
     }, 1500);
 
     const el = e.currentTarget;
