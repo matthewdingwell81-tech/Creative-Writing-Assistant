@@ -2,8 +2,44 @@ import React, { useEffect, useRef, useCallback, useState, useMemo, useImperative
 import { Mic, MicOff, Cloud, Loader2 } from 'lucide-react';
 import { useDictation, normalizeDictation, type DictationEngine } from '@/hooks/useDictation';
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const DICTATION_ENGINE_STORAGE_KEY = 'lumina:dictation-engine';
+const DICTATION_LANG_STORAGE_KEY = 'lumina:dictation-lang';
+
+const DICTATION_LANGUAGES: { value: string; label: string }[] = [
+  { value: 'en-US', label: 'English (US)' },
+  { value: 'en-GB', label: 'English (UK)' },
+  { value: 'es-ES', label: 'Spanish (Spain)' },
+  { value: 'es-MX', label: 'Spanish (Mexico)' },
+  { value: 'fr-FR', label: 'French' },
+  { value: 'de-DE', label: 'German' },
+  { value: 'it-IT', label: 'Italian' },
+  { value: 'pt-BR', label: 'Portuguese (Brazil)' },
+  { value: 'pt-PT', label: 'Portuguese (Portugal)' },
+  { value: 'nl-NL', label: 'Dutch' },
+  { value: 'pl-PL', label: 'Polish' },
+  { value: 'ru-RU', label: 'Russian' },
+  { value: 'tr-TR', label: 'Turkish' },
+  { value: 'ar-SA', label: 'Arabic' },
+  { value: 'hi-IN', label: 'Hindi' },
+  { value: 'ja-JP', label: 'Japanese' },
+  { value: 'ko-KR', label: 'Korean' },
+  { value: 'zh-CN', label: 'Mandarin (Simplified)' },
+  { value: 'zh-TW', label: 'Mandarin (Traditional)' },
+];
+
+const DICTATION_LANG_VALUES = new Set(DICTATION_LANGUAGES.map((l) => l.value));
+
+function getDefaultDictationLang(): string {
+  if (typeof navigator !== 'undefined' && navigator.language) {
+    if (DICTATION_LANG_VALUES.has(navigator.language)) return navigator.language;
+    const prefix = navigator.language.split('-')[0];
+    const match = DICTATION_LANGUAGES.find((l) => l.value.startsWith(prefix + '-'));
+    if (match) return match.value;
+  }
+  return 'en-US';
+}
 
 export interface GrammarHighlight {
   original: string;
@@ -468,8 +504,25 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
     } catch { /* ignore */ }
   }, [dictationEngine]);
 
+  const [dictationLang, setDictationLang] = useState<string>(() => {
+    if (typeof window === 'undefined') return getDefaultDictationLang();
+    try {
+      const stored = window.localStorage.getItem(DICTATION_LANG_STORAGE_KEY);
+      if (stored && DICTATION_LANG_VALUES.has(stored)) return stored;
+    } catch { /* ignore */ }
+    return getDefaultDictationLang();
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(DICTATION_LANG_STORAGE_KEY, dictationLang);
+    } catch { /* ignore */ }
+  }, [dictationLang]);
+
   const dictation = useDictation({
     engine: dictationEngine,
+    lang: dictationLang,
     onStart: () => {
       const el = editorRef.current;
       if (el) {
@@ -691,6 +744,37 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
               </>
             )}
           </button>
+
+          {dictation.supported && (
+            <Select
+              value={dictationLang}
+              onValueChange={(v) => {
+                if (dictation.listening || dictationBusy) return;
+                setDictationLang(v);
+              }}
+              disabled={dictation.listening || dictationBusy}
+            >
+              <SelectTrigger
+                className="h-8 w-[140px] text-xs rounded-full"
+                title="Choose dictation language"
+                aria-label="Dictation language"
+                data-testid="select-dictation-language"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DICTATION_LANGUAGES.map((l) => (
+                  <SelectItem
+                    key={l.value}
+                    value={l.value}
+                    data-testid={`option-dictation-language-${l.value}`}
+                  >
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           {dictation.whisperSupported && (
             dictation.webSpeechSupported ? (
