@@ -346,8 +346,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
 
     removeInterimSpan();
 
-    // Restore stored caret position so dictation always inserts where the user left off,
-    // even if focus moved away to click the mic button.
+    // Make sure focus + caret are inside the editor before issuing editing commands so they
+    // participate in the contenteditable's native undo/redo stack.
+    if (document.activeElement !== el) {
+      el.focus();
+    }
+
     const stored = dictationCaretRef.current;
     const sel = window.getSelection();
     if (stored && sel && el.contains(stored.node)) {
@@ -367,31 +371,30 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
       restoreCaretToEnd();
     }
 
-    // Split on newlines so we can insert <br> for line breaks
-    const parts = text.split('\n');
-    const currentSel = window.getSelection();
-    if (!currentSel || currentSel.rangeCount === 0) return;
-    let range = currentSel.getRangeAt(0);
-
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      if (part) {
-        const textNode = document.createTextNode(part);
-        range.insertNode(textNode);
-        range.setStartAfter(textNode);
-        range.setEndAfter(textNode);
-      }
-      if (i < parts.length - 1) {
-        const br = document.createElement('br');
-        range.insertNode(br);
-        range.setStartAfter(br);
-        range.setEndAfter(br);
+    // Insert via execCommand so the change appears in the browser's undo history,
+    // matching the behaviour of regular typing. Split into text runs and break markers
+    // so we can map "\n\n" -> paragraph break, "\n" -> line break.
+    const tokens = text.split(/(\n\n+|\n)/);
+    for (const token of tokens) {
+      if (!token) continue;
+      if (token === '\n') {
+        // insertHTML with a <br> is undoable in Chromium/WebKit/Firefox contenteditable
+        document.execCommand('insertHTML', false, '<br>');
+      } else if (/^\n\n+$/.test(token)) {
+        document.execCommand('insertParagraph');
+      } else {
+        document.execCommand('insertText', false, token);
       }
     }
 
-    currentSel.removeAllRanges();
-    currentSel.addRange(range);
-    dictationCaretRef.current = { node: range.startContainer, offset: range.startOffset };
+    // Update our caret tracking to wherever the selection ended up after the edits
+    const newSel = window.getSelection();
+    if (newSel && newSel.rangeCount > 0) {
+      const r = newSel.getRangeAt(0);
+      if (el.contains(r.startContainer)) {
+        dictationCaretRef.current = { node: r.startContainer, offset: r.startOffset };
+      }
+    }
 
     isInternalUpdate.current = true;
     isTyping.current = true;

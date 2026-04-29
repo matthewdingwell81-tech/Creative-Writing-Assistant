@@ -302,8 +302,10 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
 export function normalizeDictation(raw: string): { text: string; newlines: number; trailingNewlines: number } {
   let s = raw;
 
-  // Replace explicit newline commands with markers we can split on
-  s = s.replace(/\b(new paragraph|new line|next line|line break)\b/gi, '\n');
+  // Replace explicit newline commands with markers we can split on.
+  // "new paragraph" = double newline (paragraph break); "new line" = single newline.
+  s = s.replace(/\bnew paragraph\b/gi, '\n\n');
+  s = s.replace(/\b(new line|next line|line break)\b/gi, '\n');
 
   // Replace spoken punctuation with characters
   s = s.replace(/\s*\b(period|full stop)\b\s*/gi, '. ');
