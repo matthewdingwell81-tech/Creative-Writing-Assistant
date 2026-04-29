@@ -22,6 +22,7 @@ A real-time AI writing assistant tailored for fiction writers. Uses OpenAI (via 
   - Change History tab tracks all applied suggestions with timestamps, showing what was changed
 - Inline spell-check: grammar suggestions with corrections are highlighted with subtle red wavy underlines in the editor; clicking a highlighted word shows a popover with correction options for quick replacement
 - Text selection review: select text in the editor to get targeted AI feedback on specific passages
+- Voice-to-text dictation: a "Dictate" mic button in the editor toolbar lets writers speak text directly into the editor at the cursor; interim words appear live (italic/purple) and resolve into final text. Supports spoken punctuation ("period", "comma", "question mark", "new paragraph", etc.). Toggleable via Cmd/Ctrl+Shift+M; press Esc to stop. Uses the browser's built-in Web Speech API (Chrome/Edge/Safari) — falls back to a friendly message in unsupported browsers or when mic access is denied.
 - Ideas Scratchpad: collapsible per-document panel at the bottom of the editor for jotting down and revisiting ideas
 - Document management (create, list, delete, export)
 - Multiple document types (fiction, non-fiction, essay, blog, script)

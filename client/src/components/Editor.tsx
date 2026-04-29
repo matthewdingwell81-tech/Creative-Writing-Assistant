@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState, useMemo, useImperativeHandle, forwardRef } from 'react';
+import { Mic, MicOff } from 'lucide-react';
+import { useDictation, normalizeDictation } from '@/hooks/useDictation';
+import { useToast } from '@/hooks/use-toast';
 
 export interface GrammarHighlight {
   original: string;
@@ -45,6 +48,9 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
   const flashedSpellElemRef = useRef<HTMLElement | null>(null);
   const [isTypingState, setIsTypingState] = useState(false);
   const [popover, setPopover] = useState<PopoverState>({ visible: false, x: 0, y: 0, original: '', alternatives: [], targetSpan: null });
+  const interimSpanRef = useRef<HTMLSpanElement | null>(null);
+  const dictationCaretRef = useRef<{ node: Node; offset: number } | null>(null);
+  const { toast } = useToast();
 
   grammarHighlightsRef.current = grammarHighlights;
 
@@ -63,6 +69,9 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
           parent.replaceChild(text, span);
           parent.normalize();
         }
+      });
+      clone.querySelectorAll('[data-dictation-interim]').forEach(span => {
+        span.parentNode?.removeChild(span);
       });
       return clone.innerHTML;
     },
@@ -268,6 +277,14 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
     lastHighlightKey.current = '';
   }, [popover.targetSpan, onApplyCorrection, setContent]);
 
+  const stripInterimFromHtml = useCallback((html: string) => {
+    if (!html.includes('data-dictation-interim')) return html;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    tmp.querySelectorAll('[data-dictation-interim]').forEach(s => s.parentNode?.removeChild(s));
+    return tmp.innerHTML;
+  }, []);
+
   const handleInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
     isInternalUpdate.current = true;
     isTyping.current = true;
@@ -282,8 +299,9 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
 
     const el = e.currentTarget;
     clearHighlights(el);
-    setContent(el.innerHTML);
-  }, [setContent]);
+    // Strip any in-flight dictation interim spans before persisting so they never get saved.
+    setContent(stripInterimFromHtml(el.innerHTML));
+  }, [setContent, stripInterimFromHtml]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Tab') {
@@ -291,6 +309,255 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
       document.execCommand('insertText', false, '    ');
     }
   }, []);
+
+  const removeInterimSpan = useCallback(() => {
+    const span = interimSpanRef.current;
+    if (span && span.parentNode) {
+      span.parentNode.removeChild(span);
+    }
+    interimSpanRef.current = null;
+  }, []);
+
+  const captureCaret = useCallback(() => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !editorRef.current) return false;
+    const range = sel.getRangeAt(0);
+    if (!editorRef.current.contains(range.startContainer)) return false;
+    dictationCaretRef.current = { node: range.startContainer, offset: range.startOffset };
+    return true;
+  }, []);
+
+  const restoreCaretToEnd = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    dictationCaretRef.current = { node: range.startContainer, offset: range.startOffset };
+  }, []);
+
+  const insertTextAtCaret = useCallback((text: string) => {
+    const el = editorRef.current;
+    if (!el || !text) return;
+
+    removeInterimSpan();
+
+    // Restore stored caret position so dictation always inserts where the user left off,
+    // even if focus moved away to click the mic button.
+    const stored = dictationCaretRef.current;
+    const sel = window.getSelection();
+    if (stored && sel && el.contains(stored.node)) {
+      const range = document.createRange();
+      const safeOffset = Math.min(stored.offset, (stored.node.nodeType === Node.TEXT_NODE
+        ? (stored.node as Text).length
+        : stored.node.childNodes.length));
+      try {
+        range.setStart(stored.node, safeOffset);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch {
+        restoreCaretToEnd();
+      }
+    } else {
+      restoreCaretToEnd();
+    }
+
+    // Split on newlines so we can insert <br> for line breaks
+    const parts = text.split('\n');
+    const currentSel = window.getSelection();
+    if (!currentSel || currentSel.rangeCount === 0) return;
+    let range = currentSel.getRangeAt(0);
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (part) {
+        const textNode = document.createTextNode(part);
+        range.insertNode(textNode);
+        range.setStartAfter(textNode);
+        range.setEndAfter(textNode);
+      }
+      if (i < parts.length - 1) {
+        const br = document.createElement('br');
+        range.insertNode(br);
+        range.setStartAfter(br);
+        range.setEndAfter(br);
+      }
+    }
+
+    currentSel.removeAllRanges();
+    currentSel.addRange(range);
+    dictationCaretRef.current = { node: range.startContainer, offset: range.startOffset };
+
+    isInternalUpdate.current = true;
+    isTyping.current = true;
+    setIsTypingState(true);
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => {
+      isTyping.current = false;
+      lastHighlightKey.current = '';
+      setIsTypingState(false);
+    }, 1500);
+
+    setContent(stripInterimFromHtml(el.innerHTML));
+  }, [removeInterimSpan, restoreCaretToEnd, setContent, stripInterimFromHtml]);
+
+  const renderInterim = useCallback((text: string) => {
+    const el = editorRef.current;
+    if (!el) return;
+
+    // Remove any existing interim span
+    removeInterimSpan();
+
+    if (!text) return;
+
+    // Place a styled inline span at the stored caret position so the user sees their words live.
+    const stored = dictationCaretRef.current;
+    if (!stored || !el.contains(stored.node)) {
+      restoreCaretToEnd();
+    }
+    const sel = window.getSelection();
+    if (!sel) return;
+
+    const current = dictationCaretRef.current;
+    if (!current) return;
+
+    const range = document.createRange();
+    const safeOffset = Math.min(current.offset, (current.node.nodeType === Node.TEXT_NODE
+      ? (current.node as Text).length
+      : current.node.childNodes.length));
+    try {
+      range.setStart(current.node, safeOffset);
+      range.collapse(true);
+    } catch {
+      return;
+    }
+
+    const span = document.createElement('span');
+    span.setAttribute('data-dictation-interim', 'true');
+    span.style.opacity = '0.55';
+    span.style.fontStyle = 'italic';
+    span.style.color = 'rgb(124, 58, 237)';
+    span.textContent = ' ' + text;
+    range.insertNode(span);
+    interimSpanRef.current = span;
+  }, [removeInterimSpan, restoreCaretToEnd]);
+
+  const dictation = useDictation({
+    onStart: () => {
+      const el = editorRef.current;
+      if (el) {
+        if (!el.contains(document.activeElement)) {
+          el.focus();
+        }
+        if (!captureCaret()) {
+          restoreCaretToEnd();
+        }
+      }
+    },
+    onInterimTranscript: (text) => {
+      const { text: normalized } = normalizeDictation(text);
+      // Strip trailing newlines from interim preview so it doesn't jump around
+      renderInterim(normalized.replace(/\n+/g, ' ').trim());
+    },
+    onFinalTranscript: (text) => {
+      removeInterimSpan();
+      const { text: normalized } = normalizeDictation(text);
+      // Add a leading space if there isn't one already and there's text before the caret
+      let toInsert = normalized;
+      const stored = dictationCaretRef.current;
+      if (stored && stored.node.nodeType === Node.TEXT_NODE) {
+        const before = (stored.node as Text).textContent?.slice(0, stored.offset) || '';
+        const lastChar = before.slice(-1);
+        if (lastChar && !/\s/.test(lastChar) && !/^[\s.,;:!?)\]\n]/.test(toInsert)) {
+          toInsert = ' ' + toInsert;
+        }
+      }
+      // Capitalize the first letter if previous content ends a sentence (or buffer is empty)
+      const stored2 = dictationCaretRef.current;
+      if (stored2) {
+        const beforeText = stored2.node.nodeType === Node.TEXT_NODE
+          ? (stored2.node as Text).textContent?.slice(0, stored2.offset) || ''
+          : '';
+        const trimmedBefore = beforeText.replace(/\s+$/, '');
+        const endsSentence = trimmedBefore === '' || /[.!?]\s*$/.test(beforeText) || /\n\s*$/.test(beforeText);
+        if (endsSentence) {
+          toInsert = toInsert.replace(/^(\s*)([a-z])/, (_m, ws, ch) => ws + ch.toUpperCase());
+        }
+      }
+      insertTextAtCaret(toInsert);
+    },
+    onError: (err) => {
+      removeInterimSpan();
+      if (err.kind === 'unsupported') {
+        toast({
+          title: 'Voice dictation not supported',
+          description: 'Try Chrome, Edge, or Safari to use this feature.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Dictation stopped',
+          description: err.message,
+          variant: 'destructive',
+        });
+      }
+    },
+    onEnd: () => {
+      removeInterimSpan();
+    },
+  });
+
+  const handleMicClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dictation.listening) {
+      // Capture caret BEFORE focus moves to the button
+      captureCaret() || restoreCaretToEnd();
+    }
+    dictation.toggle();
+  }, [dictation, captureCaret, restoreCaretToEnd]);
+
+  const handleMicMouseDown = useCallback((e: React.MouseEvent) => {
+    // Prevent the editor from losing its caret when the mic button is pressed
+    e.preventDefault();
+    captureCaret();
+  }, [captureCaret]);
+
+  // Global keyboard shortcut: Cmd/Ctrl+Shift+M to toggle dictation
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'm' || e.key === 'M')) {
+        // Only toggle when focus is in the editor or no input/contenteditable is focused
+        const active = document.activeElement as HTMLElement | null;
+        const isInOtherInput = !!(active &&
+          active !== editorRef.current &&
+          !editorRef.current?.contains(active) &&
+          (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable));
+        if (isInOtherInput) return;
+        e.preventDefault();
+        if (!dictation.listening) {
+          captureCaret() || restoreCaretToEnd();
+        }
+        dictation.toggle();
+      } else if (e.key === 'Escape' && dictation.listening) {
+        dictation.stop();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [dictation, captureCaret, restoreCaretToEnd]);
+
+  // Strip stray dictation interim spans from saved content
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const interimSpans = editorRef.current.querySelectorAll('[data-dictation-interim]');
+    interimSpans.forEach(s => s.parentNode?.removeChild(s));
+  }, [content]);
 
   return (
     <div className="relative">
@@ -303,6 +570,52 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
         placeholder="Untitled"
         data-testid="input-title"
       />
+
+      <div className="sticky top-0 z-30 -mx-2 mb-3 flex items-center justify-between gap-2 bg-background/80 backdrop-blur px-2 py-2 border-b border-border/40">
+        <button
+          type="button"
+          onMouseDown={handleMicMouseDown}
+          onClick={handleMicClick}
+          title={
+            !dictation.supported
+              ? 'Voice dictation not supported in this browser'
+              : dictation.listening
+                ? 'Stop dictation (Esc)'
+                : 'Start voice dictation (Cmd/Ctrl+Shift+M)'
+          }
+          aria-label={dictation.listening ? 'Stop voice dictation' : 'Start voice dictation'}
+          aria-pressed={dictation.listening}
+          className={`relative inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+            dictation.listening
+              ? 'border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/15'
+              : 'border-border bg-background hover:bg-accent text-foreground/80'
+          } ${!dictation.supported ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+          data-testid="button-dictation"
+        >
+          {dictation.listening ? (
+            <>
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75"></span>
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500"></span>
+              </span>
+              <Mic className="h-4 w-4" />
+              <span data-testid="text-dictation-status">Listening…</span>
+            </>
+          ) : (
+            <>
+              {dictation.supported ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+              <span>Dictate</span>
+            </>
+          )}
+        </button>
+
+        {dictation.listening && (
+          <span className="text-xs text-muted-foreground hidden sm:inline" data-testid="text-dictation-hint">
+            Press Esc to stop. Try saying "period", "comma", or "new paragraph".
+          </span>
+        )}
+      </div>
+
       <div
         ref={editorRef}
         className="prose prose-lg prose-neutral max-w-none font-serif text-foreground/85 leading-relaxed focus:outline-none min-h-[60vh] pb-32"
