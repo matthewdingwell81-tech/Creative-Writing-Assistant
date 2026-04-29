@@ -84,6 +84,9 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const wantListeningRef = useRef(false);
+  const interimRef = useRef('');
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const SILENCE_TIMEOUT_MS = 10000;
   const callbacksRef = useRef({ onFinalTranscript, onInterimTranscript, onError, onStart, onEnd });
 
   callbacksRef.current = { onFinalTranscript, onInterimTranscript, onError, onStart, onEnd };
@@ -102,14 +105,32 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
       (typeof navigator !== 'undefined' && navigator.language) ||
       'en-US';
 
+    const armSilenceTimer = () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = setTimeout(() => {
+        // Long silence — stop listening rather than restarting indefinitely
+        wantListeningRef.current = false;
+        try { recognition.stop(); } catch { /* ignore */ }
+      }, SILENCE_TIMEOUT_MS);
+    };
+
+    const clearSilenceTimer = () => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+    };
+
     recognition.onstart = () => {
       setListening(true);
       setError(null);
+      armSilenceTimer();
       callbacksRef.current.onStart?.();
     };
 
     recognition.onend = () => {
-      // Auto-restart if the user still wants to listen (some browsers cut off after silence)
+      clearSilenceTimer();
+      // Auto-restart if the user still wants to listen (some browsers cut off after a few seconds)
       if (wantListeningRef.current) {
         try {
           recognition.start();
@@ -117,6 +138,13 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
         } catch {
           // fall through to stop
         }
+      }
+      // Finalize any pending interim transcript so trailing words aren't lost on stop
+      const pending = interimRef.current.trim();
+      interimRef.current = '';
+      if (pending) {
+        callbacksRef.current.onInterimTranscript?.('');
+        callbacksRef.current.onFinalTranscript?.(pending);
       }
       setListening(false);
       setInterimTranscript('');
@@ -175,15 +203,21 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
         }
       }
 
+      // Reset silence timer on any speech activity
+      armSilenceTimer();
+
       if (finalChunk) {
+        interimRef.current = '';
         setInterimTranscript('');
         callbacksRef.current.onInterimTranscript?.('');
         callbacksRef.current.onFinalTranscript?.(finalChunk);
       }
       if (interim) {
+        interimRef.current = interim;
         setInterimTranscript(interim);
         callbacksRef.current.onInterimTranscript?.(interim);
       } else if (!finalChunk) {
+        interimRef.current = '';
         setInterimTranscript('');
         callbacksRef.current.onInterimTranscript?.('');
       }
@@ -193,6 +227,8 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
 
     return () => {
       wantListeningRef.current = false;
+      clearSilenceTimer();
+      interimRef.current = '';
       recognition.onstart = null;
       recognition.onend = null;
       recognition.onerror = null;
