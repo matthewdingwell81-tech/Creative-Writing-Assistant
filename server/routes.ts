@@ -1,4 +1,4 @@
-import type { Express, Request, Response, NextFunction } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertDocumentSchema, insertIdeaSchema, insertUserSchema, insertChapterSchema } from "@shared/schema";
@@ -10,11 +10,26 @@ import {
   googleDocsToHtml,
   htmlToGoogleDocsRequests,
 } from "./googleDocs";
+import {
+  detectAudioFormat,
+  convertToWavInMemory,
+  speechToText,
+  type SpeechToTextFormat,
+} from "./replit_integrations/audio/client";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
+
+// Body parser for base64-encoded audio uploads. Audio is processed in-memory
+// and never persisted to disk by us. Audio is uploaded base64-encoded inside
+// JSON, which inflates the payload by ~33%, so we allow enough headroom that
+// the raw-audio cap (24MB, see route handler) is the effective limit instead
+// of the body parser. 24MB raw ≈ 32MB base64; 35mb gives a small safety
+// margin for JSON overhead and still fits within the upstream OpenAI 25MB
+// *raw audio* cap.
+const audioBodyParser = express.json({ limit: "35mb" });
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) {
@@ -288,6 +303,70 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
   });
 
   // === Google Docs Integration ===
+
+  // === Whisper-style server-side dictation ===
+  // Accepts a base64-encoded audio recording, transcribes it via OpenAI's
+  // speech-to-text model, and returns the text.
+  //
+  // Privacy: audio is held in memory only and never written to disk by us.
+  // - For formats OpenAI accepts directly (wav, mp3, webm, mp4, ogg) we
+  //   stream the raw buffer to the API as-is.
+  // - For unknown formats we run a short in-memory ffmpeg conversion via
+  //   stdin/stdout pipes — also no temp files.
+  app.post("/api/transcribe", requireAuth, audioBodyParser, async (req, res) => {
+    try {
+      const { audio, language } = req.body as { audio?: string; language?: string };
+      if (!audio || typeof audio !== "string") {
+        return res.status(400).json({ error: "audio (base64) is required" });
+      }
+
+      // `Buffer.from(_, 'base64')` silently ignores characters outside the
+      // base64 alphabet, so a syntactic check up-front catches malformed
+      // payloads before we waste cycles decoding/converting/uploading them.
+      // Standard alphabet only (no URL-safe variant); length must be a
+      // multiple of 4 with at most two trailing '=' padding chars.
+      const looksLikeBase64 = /^[A-Za-z0-9+/]+={0,2}$/.test(audio) && audio.length % 4 === 0;
+      if (!looksLikeBase64) {
+        return res.status(400).json({ error: "Invalid base64 audio payload" });
+      }
+
+      const rawBuffer: Buffer = Buffer.from(audio, "base64");
+      // Reject obviously bad payloads early — too small to contain a real
+      // recording or larger than what the OpenAI audio API accepts.
+      const MIN_AUDIO_BYTES = 256;
+      const MAX_AUDIO_BYTES = 24 * 1024 * 1024; // ~24MB, under OpenAI's 25MB cap
+      if (rawBuffer.length < MIN_AUDIO_BYTES) {
+        return res.status(400).json({ error: "Audio payload is too small to transcribe" });
+      }
+      if (rawBuffer.length > MAX_AUDIO_BYTES) {
+        return res.status(413).json({ error: "Audio payload is too large" });
+      }
+
+      const detected = detectAudioFormat(rawBuffer);
+      let buffer: Buffer = rawBuffer;
+      let format: SpeechToTextFormat;
+
+      if (detected === "wav" || detected === "mp3" || detected === "webm" || detected === "mp4" || detected === "ogg") {
+        // OpenAI's transcription API accepts these directly — no conversion needed.
+        format = detected;
+      } else {
+        // Unknown format — convert to WAV in-memory (no disk writes).
+        try {
+          buffer = await convertToWavInMemory(rawBuffer);
+          format = "wav";
+        } catch (e: any) {
+          console.error("In-memory audio conversion failed:", e?.message || e);
+          return res.status(415).json({ error: "Unsupported audio format" });
+        }
+      }
+
+      const text = await speechToText(buffer, format, language || undefined);
+      res.json({ text, language: language || null });
+    } catch (error: any) {
+      console.error("Transcription error:", error?.message || error);
+      res.status(500).json({ error: "Failed to transcribe audio" });
+    }
+  });
 
   app.post("/api/gdocs/import", requireAuth, async (req, res) => {
     const { documentId } = req.body;

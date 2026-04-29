@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useCallback, useState, useMemo, useImperativeHandle, forwardRef } from 'react';
-import { Mic, MicOff } from 'lucide-react';
-import { useDictation, normalizeDictation } from '@/hooks/useDictation';
+import { Mic, MicOff, Cloud, Loader2 } from 'lucide-react';
+import { useDictation, normalizeDictation, type DictationEngine } from '@/hooks/useDictation';
 import { useToast } from '@/hooks/use-toast';
+
+const DICTATION_ENGINE_STORAGE_KEY = 'lumina:dictation-engine';
 
 export interface GrammarHighlight {
   original: string;
@@ -450,7 +452,24 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
     interimSpanRef.current = span;
   }, [removeInterimSpan, restoreCaretToEnd]);
 
+  const [dictationEngine, setDictationEngine] = useState<DictationEngine>(() => {
+    if (typeof window === 'undefined') return 'auto';
+    try {
+      const stored = window.localStorage.getItem(DICTATION_ENGINE_STORAGE_KEY);
+      if (stored === 'web-speech' || stored === 'whisper' || stored === 'auto') return stored;
+    } catch { /* ignore */ }
+    return 'auto';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(DICTATION_ENGINE_STORAGE_KEY, dictationEngine);
+    } catch { /* ignore */ }
+  }, [dictationEngine]);
+
   const dictation = useDictation({
+    engine: dictationEngine,
     onStart: () => {
       const el = editorRef.current;
       if (el) {
@@ -499,7 +518,14 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
       if (err.kind === 'unsupported') {
         toast({
           title: 'Voice dictation not supported',
-          description: 'Try Chrome, Edge, or Safari to use this feature.',
+          description:
+            'Your browser cannot record audio. Try a recent version of Chrome, Edge, Firefox, or Safari.',
+          variant: 'destructive',
+        });
+      } else if (err.kind === 'transcription-failed') {
+        toast({
+          title: 'Transcription failed',
+          description: err.message,
           variant: 'destructive',
         });
       } else {
@@ -515,15 +541,29 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
     },
   });
 
+  // Treat the brief mic-permission/setup window ('starting') as busy too, so
+  // the button surfaces a spinner and rapid repeated clicks/shortcuts can't
+  // re-trigger getUserMedia.
+  const dictationBusy =
+    dictation.status === 'starting' ||
+    dictation.status === 'uploading' ||
+    dictation.status === 'transcribing';
+
   const handleMicClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    // While uploading/transcribing, treat a click as "cancel" — the hook's
+    // stop() aborts any in-flight request and suppresses late results.
+    if (dictationBusy) {
+      dictation.stop();
+      return;
+    }
     if (!dictation.listening) {
       // Capture caret BEFORE focus moves to the button
       captureCaret() || restoreCaretToEnd();
     }
     dictation.toggle();
-  }, [dictation, captureCaret, restoreCaretToEnd]);
+  }, [dictation, dictationBusy, captureCaret, restoreCaretToEnd]);
 
   const handleMicMouseDown = useCallback((e: React.MouseEvent) => {
     // Prevent the editor from losing its caret when the mic button is pressed
@@ -542,18 +582,26 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
           !editorRef.current?.contains(active) &&
           (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable));
         if (isInOtherInput) return;
+        // Match the button's disabled rules: ignore the shortcut while
+        // the previous session is uploading/transcribing.
+        if (dictationBusy) {
+          e.preventDefault();
+          return;
+        }
         e.preventDefault();
         if (!dictation.listening) {
           captureCaret() || restoreCaretToEnd();
         }
         dictation.toggle();
-      } else if (e.key === 'Escape' && dictation.listening) {
+      } else if (e.key === 'Escape' && (dictation.listening || dictationBusy)) {
+        // Esc is the universal "stop/cancel" — works during recording,
+        // uploading, and transcribing.
         dictation.stop();
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [dictation, captureCaret, restoreCaretToEnd]);
+  }, [dictation, dictationBusy, captureCaret, restoreCaretToEnd]);
 
   // Strip stray dictation interim spans from saved content
   useEffect(() => {
@@ -575,48 +623,127 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
       />
 
       <div className="sticky top-0 z-30 -mx-2 mb-3 flex items-center justify-between gap-2 bg-background/80 backdrop-blur px-2 py-2 border-b border-border/40">
-        <button
-          type="button"
-          onMouseDown={handleMicMouseDown}
-          onClick={handleMicClick}
-          disabled={!dictation.supported}
-          title={
-            !dictation.supported
-              ? 'Voice dictation is not supported in this browser. Try Chrome, Edge, or Safari.'
-              : dictation.listening
-                ? 'Stop dictation (Esc)'
-                : 'Start voice dictation (Cmd/Ctrl+Shift+M)'
-          }
-          aria-label={dictation.listening ? 'Stop voice dictation' : 'Start voice dictation'}
-          aria-pressed={dictation.listening}
-          aria-disabled={!dictation.supported}
-          className={`relative inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
-            dictation.listening
-              ? 'border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/15'
-              : 'border-border bg-background hover:bg-accent text-foreground/80'
-          } ${!dictation.supported ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-          data-testid="button-dictation"
-        >
-          {dictation.listening ? (
-            <>
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75"></span>
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500"></span>
-              </span>
-              <Mic className="h-4 w-4" />
-              <span data-testid="text-dictation-status">Listening…</span>
-            </>
-          ) : (
-            <>
-              {dictation.supported ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-              <span>Dictate</span>
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onMouseDown={handleMicMouseDown}
+            onClick={handleMicClick}
+            disabled={!dictation.supported}
+            title={
+              !dictation.supported
+                ? 'Voice dictation is not supported in this browser.'
+                : dictationBusy
+                  ? dictation.status === 'starting'
+                    ? 'Waiting for microphone permission… Click or press Esc to cancel (takes effect once the browser prompt closes)'
+                    : dictation.status === 'uploading'
+                      ? 'Click or press Esc to cancel upload'
+                      : 'Click or press Esc to cancel transcription'
+                  : dictation.listening
+                    ? dictation.activeEngine === 'whisper'
+                      ? 'Stop recording'
+                      : 'Stop dictation (Esc)'
+                    : 'Start voice dictation (Cmd/Ctrl+Shift+M)'
+            }
+            aria-label={
+              dictationBusy
+                ? 'Cancel voice dictation'
+                : dictation.listening
+                  ? 'Stop voice dictation'
+                  : 'Start voice dictation'
+            }
+            aria-pressed={dictation.listening || dictationBusy}
+            aria-disabled={!dictation.supported}
+            className={`relative inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+              dictation.listening
+                ? 'border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/15'
+                : dictationBusy
+                  ? 'border-violet-500/40 bg-violet-500/10 text-violet-700 hover:bg-violet-500/15'
+                  : 'border-border bg-background hover:bg-accent text-foreground/80'
+            } ${!dictation.supported ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+            data-testid="button-dictation"
+          >
+            {dictationBusy ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span data-testid="text-dictation-status">
+                  {dictation.status === 'starting'
+                    ? 'Starting…'
+                    : dictation.status === 'uploading'
+                      ? 'Uploading…'
+                      : 'Transcribing…'}
+                </span>
+              </>
+            ) : dictation.listening ? (
+              <>
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75"></span>
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500"></span>
+                </span>
+                <Mic className="h-4 w-4" />
+                <span data-testid="text-dictation-status">
+                  {dictation.activeEngine === 'whisper' ? 'Recording…' : 'Listening…'}
+                </span>
+              </>
+            ) : (
+              <>
+                {dictation.supported ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                <span>Dictate</span>
+              </>
+            )}
+          </button>
 
-        {dictation.listening && (
+          {dictation.whisperSupported && (
+            dictation.webSpeechSupported ? (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  if (dictation.listening || dictationBusy) return;
+                  setDictationEngine((prev) => (prev === 'whisper' ? 'web-speech' : 'whisper'));
+                }}
+                disabled={dictation.listening || dictationBusy}
+                title={
+                  dictation.activeEngine === 'whisper'
+                    ? 'Cloud transcription is on. Click to switch back to your browser.'
+                    : 'Use cloud transcription (higher accuracy, works in any browser).'
+                }
+                aria-pressed={dictation.activeEngine === 'whisper'}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium transition-all ${
+                  dictation.activeEngine === 'whisper'
+                    ? 'border-violet-500/40 bg-violet-500/10 text-violet-700'
+                    : 'border-border bg-background hover:bg-accent text-foreground/70'
+                } ${dictation.listening || dictationBusy ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                data-testid="button-dictation-engine"
+              >
+                <Cloud className="h-3.5 w-3.5" />
+                <span>{dictation.activeEngine === 'whisper' ? 'Cloud' : 'Cloud off'}</span>
+              </button>
+            ) : (
+              // Web Speech is unavailable in this browser — Whisper is the only
+              // option, so render a non-interactive badge instead of a disabled
+              // toggle (no false implication of being clickable).
+              <span
+                title="Your browser does not support built-in dictation, so cloud transcription is always used."
+                className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/40 bg-violet-500/10 px-2.5 py-1.5 text-xs font-medium text-violet-700"
+                data-testid="badge-dictation-engine"
+                aria-label="Cloud transcription enabled"
+              >
+                <Cloud className="h-3.5 w-3.5" />
+                <span>Cloud</span>
+              </span>
+            )
+          )}
+        </div>
+
+        {(dictation.listening || dictationBusy) && (
           <span className="text-xs text-muted-foreground hidden sm:inline" data-testid="text-dictation-hint">
-            Press Esc to stop. Try saying "period", "comma", or "new paragraph".
+            {dictation.status === 'starting'
+              ? 'Waiting for microphone permission… (cancel takes effect once the prompt closes)'
+              : dictationBusy
+                ? 'Sending your audio for high-accuracy transcription…'
+                : dictation.activeEngine === 'whisper'
+                  ? 'Recording. Press Esc or click the mic to stop and transcribe.'
+                  : 'Press Esc to stop. Try saying "period", "comma", or "new paragraph".'}
           </span>
         )}
       </div>

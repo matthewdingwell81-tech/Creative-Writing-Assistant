@@ -40,6 +40,65 @@ function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
+function isMediaRecorderAvailable(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof navigator !== 'undefined' &&
+    typeof navigator.mediaDevices !== 'undefined' &&
+    typeof navigator.mediaDevices.getUserMedia === 'function' &&
+    typeof window.MediaRecorder !== 'undefined'
+  );
+}
+
+function pickRecorderMime(): string | undefined {
+  if (typeof window === 'undefined' || typeof window.MediaRecorder === 'undefined') return undefined;
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/ogg',
+    'audio/mp4',
+  ];
+  for (const c of candidates) {
+    try {
+      if (window.MediaRecorder.isTypeSupported(c)) return c;
+    } catch {
+      // ignore — older Safari throws on unknown types
+    }
+  }
+  return undefined;
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('Failed to read audio'));
+        return;
+      }
+      // strip the "data:<mime>;base64," prefix
+      const idx = result.indexOf('base64,');
+      resolve(idx >= 0 ? result.slice(idx + 'base64,'.length) : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error('Failed to read audio'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+export type DictationEngine = 'web-speech' | 'whisper' | 'auto';
+
+export type DictationActiveEngine = 'web-speech' | 'whisper';
+
+export type DictationStatus =
+  | 'idle'
+  | 'starting'
+  | 'listening'
+  | 'recording'
+  | 'uploading'
+  | 'transcribing';
+
 export type DictationErrorKind =
   | 'unsupported'
   | 'not-allowed'
@@ -48,6 +107,7 @@ export type DictationErrorKind =
   | 'audio-capture'
   | 'network'
   | 'aborted'
+  | 'transcription-failed'
   | 'unknown';
 
 export interface DictationError {
@@ -57,6 +117,7 @@ export interface DictationError {
 
 export interface UseDictationOptions {
   lang?: string;
+  engine?: DictationEngine;
   onFinalTranscript?: (text: string) => void;
   onInterimTranscript?: (text: string) => void;
   onError?: (err: DictationError) => void;
@@ -66,7 +127,11 @@ export interface UseDictationOptions {
 
 export interface UseDictationReturn {
   supported: boolean;
+  webSpeechSupported: boolean;
+  whisperSupported: boolean;
+  activeEngine: DictationActiveEngine;
   listening: boolean;
+  status: DictationStatus;
   interimTranscript: string;
   error: DictationError | null;
   start: () => void;
@@ -74,24 +139,87 @@ export interface UseDictationReturn {
   toggle: () => void;
 }
 
-export function useDictation(options: UseDictationOptions = {}): UseDictationReturn {
-  const { lang, onFinalTranscript, onInterimTranscript, onError, onStart, onEnd } = options;
+// Maximum audio chunk Whisper will accept comfortably + protect server payload size
+const WHISPER_MAX_DURATION_MS = 60_000;
 
-  const [supported] = useState<boolean>(() => getSpeechRecognitionCtor() !== null);
+export function useDictation(options: UseDictationOptions = {}): UseDictationReturn {
+  const {
+    lang,
+    engine: requestedEngine = 'auto',
+    onFinalTranscript,
+    onInterimTranscript,
+    onError,
+    onStart,
+    onEnd,
+  } = options;
+
+  const [webSpeechSupported] = useState<boolean>(() => getSpeechRecognitionCtor() !== null);
+  const [whisperSupported] = useState<boolean>(() => isMediaRecorderAvailable());
+
+  // Resolve the active engine. Each branch falls back to the other engine
+  // if its preferred one isn't supported in this browser, so a stale
+  // localStorage preference can never strand a user with no working option.
+  // - 'whisper': prefer whisper, fall back to web-speech.
+  // - 'web-speech': prefer web-speech, fall back to whisper.
+  // - 'auto': prefer Web Speech, fall back to whisper.
+  const activeEngine: DictationActiveEngine =
+    requestedEngine === 'whisper'
+      ? whisperSupported
+        ? 'whisper'
+        : 'web-speech'
+      : requestedEngine === 'web-speech'
+      ? webSpeechSupported
+        ? 'web-speech'
+        : 'whisper'
+      : webSpeechSupported
+      ? 'web-speech'
+      : 'whisper';
+
+  const supported =
+    activeEngine === 'web-speech' ? webSpeechSupported : whisperSupported;
+
   const [listening, setListening] = useState(false);
+  const [status, setStatus] = useState<DictationStatus>('idle');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [error, setError] = useState<DictationError | null>(null);
 
+  // Web Speech refs
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const wantListeningRef = useRef(false);
   const interimRef = useRef('');
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const SILENCE_TIMEOUT_MS = 10000;
-  const callbacksRef = useRef({ onFinalTranscript, onInterimTranscript, onError, onStart, onEnd });
 
+  // Whisper refs
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recorderMimeRef = useRef<string | undefined>(undefined);
+  const maxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelTranscribeRef = useRef<AbortController | null>(null);
+  // Set when the user explicitly cancels mid-flight so late transcripts
+  // arriving after the abort are dropped rather than inserted at the caret.
+  const whisperCancelledRef = useRef(false);
+  // Ensures `onEnd` fires at most once per Whisper session, even when the
+  // cancel/abort path and the fetch's `finally` clause both try to clean up.
+  const whisperOnEndFiredRef = useRef(false);
+  // True from the moment startWhisper is invoked until the recorder is
+  // either fully started or torn down on failure. Synchronous re-entry
+  // guard for rapid clicks during the mic-permission window.
+  const whisperStartingRef = useRef(false);
+
+  const fireWhisperEnd = () => {
+    if (whisperOnEndFiredRef.current) return;
+    whisperOnEndFiredRef.current = true;
+    callbacksRef.current.onEnd?.();
+  };
+
+  const callbacksRef = useRef({ onFinalTranscript, onInterimTranscript, onError, onStart, onEnd });
   callbacksRef.current = { onFinalTranscript, onInterimTranscript, onError, onStart, onEnd };
 
+  // ---------------- Web Speech engine setup ----------------
   useEffect(() => {
+    if (activeEngine !== 'web-speech') return;
     const Ctor = getSpeechRecognitionCtor();
     if (!Ctor) return;
 
@@ -123,6 +251,7 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
 
     recognition.onstart = () => {
       setListening(true);
+      setStatus('listening');
       setError(null);
       armSilenceTimer();
       callbacksRef.current.onStart?.();
@@ -147,6 +276,7 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
         callbacksRef.current.onFinalTranscript?.(pending);
       }
       setListening(false);
+      setStatus('idle');
       setInterimTranscript('');
       callbacksRef.current.onEnd?.();
     };
@@ -240,18 +370,315 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
       }
       recognitionRef.current = null;
     };
-  }, [lang]);
+  }, [lang, activeEngine]);
 
+  // ---------------- Whisper helpers ----------------
+  const cleanupWhisper = useCallback(() => {
+    if (maxDurationTimerRef.current) {
+      clearTimeout(maxDurationTimerRef.current);
+      maxDurationTimerRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
+    }
+    mediaRecorderRef.current = null;
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => {
+        try { t.stop(); } catch { /* ignore */ }
+      });
+      mediaStreamRef.current = null;
+    }
+    recordedChunksRef.current = [];
+  }, []);
+
+  const reportError = useCallback((kind: DictationErrorKind, message: string) => {
+    const err: DictationError = { kind, message };
+    setError(err);
+    callbacksRef.current.onError?.(err);
+  }, []);
+
+  const transcribeWhisperBlob = useCallback(async (blob: Blob) => {
+    if (whisperCancelledRef.current) {
+      // The user cancelled before we even started uploading — nothing to do.
+      setStatus('idle');
+      setListening(false);
+      fireWhisperEnd();
+      return;
+    }
+    setStatus('uploading');
+    let base64: string;
+    try {
+      base64 = await blobToBase64(blob);
+    } catch (e) {
+      reportError('transcription-failed', 'Could not read recorded audio.');
+      setStatus('idle');
+      setListening(false);
+      fireWhisperEnd();
+      return;
+    }
+
+    if (whisperCancelledRef.current) {
+      // Cancelled while we were base64-encoding — bail out without uploading.
+      setStatus('idle');
+      setListening(false);
+      fireWhisperEnd();
+      return;
+    }
+
+    const controller = new AbortController();
+    cancelTranscribeRef.current = controller;
+    setStatus('transcribing');
+    try {
+      const res = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio: base64, language: lang }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        if (whisperCancelledRef.current) {
+          // Late response after user cancelled — drop it silently.
+        } else {
+          let serverMsg = '';
+          try {
+            const j = await res.json();
+            serverMsg = j?.error || '';
+          } catch { /* ignore */ }
+          if (res.status === 401) {
+            reportError(
+              'transcription-failed',
+              'You need to be signed in to use cloud dictation.',
+            );
+          } else {
+            reportError(
+              'transcription-failed',
+              serverMsg || `Transcription failed (${res.status}).`,
+            );
+          }
+        }
+      } else {
+        const data = (await res.json()) as { text?: string };
+        const text = (data?.text || '').trim();
+        // Drop late results that arrived after the user explicitly stopped.
+        if (text && !whisperCancelledRef.current) {
+          callbacksRef.current.onFinalTranscript?.(text);
+        }
+      }
+    } catch (e: any) {
+      if (e?.name === 'AbortError' || whisperCancelledRef.current) {
+        // user-cancelled — no error
+      } else {
+        reportError('transcription-failed', 'Could not reach the transcription service.');
+      }
+    } finally {
+      cancelTranscribeRef.current = null;
+      setStatus('idle');
+      setListening(false);
+      setInterimTranscript('');
+      fireWhisperEnd();
+    }
+  }, [lang, reportError]);
+
+  const startWhisper = useCallback(async () => {
+    if (!whisperSupported) {
+      reportError(
+        'unsupported',
+        'Cloud dictation requires microphone recording, which this browser does not support.',
+      );
+      return;
+    }
+    // Synchronous re-entry guard: rapid repeated clicks during the brief
+    // mic-permission window must not trigger a second getUserMedia call.
+    if (whisperStartingRef.current || mediaRecorderRef.current) {
+      return;
+    }
+    whisperStartingRef.current = true;
+    setError(null);
+    setStatus('starting');
+    whisperCancelledRef.current = false;
+    whisperOnEndFiredRef.current = false;
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e: any) {
+      whisperStartingRef.current = false;
+      const name = e?.name || '';
+      if (name === 'NotAllowedError' || name === 'SecurityError') {
+        reportError(
+          'not-allowed',
+          'Microphone access was blocked. Please allow mic access in your browser to use dictation.',
+        );
+      } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+        reportError('audio-capture', 'No microphone was found. Please connect a mic and try again.');
+      } else {
+        reportError('unknown', 'Could not access the microphone.');
+      }
+      setStatus('idle');
+      return;
+    }
+
+    // The user may have hit Cancel/Esc while we were waiting for mic
+    // permission. Tear the stream down immediately rather than starting to
+    // record into something they already abandoned.
+    if (whisperCancelledRef.current) {
+      stream.getTracks().forEach((t) => { try { t.stop(); } catch { /* ignore */ } });
+      whisperStartingRef.current = false;
+      setStatus('idle');
+      setListening(false);
+      fireWhisperEnd();
+      return;
+    }
+
+    mediaStreamRef.current = stream;
+    const mimeType = pickRecorderMime();
+    recorderMimeRef.current = mimeType;
+    let recorder: MediaRecorder;
+    try {
+      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    } catch {
+      try {
+        recorder = new MediaRecorder(stream);
+      } catch {
+        cleanupWhisper();
+        reportError('unsupported', 'This browser cannot record audio for cloud dictation.');
+        setStatus('idle');
+        return;
+      }
+    }
+
+    recordedChunksRef.current = [];
+    recorder.ondataavailable = (ev) => {
+      if (ev.data && ev.data.size > 0) {
+        recordedChunksRef.current.push(ev.data);
+      }
+    };
+    recorder.onerror = () => {
+      whisperStartingRef.current = false;
+      reportError('audio-capture', 'Recording was interrupted. Please try again.');
+      cleanupWhisper();
+      setStatus('idle');
+      setListening(false);
+      fireWhisperEnd();
+    };
+    recorder.onstop = () => {
+      const chunks = recordedChunksRef.current;
+      recordedChunksRef.current = [];
+      // Free the mic immediately so the OS indicator turns off
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((t) => {
+          try { t.stop(); } catch { /* ignore */ }
+        });
+        mediaStreamRef.current = null;
+      }
+      mediaRecorderRef.current = null;
+      if (maxDurationTimerRef.current) {
+        clearTimeout(maxDurationTimerRef.current);
+        maxDurationTimerRef.current = null;
+      }
+      const totalBytes = chunks.reduce((n, b) => n + b.size, 0);
+      if (totalBytes === 0) {
+        setStatus('idle');
+        setListening(false);
+        fireWhisperEnd();
+        return;
+      }
+      const blob = new Blob(chunks, { type: recorderMimeRef.current || 'audio/webm' });
+      void transcribeWhisperBlob(blob);
+    };
+
+    mediaRecorderRef.current = recorder;
+    try {
+      recorder.start();
+    } catch (e) {
+      whisperStartingRef.current = false;
+      cleanupWhisper();
+      reportError('audio-capture', 'Could not start recording. Please try again.');
+      setStatus('idle');
+      return;
+    }
+
+    whisperStartingRef.current = false;
+    setListening(true);
+    setStatus('recording');
+    callbacksRef.current.onStart?.();
+
+    // Safety auto-stop so we never upload an unbounded recording.
+    maxDurationTimerRef.current = setTimeout(() => {
+      const r = mediaRecorderRef.current;
+      if (r && r.state !== 'inactive') {
+        try { r.stop(); } catch { /* ignore */ }
+      }
+    }, WHISPER_MAX_DURATION_MS);
+  }, [whisperSupported, reportError, cleanupWhisper, transcribeWhisperBlob]);
+
+  const stopWhisper = useCallback(() => {
+    // If startWhisper is mid-flight (waiting on getUserMedia), set the
+    // cancelled flag so the in-progress start tears down the stream and
+    // exits cleanly when its promise resolves.
+    if (whisperStartingRef.current) {
+      whisperCancelledRef.current = true;
+      return;
+    }
+
+    const r = mediaRecorderRef.current;
+    if (r && r.state !== 'inactive') {
+      // Recorder is still running — let it stop normally so the onstop
+      // handler can collect the chunks and send them for transcription.
+      try { r.stop(); } catch { /* ignore */ }
+      return;
+    }
+
+    // Recorder already finished. If a transcription request is in-flight
+    // (uploading or transcribing), this stop call is a user-initiated cancel:
+    // abort the request and suppress any late results.
+    if (cancelTranscribeRef.current) {
+      whisperCancelledRef.current = true;
+      try { cancelTranscribeRef.current.abort(); } catch { /* ignore */ }
+      cancelTranscribeRef.current = null;
+      setStatus('idle');
+      setListening(false);
+      setInterimTranscript('');
+      fireWhisperEnd();
+      return;
+    }
+
+    // Nothing to do — ensure any leftover state is cleared.
+    cleanupWhisper();
+    setStatus('idle');
+    setListening(false);
+  }, [cleanupWhisper]);
+
+  // Cleanup whisper on unmount
+  useEffect(() => {
+    return () => {
+      if (cancelTranscribeRef.current) {
+        try { cancelTranscribeRef.current.abort(); } catch { /* ignore */ }
+        cancelTranscribeRef.current = null;
+      }
+      cleanupWhisper();
+    };
+  }, [cleanupWhisper]);
+
+  // ---------------- Public API ----------------
   const start = useCallback(() => {
     if (!supported) {
       const err: DictationError = {
         kind: 'unsupported',
-        message: 'Voice dictation is not supported in this browser. Try Chrome, Edge, or Safari.',
+        message:
+          activeEngine === 'whisper'
+            ? 'Cloud dictation requires microphone recording, which this browser does not support.'
+            : 'Voice dictation is not supported in this browser. Try Chrome, Edge, or Safari.',
       };
       setError(err);
       callbacksRef.current.onError?.(err);
       return;
     }
+
+    if (activeEngine === 'whisper') {
+      void startWhisper();
+      return;
+    }
+
     const recognition = recognitionRef.current;
     if (!recognition) return;
     setError(null);
@@ -261,9 +688,13 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
     } catch {
       // start() throws if already started; ignore
     }
-  }, [supported]);
+  }, [supported, activeEngine, startWhisper]);
 
   const stop = useCallback(() => {
+    if (activeEngine === 'whisper') {
+      stopWhisper();
+      return;
+    }
     wantListeningRef.current = false;
     setInterimTranscript('');
     const recognition = recognitionRef.current;
@@ -273,26 +704,41 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
     } catch {
       // ignore
     }
-  }, []);
+  }, [activeEngine, stopWhisper]);
 
   const toggle = useCallback(() => {
-    if (listening) stop();
+    if (listening || status === 'uploading' || status === 'transcribing') stop();
     else start();
-  }, [listening, start, stop]);
+  }, [listening, status, start, stop]);
 
   // Stop listening when the tab becomes hidden to avoid stuck states
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const onVisibility = () => {
-      if (document.hidden && wantListeningRef.current) {
+      if (!document.hidden) return;
+      if (activeEngine === 'web-speech' && wantListeningRef.current) {
+        stop();
+      } else if (activeEngine === 'whisper' && listening) {
         stop();
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [stop]);
+  }, [stop, activeEngine, listening]);
 
-  return { supported, listening, interimTranscript, error, start, stop, toggle };
+  return {
+    supported,
+    webSpeechSupported,
+    whisperSupported,
+    activeEngine,
+    listening,
+    status,
+    interimTranscript,
+    error,
+    start,
+    stop,
+    toggle,
+  };
 }
 
 /**

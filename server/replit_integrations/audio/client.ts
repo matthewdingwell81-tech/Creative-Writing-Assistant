@@ -234,17 +234,66 @@ export async function textToSpeechStream(
 }
 
 /**
+ * Convert an arbitrary audio buffer to WAV using ffmpeg via stdin/stdout pipes.
+ * Unlike `convertToWav`, this never touches the disk — appropriate for inputs
+ * where we know the audio is small (e.g., short browser dictation clips) and
+ * for audio-only formats that don't need seeking. Video containers like MP4
+ * require seeking; for those, prefer `convertToWav` (which uses temp files).
+ */
+export async function convertToWavInMemory(audioBuffer: Buffer): Promise<Buffer> {
+  return await new Promise<Buffer>((resolve, reject) => {
+    const ffmpeg = spawn("ffmpeg", [
+      "-i", "pipe:0",
+      "-vn",
+      "-f", "wav",
+      "-ar", "16000",
+      "-ac", "1",
+      "-acodec", "pcm_s16le",
+      "pipe:1",
+    ]);
+
+    const chunks: Buffer[] = [];
+    let stderr = "";
+    ffmpeg.stdout.on("data", (c: Buffer) => chunks.push(c));
+    ffmpeg.stderr.on("data", (c: Buffer) => { stderr += c.toString(); });
+    ffmpeg.on("error", reject);
+    ffmpeg.on("close", (code) => {
+      if (code === 0) resolve(Buffer.concat(chunks));
+      else reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(0, 500)}`));
+    });
+
+    ffmpeg.stdin.on("error", reject);
+    ffmpeg.stdin.end(audioBuffer);
+  });
+}
+
+/**
  * Speech-to-Text: Transcribes audio using dedicated transcription model.
  * Uses gpt-4o-mini-transcribe for accurate transcription.
+ *
+ * The format string is used purely to pick a file extension for the upload.
+ * Restricted to OpenAI's accepted audio API extensions for compile-time
+ * safety; callers that need to handle unknown formats should normalize via
+ * {@link convertToWavInMemory} or {@link ensureCompatibleFormat} first.
  */
+export type SpeechToTextFormat =
+  | "flac" | "m4a" | "mp3" | "mp4" | "mpeg"
+  | "mpga" | "oga" | "ogg" | "wav" | "webm";
+
 export async function speechToText(
   audioBuffer: Buffer,
-  format: "wav" | "mp3" | "webm" = "wav"
+  format: SpeechToTextFormat = "wav",
+  // Optional ISO-639-1 language hint (e.g. "en", "fr"). Improves accuracy
+  // for non-English speech. Anything before the first dash/underscore is
+  // used so common locale tags like "en-US" are accepted.
+  language?: string,
 ): Promise<string> {
   const file = await toFile(audioBuffer, `audio.${format}`);
+  const langHint = language?.split(/[-_]/)[0]?.toLowerCase();
   const response = await openai.audio.transcriptions.create({
     file,
     model: "gpt-4o-mini-transcribe",
+    ...(langHint ? { language: langHint } : {}),
   });
   return response.text;
 }
