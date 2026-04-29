@@ -579,15 +579,17 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
           type="button"
           onMouseDown={handleMicMouseDown}
           onClick={handleMicClick}
+          disabled={!dictation.supported}
           title={
             !dictation.supported
-              ? 'Voice dictation not supported in this browser'
+              ? 'Voice dictation is not supported in this browser. Try Chrome, Edge, or Safari.'
               : dictation.listening
                 ? 'Stop dictation (Esc)'
                 : 'Start voice dictation (Cmd/Ctrl+Shift+M)'
           }
           aria-label={dictation.listening ? 'Stop voice dictation' : 'Start voice dictation'}
           aria-pressed={dictation.listening}
+          aria-disabled={!dictation.supported}
           className={`relative inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
             dictation.listening
               ? 'border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/15'
