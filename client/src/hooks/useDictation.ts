@@ -189,6 +189,14 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
   const interimRef = useRef('');
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const SILENCE_TIMEOUT_MS = 10000;
+  // Deduplication: track the last final transcript text + when it was emitted.
+  // If the same text arrives again within this window (ms) we drop it — this
+  // prevents Chrome's session-restart overlap from inserting words twice.
+  const lastFinalRef = useRef<{ text: string; at: number } | null>(null);
+  const DEDUP_WINDOW_MS = 1500;
+  // True while an internal auto-restart is in progress so onstart doesn't
+  // re-fire the user-facing onStart callback on every Chrome session cycle.
+  const isInternalRestartRef = useRef(false);
 
   // Whisper refs
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -254,7 +262,12 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
       setStatus('listening');
       setError(null);
       armSilenceTimer();
-      callbacksRef.current.onStart?.();
+      // Only fire the user-facing onStart on the first start of a session,
+      // not on every internal auto-restart (which Chrome does every ~60 s).
+      if (!isInternalRestartRef.current) {
+        callbacksRef.current.onStart?.();
+      }
+      isInternalRestartRef.current = false;
     };
 
     recognition.onend = () => {
@@ -262,9 +275,15 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
       // Auto-restart if the user still wants to listen (some browsers cut off after a few seconds)
       if (wantListeningRef.current) {
         try {
+          // Clear stale interim so the restarted session can't re-emit it as a
+          // false final, and flag that this start is an internal restart.
+          interimRef.current = '';
+          setInterimTranscript('');
+          isInternalRestartRef.current = true;
           recognition.start();
           return;
         } catch {
+          isInternalRestartRef.current = false;
           // fall through to stop
         }
       }
@@ -340,7 +359,19 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
         interimRef.current = '';
         setInterimTranscript('');
         callbacksRef.current.onInterimTranscript?.('');
-        callbacksRef.current.onFinalTranscript?.(finalChunk);
+        // Deduplicate: drop the chunk if it is identical to the last one
+        // emitted within the overlap window. This prevents Chrome's
+        // session-restart handoff from inserting the same words twice.
+        const now = Date.now();
+        const last = lastFinalRef.current;
+        const isDuplicate =
+          last !== null &&
+          last.text === finalChunk.trim() &&
+          now - last.at < DEDUP_WINDOW_MS;
+        if (!isDuplicate) {
+          lastFinalRef.current = { text: finalChunk.trim(), at: now };
+          callbacksRef.current.onFinalTranscript?.(finalChunk);
+        }
       }
       if (interim) {
         interimRef.current = interim;
@@ -357,6 +388,8 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRet
 
     return () => {
       wantListeningRef.current = false;
+      isInternalRestartRef.current = false;
+      lastFinalRef.current = null;
       clearSilenceTimer();
       interimRef.current = '';
       recognition.onstart = null;
