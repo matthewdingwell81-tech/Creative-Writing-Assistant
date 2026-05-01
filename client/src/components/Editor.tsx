@@ -237,41 +237,42 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
     lastHighlightKey.current = highlightKey;
   }, [highlightKey, grammarHighlights, isTypingState]);
 
+  // Single selectionchange listener that both:
+  //   1. Reports the selected text to the parent (for toolbar/context features), and
+  //   2. Keeps dictationCaretRef up to date so dictation always inserts at the
+  //      user's actual cursor rather than defaulting to end-of-document.
   useEffect(() => {
     const handleSelectionChange = () => {
-      if (!onSelectionChange || !editorRef.current) return;
+      if (!editorRef.current) return;
       const selection = window.getSelection();
-      if (!selection || selection.isCollapsed) {
-        onSelectionChange('');
-        return;
+
+      // --- Dictation caret tracking (always runs) ---
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        if (editorRef.current.contains(range.startContainer)) {
+          dictationCaretRef.current = { node: range.startContainer, offset: range.startOffset };
+        }
       }
-      if (
-        selection.anchorNode && editorRef.current.contains(selection.anchorNode) &&
-        selection.focusNode && editorRef.current.contains(selection.focusNode)
-      ) {
-        onSelectionChange(selection.toString().trim());
-      } else {
-        onSelectionChange('');
+
+      // --- Selected-text reporting (only when parent opted in) ---
+      if (onSelectionChange) {
+        if (!selection || selection.isCollapsed) {
+          onSelectionChange('');
+          return;
+        }
+        if (
+          selection.anchorNode && editorRef.current.contains(selection.anchorNode) &&
+          selection.focusNode && editorRef.current.contains(selection.focusNode)
+        ) {
+          onSelectionChange(selection.toString().trim());
+        } else {
+          onSelectionChange('');
+        }
       }
     };
     document.addEventListener('selectionchange', handleSelectionChange);
     return () => document.removeEventListener('selectionchange', handleSelectionChange);
   }, [onSelectionChange]);
-
-  // Continuously track the caret position while the user types or clicks
-  // inside the editor so that dictation always inserts at the right place.
-  useEffect(() => {
-    const trackCaret = () => {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0 || !editorRef.current) return;
-      const range = sel.getRangeAt(0);
-      if (editorRef.current.contains(range.startContainer)) {
-        dictationCaretRef.current = { node: range.startContainer, offset: range.startOffset };
-      }
-    };
-    document.addEventListener('selectionchange', trackCaret);
-    return () => document.removeEventListener('selectionchange', trackCaret);
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
