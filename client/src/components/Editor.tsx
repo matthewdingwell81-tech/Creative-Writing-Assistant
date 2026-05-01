@@ -601,6 +601,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
         }
       }
       // Capitalize the first letter if previous content ends a sentence (or buffer is empty)
+      // but only when the cursor is NOT in the middle of existing text (mid-sentence insertion).
       const stored2 = dictationCaretRef.current;
       if (stored2) {
         const beforeText = stored2.node.nodeType === Node.TEXT_NODE
@@ -608,7 +609,26 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
           : '';
         const trimmedBefore = beforeText.replace(/\s+$/, '');
         const endsSentence = trimmedBefore === '' || /[.!?]\s*$/.test(beforeText) || /\n\s*$/.test(beforeText);
-        if (endsSentence) {
+
+        // Check whether there is text after the cursor — if so, the cursor is mid-sentence
+        // and we should not auto-capitalize regardless of what precedes it.
+        // Use a Range from the caret to the end of the editor so nested DOM shapes
+        // (e.g. grammar-highlight spans, element-node carets) are handled correctly.
+        let hasTextAfterCursor = false;
+        if (editorRef.current) {
+          try {
+            const afterRange = document.createRange();
+            afterRange.setStart(stored2.node, stored2.offset);
+            afterRange.setEnd(editorRef.current, editorRef.current.childNodes.length);
+            hasTextAfterCursor = /\S/.test(afterRange.toString());
+          } catch {
+            // If range creation fails for any reason, fall back to conservative behaviour
+            // (treat as mid-sentence to avoid spurious capitalisation).
+            hasTextAfterCursor = true;
+          }
+        }
+
+        if (endsSentence && !hasTextAfterCursor) {
           toInsert = toInsert.replace(/^(\s*)([a-z])/, (_m, ws, ch) => ws + ch.toUpperCase());
         }
       }
