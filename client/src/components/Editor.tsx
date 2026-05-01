@@ -363,12 +363,6 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
     }
   }, []);
 
-  // Save the caret position when the editor loses focus so we can restore it
-  // when dictation starts after the user clicks the mic button.
-  const handleEditorBlur = useCallback(() => {
-    captureCaret();
-  }, [captureCaret]);
-
   const removeInterimSpan = useCallback(() => {
     const span = interimSpanRef.current;
     if (span && span.parentNode) {
@@ -385,6 +379,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
     dictationCaretRef.current = { node: range.startContainer, offset: range.startOffset };
     return true;
   }, []);
+
+  // Save the caret position when the editor loses focus so we can restore it
+  // when dictation starts after the user clicks the mic button.
+  const handleEditorBlur = useCallback(() => {
+    captureCaret();
+  }, [captureCaret]);
 
   const restoreCaretToEnd = useCallback(() => {
     const el = editorRef.current;
