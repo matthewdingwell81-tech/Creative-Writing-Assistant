@@ -258,6 +258,21 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
     return () => document.removeEventListener('selectionchange', handleSelectionChange);
   }, [onSelectionChange]);
 
+  // Continuously track the caret position while the user types or clicks
+  // inside the editor so that dictation always inserts at the right place.
+  useEffect(() => {
+    const trackCaret = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || !editorRef.current) return;
+      const range = sel.getRangeAt(0);
+      if (editorRef.current.contains(range.startContainer)) {
+        dictationCaretRef.current = { node: range.startContainer, offset: range.startOffset };
+      }
+    };
+    document.addEventListener('selectionchange', trackCaret);
+    return () => document.removeEventListener('selectionchange', trackCaret);
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (popover.visible) {
@@ -347,6 +362,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
       document.execCommand('insertText', false, '    ');
     }
   }, []);
+
+  // Save the caret position when the editor loses focus so we can restore it
+  // when dictation starts after the user clicks the mic button.
+  const handleEditorBlur = useCallback(() => {
+    captureCaret();
+  }, [captureCaret]);
 
   const removeInterimSpan = useCallback(() => {
     const span = interimSpanRef.current;
@@ -529,8 +550,34 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
         if (!el.contains(document.activeElement)) {
           el.focus();
         }
+        // captureCaret() will return false when the active element has already
+        // moved away from the editor (e.g. the mic button took focus). In that
+        // case, restore the selection to the last position tracked via
+        // selectionchange / onBlur rather than jumping to end-of-document.
         if (!captureCaret()) {
-          restoreCaretToEnd();
+          const stored = dictationCaretRef.current;
+          if (stored && el.contains(stored.node)) {
+            const sel = window.getSelection();
+            if (sel) {
+              try {
+                const range = document.createRange();
+                const safeOffset = Math.min(
+                  stored.offset,
+                  stored.node.nodeType === Node.TEXT_NODE
+                    ? (stored.node as Text).length
+                    : stored.node.childNodes.length
+                );
+                range.setStart(stored.node, safeOffset);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+              } catch {
+                restoreCaretToEnd();
+              }
+            }
+          } else {
+            restoreCaretToEnd();
+          }
         }
       }
     },
@@ -612,8 +659,14 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
       return;
     }
     if (!dictation.listening) {
-      // Capture caret BEFORE focus moves to the button
-      captureCaret() || restoreCaretToEnd();
+      // Capture the current caret. If captureCaret() fails (e.g. focus has
+      // already left the editor), keep whatever position was saved by the
+      // continuous selectionchange / onBlur tracking instead of overwriting it
+      // with the end of the document. Only fall back to end-of-document when
+      // there is genuinely no stored position at all.
+      if (!captureCaret() && !dictationCaretRef.current) {
+        restoreCaretToEnd();
+      }
     }
     dictation.toggle();
   }, [dictation, dictationBusy, captureCaret, restoreCaretToEnd]);
@@ -643,7 +696,9 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
         }
         e.preventDefault();
         if (!dictation.listening) {
-          captureCaret() || restoreCaretToEnd();
+          if (!captureCaret() && !dictationCaretRef.current) {
+            restoreCaretToEnd();
+          }
         }
         dictation.toggle();
       } else if (e.key === 'Escape' && (dictation.listening || dictationBusy)) {
@@ -839,6 +894,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onClick={handleEditorClick}
+        onBlur={handleEditorBlur}
         spellCheck="false"
         data-testid="editor-area"
         data-placeholder="Start writing..."
