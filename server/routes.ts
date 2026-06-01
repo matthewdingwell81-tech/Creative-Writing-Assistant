@@ -286,6 +286,65 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
     res.status(204).send();
   });
 
+  // === AI Writing Coach (multi-turn streaming) ===
+
+  app.post("/api/coach", requireAuth, async (req, res) => {
+    const { messages, documentContent = "", documentType = "fiction" } = req.body;
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: "messages array is required" });
+    }
+
+    const docSnippet = documentContent
+      ? `\n\nThe writer's current document (for context):\n\n${documentContent.slice(0, 2000)}${documentContent.length > 2000 ? "\n...(truncated)" : ""}`
+      : "";
+
+    const systemPrompt = `You are a Socratic writing coach helping a writer develop and organize their ideas for a ${documentType} piece.
+
+Your role:
+- Ask probing follow-up questions when ideas are vague — help the writer dig deeper rather than jumping straight to answers
+- Give honest, constructive feedback when the writer shares plans, passages, or plot points — acknowledge what works, then clearly identify what could be stronger
+- Help spot gaps, inconsistencies, or underdeveloped areas in story concepts or arguments
+- Suggest structure and organization when the writer is trying to sort out their thinking
+- Be encouraging but direct — real growth comes from honest reflection
+- Keep responses conversational and focused (2–3 paragraphs max unless a detailed outline is explicitly requested)
+- Always end your response with a question that pushes the writer to think one step further${docSnippet}`;
+
+    try {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      const stream = await openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messages,
+        ],
+        stream: true,
+        max_completion_tokens: 8192,
+      });
+
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || "";
+        if (content) {
+          res.write(`data: ${JSON.stringify({ content })}\n\n`);
+        }
+      }
+
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+    } catch (error: any) {
+      console.error("AI coach error:", error?.message);
+      if (res.headersSent) {
+        res.write(`data: ${JSON.stringify({ error: "Failed to connect to coach" })}\n\n`);
+        res.end();
+      } else {
+        res.status(500).json({ error: "Failed to connect to coach" });
+      }
+    }
+  });
+
   // === Google Docs Integration ===
 
   app.post("/api/gdocs/import", requireAuth, async (req, res) => {

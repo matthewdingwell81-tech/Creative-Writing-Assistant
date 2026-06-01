@@ -582,6 +582,11 @@ export default function Home() {
                 setIdeaAssistantLoading(false);
               }}
               onScrollToSuggestion={(text) => editorHandle.current?.scrollToSuggestion(text)}
+              onInsertText={(text) => {
+                const appended = (content ? content + '\n\n' : '') + text;
+                setContent(appended);
+                save(appended, title);
+              }}
             />
           </aside>
         )}

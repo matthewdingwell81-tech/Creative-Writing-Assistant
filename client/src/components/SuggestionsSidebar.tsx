@@ -1,15 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles, BookOpen, AlertCircle, TrendingUp, CheckCircle2,
-  ChevronRight, MessageSquareDashed, Check, Loader2, RefreshCw, Type, TextSelect,
-  X, Bookmark, BookmarkCheck, History, Trash2, ArrowRight
+  ChevronRight, MessageSquareDashed, Check, Loader2, Type, TextSelect,
+  X, Bookmark, BookmarkCheck, History, Trash2, ArrowRight, Bot, RotateCcw,
+  ClipboardCopy, Send, User
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { streamIdeas } from '@/lib/api';
+import { streamIdeas, streamCoach } from '@/lib/api';
 import type { Suggestion, ChangeHistoryEntry } from '@/hooks/useSuggestions';
+
+interface CoachMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 interface SuggestionsSidebarProps {
   suggestions: Suggestion[];
@@ -28,6 +34,7 @@ interface SuggestionsSidebarProps {
   externalIdeaPrompt?: { prompt: string; id: number } | null;
   onExternalIdeaHandled?: () => void;
   onScrollToSuggestion?: (original: string) => void;
+  onInsertText?: (text: string) => void;
 }
 
 const severityConfig = {
@@ -210,10 +217,17 @@ function formatTimeAgo(timestamp: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+const STARTER_PROMPTS = [
+  "Help me develop my main character",
+  "Here's my story idea — what am I missing?",
+  "Give me feedback on this plot point",
+  "Let's outline my next chapter",
+];
+
 export default function SuggestionsSidebar({
   suggestions, savedSuggestions, savedCount, changeHistory, loading, onApplySuggestion,
   onDismiss, onSave, onRemoveSaved, onClearHistory, documentContent, documentType, selectedText,
-  externalIdeaPrompt, onExternalIdeaHandled, onScrollToSuggestion
+  externalIdeaPrompt, onExternalIdeaHandled, onScrollToSuggestion, onInsertText
 }: SuggestionsSidebarProps) {
   const [ideaPrompt, setIdeaPrompt] = useState('');
   const [ideaResponse, setIdeaResponse] = useState('');
@@ -221,6 +235,12 @@ export default function SuggestionsSidebar({
   const [activeTab, setActiveTab] = useState('grammar');
   const [showSaved, setShowSaved] = useState(false);
   const externalPromptHandled = useRef<number | null>(null);
+
+  const [coachMessages, setCoachMessages] = useState<CoachMessage[]>([]);
+  const [coachInput, setCoachInput] = useState('');
+  const [coachLoading, setCoachLoading] = useState(false);
+  const coachScrollRef = useRef<HTMLDivElement>(null);
+  const coachInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (externalIdeaPrompt && externalIdeaPrompt.id !== externalPromptHandled.current) {
@@ -283,6 +303,61 @@ export default function SuggestionsSidebar({
     setActiveTab('ideas');
     setIdeaPrompt('');
     handleIdeaSubmitDirect(prompt);
+  };
+
+  useEffect(() => {
+    if (coachScrollRef.current) {
+      coachScrollRef.current.scrollTop = coachScrollRef.current.scrollHeight;
+    }
+  }, [coachMessages]);
+
+  const handleCoachSend = async (messageText?: string) => {
+    const text = (messageText ?? coachInput).trim();
+    if (!text || coachLoading) return;
+
+    const userMessage: CoachMessage = { role: 'user', content: text };
+    const nextMessages = [...coachMessages, userMessage];
+    setCoachMessages(nextMessages);
+    setCoachInput('');
+    setCoachLoading(true);
+
+    const assistantPlaceholder: CoachMessage = { role: 'assistant', content: '' };
+    setCoachMessages(prev => [...prev, assistantPlaceholder]);
+
+    try {
+      await streamCoach(
+        nextMessages,
+        documentContent,
+        documentType,
+        (chunk) => {
+          setCoachMessages(prev => {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              role: 'assistant',
+              content: updated[updated.length - 1].content + chunk,
+            };
+            return updated;
+          });
+        },
+        () => setCoachLoading(false)
+      );
+    } catch {
+      setCoachMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          role: 'assistant',
+          content: 'Something went wrong. Please try again.',
+        };
+        return updated;
+      });
+      setCoachLoading(false);
+    }
+  };
+
+  const handleCoachReset = () => {
+    setCoachMessages([]);
+    setCoachInput('');
+    setCoachLoading(false);
   };
 
   const grammarSuggestions = suggestions.filter(s => s.type === 'grammar');
@@ -389,20 +464,23 @@ export default function SuggestionsSidebar({
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col w-full min-h-0">
         <div className="px-4 pt-3 pb-0 border-b border-border/50">
-          <TabsList className="w-full bg-muted/50 grid grid-cols-5 p-1 rounded-lg">
-            <TabsTrigger value="grammar" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-grammar">
+          <TabsList className="w-full bg-muted/50 grid grid-cols-6 p-1 rounded-lg">
+            <TabsTrigger value="grammar" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1" data-testid="tab-grammar">
               Grammar {grammarSuggestions.length > 0 && `(${grammarSuggestions.length})`}
             </TabsTrigger>
-            <TabsTrigger value="suggestions" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-review">
+            <TabsTrigger value="suggestions" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1" data-testid="tab-review">
               Review {reviewSuggestions.length > 0 && `(${reviewSuggestions.length})`}
             </TabsTrigger>
-            <TabsTrigger value="story" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-story">
+            <TabsTrigger value="story" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1" data-testid="tab-story">
               Story {storySuggestions.length > 0 && `(${storySuggestions.length})`}
             </TabsTrigger>
-            <TabsTrigger value="history" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-history">
+            <TabsTrigger value="history" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1" data-testid="tab-history">
               History {changeHistory.length > 0 && `(${changeHistory.length})`}
             </TabsTrigger>
-            <TabsTrigger value="ideas" className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-ideas">Ideas</TabsTrigger>
+            <TabsTrigger value="ideas" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1" data-testid="tab-ideas">Ideas</TabsTrigger>
+            <TabsTrigger value="coach" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 gap-0.5" data-testid="tab-coach">
+              <Bot className="w-3 h-3 shrink-0" />Coach
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -582,6 +660,131 @@ export default function SuggestionsSidebar({
                   {prompt}
                 </Button>
               ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="coach" className="m-0 flex flex-col h-full">
+            <div className="flex flex-col h-[calc(100vh-14rem)]">
+              {coachMessages.length === 0 ? (
+                <div className="flex-1 flex flex-col justify-center p-4 space-y-3">
+                  <div className="text-center mb-2">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                      <Bot className="w-5 h-5 text-primary" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">Writing Coach</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      Share your ideas and I'll ask questions, give feedback, and help you develop your story.
+                    </p>
+                  </div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground text-center">Start with</p>
+                  {STARTER_PROMPTS.map((prompt, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleCoachSend(prompt)}
+                      className="w-full text-left text-xs p-2.5 rounded-lg border border-border/60 bg-card hover:border-primary/40 hover:bg-primary/5 transition-all"
+                      data-testid={`btn-coach-starter-${i}`}
+                    >
+                      <span className="text-primary/70 mr-1.5">→</span>
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  ref={coachScrollRef}
+                  className="flex-1 overflow-y-auto p-4 space-y-3"
+                  data-testid="coach-message-list"
+                >
+                  {coachMessages.map((msg, i) => (
+                    <div
+                      key={i}
+                      className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                      data-testid={`coach-message-${i}`}
+                    >
+                      <div className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center mt-0.5 ${
+                        msg.role === 'user' ? 'bg-primary/20' : 'bg-muted'
+                      }`}>
+                        {msg.role === 'user'
+                          ? <User className="w-3 h-3 text-primary" />
+                          : <Bot className="w-3 h-3 text-muted-foreground" />
+                        }
+                      </div>
+                      <div className={`flex-1 min-w-0 ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+                        <div className={`rounded-lg px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap break-words max-w-[90%] ${
+                          msg.role === 'user'
+                            ? 'bg-primary text-primary-foreground self-end'
+                            : 'bg-muted text-foreground self-start'
+                        }`}>
+                          {msg.content}
+                          {msg.role === 'assistant' && coachLoading && i === coachMessages.length - 1 && msg.content === '' && (
+                            <span className="inline-flex items-center gap-1 text-muted-foreground">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            </span>
+                          )}
+                        </div>
+                        {msg.role === 'assistant' && msg.content && !(coachLoading && i === coachMessages.length - 1) && (
+                          <div className="flex gap-1 self-start">
+                            {onInsertText && (
+                              <button
+                                onClick={() => onInsertText(msg.content)}
+                                className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-primary/10 transition-colors"
+                                title="Insert into document"
+                                data-testid={`btn-coach-insert-${i}`}
+                              >
+                                <ClipboardCopy className="w-2.5 h-2.5" />
+                                Insert
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="border-t border-border/50 p-3 space-y-2">
+                {coachMessages.length > 0 && (
+                  <button
+                    onClick={handleCoachReset}
+                    className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                    data-testid="btn-coach-reset"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Start over
+                  </button>
+                )}
+                <div className="flex gap-2 items-end">
+                  <textarea
+                    ref={coachInputRef}
+                    className="flex-1 bg-background border border-border/60 rounded-md p-2 text-xs min-h-[60px] max-h-[120px] focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
+                    placeholder="Share an idea, ask a question, or describe a scene..."
+                    value={coachInput}
+                    onChange={(e) => setCoachInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleCoachSend();
+                      }
+                    }}
+                    disabled={coachLoading}
+                    data-testid="textarea-coach-input"
+                  />
+                  <Button
+                    size="icon"
+                    className="h-8 w-8 shrink-0 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground"
+                    onClick={() => handleCoachSend()}
+                    disabled={coachLoading || !coachInput.trim()}
+                    data-testid="btn-coach-send"
+                  >
+                    {coachLoading
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Send className="w-3.5 h-3.5" />
+                    }
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground/60">Enter to send · Shift+Enter for new line</p>
+              </div>
             </div>
           </TabsContent>
         </ScrollArea>
