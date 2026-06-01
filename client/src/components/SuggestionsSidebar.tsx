@@ -241,6 +241,7 @@ export default function SuggestionsSidebar({
   const [coachLoading, setCoachLoading] = useState(false);
   const coachScrollRef = useRef<HTMLDivElement>(null);
   const coachInputRef = useRef<HTMLTextAreaElement>(null);
+  const coachAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (externalIdeaPrompt && externalIdeaPrompt.id !== externalPromptHandled.current) {
@@ -315,14 +316,17 @@ export default function SuggestionsSidebar({
     const text = (messageText ?? coachInput).trim();
     if (!text || coachLoading) return;
 
+    if (coachAbortRef.current) {
+      coachAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    coachAbortRef.current = controller;
+
     const userMessage: CoachMessage = { role: 'user', content: text };
     const nextMessages = [...coachMessages, userMessage];
-    setCoachMessages(nextMessages);
+    setCoachMessages([...nextMessages, { role: 'assistant', content: '' }]);
     setCoachInput('');
     setCoachLoading(true);
-
-    const assistantPlaceholder: CoachMessage = { role: 'assistant', content: '' };
-    setCoachMessages(prev => [...prev, assistantPlaceholder]);
 
     try {
       await streamCoach(
@@ -330,7 +334,9 @@ export default function SuggestionsSidebar({
         documentContent,
         documentType,
         (chunk) => {
+          if (controller.signal.aborted) return;
           setCoachMessages(prev => {
+            if (prev.length === 0) return prev;
             const updated = [...prev];
             updated[updated.length - 1] = {
               role: 'assistant',
@@ -339,10 +345,15 @@ export default function SuggestionsSidebar({
             return updated;
           });
         },
-        () => setCoachLoading(false)
+        () => {
+          if (!controller.signal.aborted) setCoachLoading(false);
+        },
+        controller.signal
       );
-    } catch {
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
       setCoachMessages(prev => {
+        if (prev.length === 0) return prev;
         const updated = [...prev];
         updated[updated.length - 1] = {
           role: 'assistant',
@@ -350,11 +361,16 @@ export default function SuggestionsSidebar({
         };
         return updated;
       });
-      setCoachLoading(false);
+    } finally {
+      if (!controller.signal.aborted) setCoachLoading(false);
     }
   };
 
   const handleCoachReset = () => {
+    if (coachAbortRef.current) {
+      coachAbortRef.current.abort();
+      coachAbortRef.current = null;
+    }
     setCoachMessages([]);
     setCoachInput('');
     setCoachLoading(false);
