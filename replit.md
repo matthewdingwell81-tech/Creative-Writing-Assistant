@@ -22,7 +22,6 @@ A real-time AI writing assistant tailored for fiction writers. Uses OpenAI (via 
   - Change History tab tracks all applied suggestions with timestamps, showing what was changed
 - Inline spell-check: grammar suggestions with corrections are highlighted with subtle red wavy underlines in the editor; clicking a highlighted word shows a popover with correction options for quick replacement
 - Text selection review: select text in the editor to get targeted AI feedback on specific passages
-- Voice-to-text dictation: a "Dictate" mic button in the editor toolbar lets writers speak text directly into the editor at the cursor; interim words appear live (italic/purple) and resolve into final text. Supports spoken punctuation ("period", "comma", "question mark", "new paragraph", etc.). Toggleable via Cmd/Ctrl+Shift+M; press Esc to stop. Uses the browser's built-in Web Speech API (Chrome/Edge/Safari) by default, and automatically falls back to server-side transcription via OpenAI Whisper (`/api/transcribe`) for browsers without speech support (e.g., Firefox). A "Cloud" toggle next to the mic lets users force the higher-accuracy Whisper path even on supported browsers; recordings are streamed to the server in-memory and never persisted.
 - Ideas Scratchpad: collapsible per-document panel at the bottom of the editor for jotting down and revisiting ideas
 - Document management (create, list, delete, export)
 - Multiple document types (fiction, non-fiction, essay, blog, script)
@@ -44,7 +43,6 @@ A real-time AI writing assistant tailored for fiction writers. Uses OpenAI (via 
 - `POST /api/ideas` - Streaming AI idea generation
 - `POST /api/gdocs/import` - Import a Google Doc by URL/ID into Lumina
 - `POST /api/gdocs/export` - Export a Lumina document to Google Docs
-- `POST /api/transcribe` - Server-side speech-to-text fallback (OpenAI Whisper). Accepts `{ audio: base64, language? }`, returns `{ text, language }`. Audio is held in memory only and never persisted.
 
 ## File Structure
 - `client/src/pages/Home.tsx` - Main workspace page

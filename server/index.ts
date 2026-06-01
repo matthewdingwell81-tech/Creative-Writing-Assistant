@@ -24,20 +24,13 @@ declare module "express-session" {
   }
 }
 
-// Routes that handle their own (large) JSON bodies and must NOT be parsed
-// by the global JSON middleware (which uses the default ~100kb limit).
-const SKIP_GLOBAL_JSON_PATHS = new Set<string>(["/api/transcribe"]);
-
 const globalJsonParser = express.json({
   verify: (req, _res, buf) => {
     req.rawBody = buf;
   },
 });
 
-app.use((req, res, next) => {
-  if (SKIP_GLOBAL_JSON_PATHS.has(req.path)) return next();
-  return globalJsonParser(req, res, next);
-});
+app.use(globalJsonParser);
 
 app.use(express.urlencoded({ extended: false }));
 
