@@ -1,11 +1,15 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
+// IMPORTANT: server.url must point to the permanent production deployment URL
+// before publishing to the Play Store. The dev domain is ephemeral and will
+// stop working after the Replit dev environment changes. Use the stable
+// production URL (e.g. https://lumina.replit.app) for all Play Store builds.
 const config: CapacitorConfig = {
   appId: "com.lumina.app",
   appName: "Lumina",
   webDir: "dist/public",
   server: {
-    url: "https://603f1633-0ade-4928-a254-85e9b83970cc-00-2ga6s5lxazaan-bolhoabm.picard.replit.dev",
+    url: "https://lumina.replit.app",
     cleartext: false,
   },
   android: {
