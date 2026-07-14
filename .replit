@@ -24,12 +24,12 @@ args = "Sync Android"
 name = "Sync Android"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/lumina && pnpm run build && npx cap sync android"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/lumina && pnpm run validate-url && pnpm run build && npx cap sync android"
 
 [agent]
 stack = "PNPM_WORKSPACE"

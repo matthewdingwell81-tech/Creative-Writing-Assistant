@@ -50,12 +50,23 @@ LUMINA_PRODUCTION_URL=https://your-custom-domain.com npx cap sync android
 After any URL change, re-run `cap sync android` so the Android project picks up the
 new config.
 
+> **Validation:** The **Sync Android** workflow automatically validates
+> `LUMINA_PRODUCTION_URL` before building. If the value is set but is not a
+> well-formed `https://` URL the sync is aborted with a clear error message so a
+> broken URL can never silently ship in a Play Store build.
+>
+> You can also run the check independently:
+> ```bash
+> pnpm --filter @workspace/lumina run validate-url
+> ```
+
 ---
 
 ## Step 3 — Open the Android Project in Android Studio
 
 1. Make sure you have the latest web build synced:
    ```bash
+   pnpm --filter @workspace/lumina run validate-url
    pnpm --filter @workspace/lumina run build
    npx cap sync android
    ```
