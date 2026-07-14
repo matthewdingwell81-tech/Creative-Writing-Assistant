@@ -1,0 +1,12 @@
+{
+  "appId": "com.lumina.app",
+  "appName": "Lumina",
+  "webDir": "../dist/public",
+  "server": {
+    "url": "https://lumina-creative-hub.replit.app",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
