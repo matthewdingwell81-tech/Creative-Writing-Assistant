@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "python-3.11"]
 
 [deployment]
 router = "application"
@@ -24,12 +24,12 @@ args = "Sync Android"
 name = "Sync Android"
 author = "agent"
 
-[workflows.workflow.metadata]
-outputType = "console"
-
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=25762 BASE_PATH=/ pnpm --filter @workspace/lumina run build && cd artifacts/lumina && node_modules/.bin/cap sync android"
+args = "cd artifacts/lumina && pnpm run build && npx cap sync android"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [agent]
 stack = "PNPM_WORKSPACE"

@@ -1,116 +1,145 @@
-# Getting Lumina on the Google Play Store
+# Publishing Lumina to Google Play
 
-This guide walks you through everything needed to publish Lumina to Google Play — no prior Android experience required.
-
----
-
-## Before you begin
-
-Make sure you have:
-- A computer with [Android Studio](https://developer.android.com/studio) installed (free)
-- A Google account
-- $25 USD for the one-time Google Play developer registration fee
+This guide covers the manual steps to publish the Lumina Android app on the Google Play Store. The app is built with Capacitor, which wraps the existing Lumina web app in a native Android shell.
 
 ---
 
-## Step 1 — Deploy the Lumina web app
+## Prerequisites
 
-The Android app loads Lumina from your live web server, so you need to deploy first.
+- A computer with [Android Studio](https://developer.android.com/studio) installed
+- A [Google Play Developer account](https://play.google.com/console/signup) ($25 one-time fee)
 
-1. In Replit, click the **Deploy** button and publish your app.
-2. Note your deployed URL (it will look like `https://your-app.replit.app`).
-3. Open `artifacts/lumina/capacitor.config.ts` and update the `server.url` line:
-   ```ts
-   url: "https://your-app.replit.app",  // ← replace with your actual URL
+---
+
+## Step 1 — Set up your Google Play Developer Account
+
+1. Go to [play.google.com/console/signup](https://play.google.com/console/signup)
+2. Sign in with a Google account
+3. Pay the $25 one-time registration fee
+4. Fill in your developer name and contact details
+5. Accept the Developer Distribution Agreement
+6. Wait for your account to be approved (usually within a few hours)
+
+---
+
+## Step 2 — Open the Android Project in Android Studio
+
+1. Make sure you have the latest web build synced:
+   ```bash
+   pnpm --filter @workspace/lumina run build
+   npx cap sync android
    ```
-4. Run the **Sync Android** workflow in Replit to copy the latest assets.
+   *(Or use the **Sync Android** workflow in Replit)*
+
+2. Open Android Studio, then open the project at:
+   ```
+   artifacts/lumina/android/
+   ```
+
+3. Wait for Gradle to finish syncing (first time may take a few minutes)
 
 ---
 
-## Step 2 — Open the Android project in Android Studio
+## Step 3 — Configure the App Version
 
-1. On your computer, open a terminal and navigate to this project folder.
-2. Run: `npx cap open android`  
-   This opens Android Studio with the Lumina Android project.
-3. Wait for Android Studio to finish syncing (a progress bar appears at the bottom — this can take a minute or two the first time).
+In Android Studio, open `app/build.gradle` and update the version info:
 
----
-
-## Step 3 — Generate a signed release build (APK or AAB)
-
-Google Play requires a signed App Bundle (AAB). Here's how:
-
-1. In Android Studio, go to **Build → Generate Signed Bundle / APK**.
-2. Select **Android App Bundle** and click **Next**.
-3. Click **Create new…** to create a keystore file:
-   - Choose a location to save it (keep this file safe — you'll need it for every future update)
-   - Fill in the alias, password, and your name/organization
-4. Click **Next**, choose the **release** build variant, and click **Finish**.
-5. Android Studio will build the `.aab` file — you'll find it in `android/app/release/`.
-
-> **Important:** Back up your keystore file. If you lose it, you won't be able to update your app on Google Play.
+```gradle
+defaultConfig {
+    versionCode 1        // increment this for every release (must be integer, always increasing)
+    versionName "1.0.0"  // human-readable version shown on the Play Store
+}
+```
 
 ---
 
-## Step 4 — Create a Google Play Developer account
+## Step 4 — Generate a Signed APK or AAB
 
-1. Go to [play.google.com/console](https://play.google.com/console) and sign in.
-2. Accept the developer agreement and pay the $25 registration fee.
-3. Fill in your developer profile (name, email, etc.).
+Google Play requires your app to be signed with a private key.
 
----
-
-## Step 5 — Create your app listing
-
-1. In the Play Console, click **Create app**.
-2. Fill in:
-   - **App name:** Lumina
-   - **Default language:** English
-   - **App or game:** App
-   - **Free or paid:** Your choice
-3. Complete the required sections on the left sidebar:
-   - **Store listing** — add a description, screenshots, and a feature graphic (1024×500 px)
-   - **Content rating** — fill out the questionnaire (Lumina is a writing tool, rated for everyone)
-   - **Target audience** — set the age range
-   - **Privacy policy** — you'll need a URL to a privacy policy page
+1. In Android Studio, go to **Build → Generate Signed Bundle / APK**
+2. Choose **Android App Bundle (AAB)** — this is the recommended format for Play Store
+3. Click **Create new…** to create a new keystore (a file that holds your signing key)
+   - Choose a safe location to save the `.jks` file — **back this up securely, you will need it for every future update**
+   - Set a strong password
+   - Fill in your name/organization details
+4. Complete the wizard; Android Studio will build a signed `.aab` file (usually in `app/release/`)
 
 ---
 
-## Step 6 — Upload your App Bundle
+## Step 5 — Create a New App in the Play Console
 
-1. Go to **Release → Production** (or **Internal testing** to test first).
-2. Click **Create new release**.
-3. Upload the `.aab` file you generated in Step 3.
-4. Fill in the release notes (e.g. "Initial release of Lumina writing assistant").
-5. Click **Review release** and then **Start rollout to Production**.
-
----
-
-## Step 7 — Wait for review
-
-Google typically reviews new apps within 1–7 days. You'll receive an email when it's approved or if any changes are needed.
+1. Go to [play.google.com/console](https://play.google.com/console)
+2. Click **Create app**
+3. Fill in:
+   - **App name**: Lumina
+   - **Default language**: English
+   - **App or game**: App
+   - **Free or paid**: your choice
+4. Accept the declarations and click **Create app**
 
 ---
 
-## Updating the app in the future
+## Step 6 — Fill in Store Listing Details
 
-Because Lumina loads its UI from your deployed web server, most updates (bug fixes, new features) only require redeploying the Replit app — **no new APK needed**.
+In the Play Console, go to **Store presence → Main store listing** and fill in:
 
-You only need to submit a new APK/AAB to the Play Store if you:
-- Change the `capacitor.config.ts` settings
-- Add new native Capacitor plugins
-- Update the Android project itself
-
----
-
-## Useful commands
-
-| Task | Command |
-|------|---------|
-| Open in Android Studio | `npx cap open android` |
-| Sync web assets to Android | Run the **Sync Android** workflow in Replit |
-| Build debug APK (for testing) | In Android Studio: Build → Build APK |
+- **Short description** (80 chars): "AI writing companion for authors — draft, organize, and improve your work."
+- **Full description**: describe Lumina's features — AI suggestions, chapter management, ideas scratchpad, etc.
+- **Screenshots**: at least 2 phone screenshots (take them from the app running on a device or emulator)
+- **Feature graphic**: a 1024×500px banner image with Lumina branding
+- **App icon**: a 512×512px PNG icon (use the purple Lumina icon)
+- **Category**: Productivity
 
 ---
 
-*Need help? Visit [capacitorjs.com/docs](https://capacitorjs.com/docs) for full Capacitor documentation.*
+## Step 7 — Upload the AAB
+
+1. Go to **Release → Production** in the Play Console
+2. Click **Create new release**
+3. Upload the signed `.aab` file from Step 4
+4. Add release notes (e.g., "Initial release of Lumina for Android")
+5. Click **Save** then **Review release**
+
+---
+
+## Step 8 — Complete Content Rating and Other Requirements
+
+Play Console will guide you through:
+
+- **Content rating questionnaire** — answer questions about the app's content
+- **Target audience** — select the appropriate age group
+- **Data safety form** — declare what data the app collects
+
+---
+
+## Step 9 — Submit for Review
+
+1. Once all required sections show a green checkmark in the Play Console, click **Submit for review**
+2. Google typically reviews new apps within 3–7 days
+3. You'll receive an email when the app is approved or if changes are needed
+
+---
+
+## Updating the App After Launch
+
+Whenever the Lumina web app changes significantly, you can update the Android app:
+
+1. Run the **Sync Android** workflow in Replit (or `npx cap sync android` locally)
+2. Since the app loads from the live Replit URL (`server.url` in `capacitor.config.ts`), most changes to the web app appear automatically **without needing a new Play Store release**
+3. Only release a new version to the Play Store if you change native Android code, Capacitor plugins, or want to update the store listing
+
+---
+
+## Useful Commands
+
+```bash
+# Sync latest web build to Android
+pnpm --filter @workspace/lumina run build && npx cap sync android
+
+# Open Android project in Android Studio
+cd artifacts/lumina && npx cap open android
+
+# Build a debug APK (for testing, not Play Store)
+cd artifacts/lumina/android && ./gradlew assembleDebug
+```
