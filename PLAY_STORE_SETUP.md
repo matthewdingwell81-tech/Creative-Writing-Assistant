@@ -22,22 +22,33 @@ This guide covers the manual steps to publish the Lumina Android app on the Goog
 
 ---
 
-## Step 2 — Verify the Production URL in `capacitor.config.ts`
+## Step 2 — Set the Production URL
 
-Before building for the Play Store, confirm that `artifacts/lumina/capacitor.config.ts`
-has `server.url` set to the permanent production deployment URL, **not** the ephemeral
-Replit dev domain. The dev domain changes whenever the dev environment resets, which
-would break the published app.
+`capacitor.config.ts` reads `server.url` from the `LUMINA_PRODUCTION_URL` environment
+variable at build time, falling back to `https://lumina.replit.app`. This means you
+can change the domain in the future without editing source code — just set the env var
+before running `cap sync`.
 
-```ts
-server: {
-  url: "https://lumina.replit.app",  // must be the stable production URL
-  cleartext: false,
-},
+**If the default `https://lumina.replit.app` is correct**, no action is needed.
+
+**If you are using a custom domain**, set the variable before syncing:
+
+```bash
+export LUMINA_PRODUCTION_URL=https://your-custom-domain.com
 ```
 
-After any change to this file, re-run `cap sync android` so the Android project picks
-up the new config.
+or inline:
+
+```bash
+LUMINA_PRODUCTION_URL=https://your-custom-domain.com npx cap sync android
+```
+
+> **Important:** Always use the permanent production deployment URL, **not** the
+> ephemeral Replit dev domain. The dev domain changes whenever the dev environment
+> resets and will break the published app.
+
+After any URL change, re-run `cap sync android` so the Android project picks up the
+new config.
 
 ---
 
