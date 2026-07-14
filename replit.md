@@ -1,64 +1,64 @@
-# Lumina - AI Writing Assistant
+# Lumina
 
-## Overview
-A real-time AI writing assistant tailored for fiction writers. Uses OpenAI (via Replit AI Integrations) to provide grammar corrections, vocabulary enhancements, style improvements, pacing alerts, and creative story ideas as you write.
+Lumina is an AI-powered writing companion that helps authors draft, organize, and improve their work through smart suggestions, chapter management, and an ideas scratchpad.
 
-## Architecture
-- **Frontend**: React + Vite + Tailwind CSS v4 + shadcn/ui components
-- **Backend**: Express.js with REST API
-- **Database**: PostgreSQL with Drizzle ORM
-- **AI**: OpenAI via Replit AI Integrations (gpt-5-mini for suggestions)
-- **Routing**: wouter (frontend), Express (backend)
+## Run & Operate
 
-## Key Features
-- Distraction-free editor with auto-save
-- Real-time AI suggestions split across tabs:
-  - Grammar tab (dedicated grammar corrections)
-  - Review tab (vocabulary, style, tone)
-  - Story tab (pacing alerts, arc tracking)
-  - Ideas tab (AI idea generation with streaming responses)
-- Suggestion management: dismiss suggestions you don't want, save them for later review; saved suggestions persist across re-analysis and are viewable in a dedicated panel accessible from all tabs
-  - Applied suggestions are automatically removed from the sidebar
-  - Change History tab tracks all applied suggestions with timestamps, showing what was changed
-- Inline spell-check: grammar suggestions with corrections are highlighted with subtle red wavy underlines in the editor; clicking a highlighted word shows a popover with correction options for quick replacement
-- Text selection review: select text in the editor to get targeted AI feedback on specific passages
-- Ideas Scratchpad: collapsible per-document panel at the bottom of the editor for jotting down and revisiting ideas
-- Document management (create, list, delete, export)
-- Multiple document types (fiction, non-fiction, essay, blog, script)
-- Google Docs integration (import/export)
-- PWA support (installable as desktop app)
+- `pnpm --filter @workspace/api-server run dev` — run the API server (port from env)
+- `pnpm --filter @workspace/lumina run dev` — run the Lumina frontend
+- `pnpm run typecheck` — full typecheck across all packages
+- `pnpm run build` — typecheck + build all packages
+- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- Required env: `DATABASE_URL` — Postgres connection string
 
-## Data Model
-- `documents`: id, title, content, documentType, createdAt, updatedAt
-- `ideas`: id, documentId (FK to documents with cascade delete), content, createdAt
-- `users`: id, username, password (from template, not actively used)
+## Stack
 
-## API Routes
-- `GET/POST /api/documents` - List/Create documents
-- `GET/PATCH/DELETE /api/documents/:id` - Document CRUD
-- `GET /api/documents/:docId/ideas` - List ideas for a document
-- `POST /api/documents/:docId/ideas` - Create an idea for a document
-- `DELETE /api/ideas/:id` - Delete an idea
-- `POST /api/suggestions` - AI-powered writing suggestions
-- `POST /api/ideas` - Streaming AI idea generation
-- `POST /api/gdocs/import` - Import a Google Doc by URL/ID into Lumina
-- `POST /api/gdocs/export` - Export a Lumina document to Google Docs
+- pnpm workspaces, Node.js 24, TypeScript 5.9
+- Frontend: React + Vite (artifacts/lumina)
+- API: Express 5 (artifacts/api-server)
+- DB: PostgreSQL + Drizzle ORM (lib/db)
+- Auth: express-session + bcryptjs (cookie-based sessions)
+- AI: OpenAI gpt-4o-mini via Replit AI proxy
+- Validation: Zod (manual z.object() schemas — no drizzle-zod)
+- Build: esbuild (CJS bundle)
 
-## File Structure
-- `client/src/pages/Home.tsx` - Main workspace page
-- `client/src/components/Editor.tsx` - ContentEditable editor
-- `client/src/components/SuggestionsSidebar.tsx` - AI suggestions panel
-- `client/src/components/DocumentList.tsx` - Document sidebar
-- `client/src/components/IdeasPanel.tsx` - Ideas scratchpad panel
-- `client/src/hooks/useSuggestions.ts` - Debounced AI suggestion hook
-- `client/src/hooks/useAutoSave.ts` - Auto-save hook
-- `client/src/lib/api.ts` - API client functions
-- `server/routes.ts` - API endpoints
-- `server/storage.ts` - Database storage interface
-- `server/db.ts` - Database connection
-- `shared/schema.ts` - Drizzle schema definitions
+## Where things live
 
-## Design
-- Typography: Merriweather (serif, editor) + Inter (sans, UI)
-- Color: Warm neutral backgrounds with purple primary accents
-- Style: Clean, distraction-free writing environment
+- `lib/db/src/schema/` — DB schema (users, documents, chapters, ideas)
+- `artifacts/api-server/src/routes/lumina.ts` — all Lumina API routes
+- `artifacts/api-server/src/storage.ts` — DB access layer
+- `artifacts/api-server/src/googleDocs.ts` — Google Docs import/export
+- `artifacts/lumina/src/` — React frontend (pages, components, hooks)
+- `artifacts/lumina/src/index.css` — global styles (dark theme, Merriweather + Inter fonts)
+
+## Architecture decisions
+
+- Session-based auth (express-session + connect-pg-simple) rather than JWT — simpler for a web app, sessions stored in Postgres
+- `bcryptjs` (pure JS) instead of native `bcrypt` — no native build step needed in Replit
+- Manual `z.object()` schemas in lib/db instead of `drizzle-zod` — drizzle-zod@0.8.3 is incompatible with zod@3.25.x (private type changes broke type constraints). Works fine at runtime; this avoids the build-breaking TS error
+- AI model: `gpt-4o-mini` via `AI_INTEGRATIONS_OPENAI_BASE_URL` + `AI_INTEGRATIONS_OPENAI_API_KEY` (Replit AI proxy)
+- Session augmentation in `src/types/session.d.ts` (augments express-session `SessionData`); tsconfig adds `"express-session"` to `types` array
+
+## Product
+
+- Sign in / register with username + password
+- Create and manage multiple writing documents (fiction, non-fiction, etc.)
+- Rich text editor with per-chapter organization
+- AI writing suggestions and a writing coach
+- Ideas scratchpad for capturing inspiration
+- Google Docs import and export
+
+## User preferences
+
+_Populate as you build — explicit user instructions worth remembering across sessions._
+
+## Gotchas
+
+- Always run `pnpm run typecheck:libs` before `pnpm --filter @workspace/api-server run typecheck` — the api-server needs fresh lib declarations
+- Do not use `drizzle-zod` for new schemas — use `z.object()` directly (see architecture decisions)
+- Session secret falls back to a hardcoded dev string if `SESSION_SECRET` env var is not set — set it for production
+- Google Docs routes require `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` env vars
+
+## Pointers
+
+- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
