@@ -248,13 +248,13 @@ importers:
       '@capacitor/android':
         specifier: ^8.4.1
         version: 8.4.1(@capacitor/core@8.4.1)
-      '@capacitor/cli':
-        specifier: ^8.4.1
-        version: 8.4.1
       '@capacitor/core':
         specifier: ^8.4.1
         version: 8.4.1
     devDependencies:
+      '@capacitor/cli':
+        specifier: ^8.4.1
+        version: 8.4.1
       '@hookform/resolvers':
         specifier: ^3.10.0
         version: 3.10.0(react-hook-form@7.75.0(react@19.1.0))
