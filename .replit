@@ -11,6 +11,26 @@ env = { "CI" = "true" }
 [workflows]
 runButton = "Project"
 
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Sync Android"
+
+[[workflows.workflow]]
+name = "Sync Android"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=25762 BASE_PATH=/ pnpm --filter @workspace/lumina run build && cd artifacts/lumina && node_modules/.bin/cap sync android"
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
