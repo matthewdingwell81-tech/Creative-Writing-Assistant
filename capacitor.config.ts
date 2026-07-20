@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: "Lumina",
   webDir: "artifacts/lumina/dist",
   server: {
-    url: "https://lumina.replit.app"
+    url: "https://creative-writing-assistant.replit.app"
   },
   android: {
     backgroundColor: "#0f0a1a"
