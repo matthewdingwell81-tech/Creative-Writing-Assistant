@@ -3,7 +3,7 @@
 	"appName": "Lumina",
 	"webDir": "../dist/public",
 	"server": {
-		"url": "https://lumina-creative-hub.replit.app",
+		"url": "https://creative-writing-assistant.replit.app",
 		"cleartext": true
 	},
 	"android": {
