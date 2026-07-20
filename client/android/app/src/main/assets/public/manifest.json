@@ -1,0 +1,24 @@
+{
+  "name": "Lumina - AI Writing Assistant",
+  "short_name": "Lumina",
+  "description": "A real-time AI companion for fiction writers. Get grammar corrections, vocabulary suggestions, and story ideas as you write.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#8b5cf6",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
