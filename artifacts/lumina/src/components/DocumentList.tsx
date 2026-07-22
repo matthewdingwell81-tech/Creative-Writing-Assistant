@@ -80,7 +80,7 @@ export default function DocumentList({ documents, activeId, onSelect, onNew, isC
                 e.stopPropagation();
                 setPendingDeleteId(doc.id);
               }}
-              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+              className="[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
               data-testid={`btn-delete-doc-${doc.id}`}
             >
               <Trash2 className="w-3.5 h-3.5" />
