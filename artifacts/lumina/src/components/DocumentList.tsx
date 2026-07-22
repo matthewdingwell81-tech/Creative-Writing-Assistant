@@ -1,5 +1,16 @@
+import { useState } from 'react';
 import { FileText, Plus, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { deleteDocument } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
@@ -22,6 +33,7 @@ interface DocumentListProps {
 export default function DocumentList({ documents, activeId, onSelect, onNew, isCreating }: DocumentListProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: deleteDocument,
@@ -32,6 +44,13 @@ export default function DocumentList({ documents, activeId, onSelect, onNew, isC
       toast({ title: "Could not delete document", description: "Please try again.", variant: "destructive" });
     },
   });
+
+  function handleDeleteConfirm() {
+    if (pendingDeleteId !== null) {
+      deleteMutation.mutate(pendingDeleteId);
+    }
+    setPendingDeleteId(null);
+  }
 
   return (
     <div className="p-3">
@@ -58,9 +77,7 @@ export default function DocumentList({ documents, activeId, onSelect, onNew, isC
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (confirm('Delete this document?')) {
-                  deleteMutation.mutate(doc.id);
-                }
+                setPendingDeleteId(doc.id);
               }}
               className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
               data-testid={`btn-delete-doc-${doc.id}`}
@@ -73,6 +90,26 @@ export default function DocumentList({ documents, activeId, onSelect, onNew, isC
           <p className="text-xs text-muted-foreground/60 text-center py-4">No documents yet</p>
         )}
       </div>
+
+      <AlertDialog open={pendingDeleteId !== null} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the document and all its chapters. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
