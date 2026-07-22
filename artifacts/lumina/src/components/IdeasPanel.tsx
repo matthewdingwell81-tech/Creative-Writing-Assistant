@@ -72,7 +72,7 @@ export default function IdeasPanel({ documentId, onAskAssistant, assistantLoadin
               type="submit"
               size="icon"
               variant="ghost"
-              className="self-end text-primary hover:bg-primary/10 shrink-0"
+              className="self-end text-primary hover:bg-primary/10 shrink-0 [@media(hover:none)]:min-h-[44px] [@media(hover:none)]:min-w-[44px]"
               disabled={!newIdea.trim() || createMutation.isPending}
               data-testid="btn-add-idea"
             >
@@ -160,7 +160,7 @@ export default function IdeasPanel({ documentId, onAskAssistant, assistantLoadin
               type="submit"
               size="icon"
               variant="ghost"
-              className="self-end text-primary hover:bg-primary/10 shrink-0"
+              className="self-end text-primary hover:bg-primary/10 shrink-0 [@media(hover:none)]:min-h-[44px] [@media(hover:none)]:min-w-[44px]"
               disabled={!newIdea.trim() || createMutation.isPending}
               data-testid="btn-add-idea"
             >
