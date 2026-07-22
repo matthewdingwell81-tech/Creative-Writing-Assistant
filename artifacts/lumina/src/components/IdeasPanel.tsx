@@ -112,7 +112,7 @@ export default function IdeasPanel({ documentId, onAskAssistant, assistantLoadin
                   </div>
                   <button
                     onClick={() => deleteMutation.mutate(idea.id)}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground/50 hover:text-destructive transition-opacity mt-0.5"
+                    className="shrink-0 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 text-muted-foreground/50 hover:text-destructive transition-opacity mt-0.5"
                     data-testid={`btn-delete-idea-${idea.id}`}
                   >
                     <X className="w-3.5 h-3.5" />
@@ -200,7 +200,7 @@ export default function IdeasPanel({ documentId, onAskAssistant, assistantLoadin
                   </div>
                   <button
                     onClick={() => deleteMutation.mutate(idea.id)}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground/50 hover:text-destructive transition-opacity mt-0.5"
+                    className="shrink-0 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 text-muted-foreground/50 hover:text-destructive transition-opacity mt-0.5"
                     data-testid={`btn-delete-idea-${idea.id}`}
                   >
                     <X className="w-3.5 h-3.5" />
