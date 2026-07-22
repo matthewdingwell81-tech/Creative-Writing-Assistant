@@ -57,7 +57,7 @@ export default function DocumentList({ documents, activeId, onSelect, onNew, isC
     <div className="p-3">
       <div className="flex items-center justify-between mb-3 px-1">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Documents</h3>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onNew} disabled={isCreating} data-testid="btn-new-doc-sidebar">
+        <Button variant="ghost" size="icon" className="h-6 w-6 [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]" onClick={onNew} disabled={isCreating} data-testid="btn-new-doc-sidebar">
           {isCreating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
         </Button>
       </div>
@@ -66,7 +66,7 @@ export default function DocumentList({ documents, activeId, onSelect, onNew, isC
           <div
             key={doc.id}
             onClick={() => onSelect(doc.id)}
-            className={`group flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer transition-colors text-sm ${
+            className={`group flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer transition-colors text-sm [@media(pointer:coarse)]:min-h-[44px] ${
               activeId === doc.id
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
@@ -80,7 +80,7 @@ export default function DocumentList({ documents, activeId, onSelect, onNew, isC
                 e.stopPropagation();
                 setPendingDeleteId(doc.id);
               }}
-              className="[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+              className="[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity flex items-center justify-center [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
               data-testid={`btn-delete-doc-${doc.id}`}
             >
               <Trash2 className="w-3.5 h-3.5" />

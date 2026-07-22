@@ -325,7 +325,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
           {popover.alternatives.map((alt, i) => (
             <button
               key={i}
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center gap-2 [@media(pointer:coarse)]:min-h-[44px]"
               onClick={() => handleApplyCorrection(popover.original, alt)}
               data-testid={`btn-correction-${i}`}
             >
@@ -334,7 +334,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
           ))}
           <div className="border-t border-border/50 mt-0.5">
             <button
-              className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent transition-colors"
+              className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent transition-colors [@media(pointer:coarse)]:min-h-[44px]"
               onClick={() => setPopover(prev => ({ ...prev, visible: false }))}
               data-testid="btn-dismiss-correction"
             >

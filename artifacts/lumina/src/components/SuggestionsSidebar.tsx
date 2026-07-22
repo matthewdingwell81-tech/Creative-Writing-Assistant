@@ -85,7 +85,7 @@ function SuggestionCard({
         <div className="flex items-center gap-0.5 shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); onSave(sug.id); }}
-            className="p-1 rounded hover:bg-muted transition-colors"
+            className="p-1 rounded hover:bg-muted transition-colors flex items-center justify-center [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
             title={isSaved ? "Saved" : "Save for later"}
             data-testid={`btn-save-suggestion-${sug.id}`}
           >
@@ -93,7 +93,7 @@ function SuggestionCard({
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDismiss(sug.id); }}
-            className="p-1 rounded hover:bg-muted transition-colors"
+            className="p-1 rounded hover:bg-muted transition-colors flex items-center justify-center [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
             title="Dismiss"
             data-testid={`btn-dismiss-suggestion-${sug.id}`}
           >
@@ -127,7 +127,7 @@ function SuggestionCard({
           ))}
           <Button
             size="sm"
-            className="w-full h-7 text-xs mt-1 bg-primary hover:bg-primary/90 text-primary-foreground"
+            className="w-full h-7 text-xs mt-1 bg-primary hover:bg-primary/90 text-primary-foreground [@media(pointer:coarse)]:min-h-[44px]"
             onClick={(e) => { e.stopPropagation(); onApply(sug.id, sug.original!, selectedAlt); }}
             data-testid={`btn-apply-suggestion-${sug.id}`}
           >
@@ -154,10 +154,10 @@ function StoryCard({
         <Icon className="w-4 h-4 text-primary mt-0.5 shrink-0" />
         <h4 className="text-sm font-medium flex-1">{sug.title}</h4>
         <div className="flex items-center gap-0.5 shrink-0">
-          <button onClick={() => onSave(sug.id)} className="p-1 rounded hover:bg-muted transition-colors" data-testid={`btn-save-suggestion-${sug.id}`}>
+          <button onClick={() => onSave(sug.id)} className="p-1 rounded hover:bg-muted transition-colors flex items-center justify-center [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]" data-testid={`btn-save-suggestion-${sug.id}`}>
             {isSaved ? <BookmarkCheck className="w-3.5 h-3.5 text-primary" /> : <Bookmark className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />}
           </button>
-          <button onClick={() => onDismiss(sug.id)} className="p-1 rounded hover:bg-muted transition-colors" data-testid={`btn-dismiss-suggestion-${sug.id}`}>
+          <button onClick={() => onDismiss(sug.id)} className="p-1 rounded hover:bg-muted transition-colors flex items-center justify-center [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]" data-testid={`btn-dismiss-suggestion-${sug.id}`}>
             <X className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
           </button>
         </div>
@@ -344,7 +344,7 @@ export default function SuggestionsSidebar({
             <Button
               variant={showSaved ? "default" : "outline"}
               size="sm"
-              className="h-7 text-xs gap-1.5"
+              className="h-7 text-xs gap-1.5 [@media(pointer:coarse)]:min-h-[44px]"
               onClick={() => setShowSaved(!showSaved)}
               data-testid="btn-toggle-saved"
             >
@@ -396,7 +396,7 @@ export default function SuggestionsSidebar({
           </div>
           <Button
             size="sm"
-            className="w-full mt-2 h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
+            className="w-full mt-2 h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground [@media(pointer:coarse)]:min-h-[44px]"
             onClick={handleReviewSelection}
             disabled={ideaLoading}
             data-testid="btn-review-selection"
@@ -410,20 +410,20 @@ export default function SuggestionsSidebar({
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col w-full min-h-0">
         <div className="px-4 pt-3 pb-0 border-b border-border/50">
           <TabsList className="w-full bg-muted/50 grid grid-cols-6 p-1 rounded-lg">
-            <TabsTrigger value="grammar" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1" data-testid="tab-grammar">
+            <TabsTrigger value="grammar" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-grammar">
               Grammar {grammarSuggestions.length > 0 && `(${grammarSuggestions.length})`}
             </TabsTrigger>
-            <TabsTrigger value="suggestions" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1" data-testid="tab-review">
+            <TabsTrigger value="suggestions" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-review">
               Review {reviewSuggestions.length > 0 && `(${reviewSuggestions.length})`}
             </TabsTrigger>
-            <TabsTrigger value="story" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1" data-testid="tab-story">
+            <TabsTrigger value="story" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-story">
               Story {storySuggestions.length > 0 && `(${storySuggestions.length})`}
             </TabsTrigger>
-            <TabsTrigger value="history" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1" data-testid="tab-history">
+            <TabsTrigger value="history" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-history">
               History {changeHistory.length > 0 && `(${changeHistory.length})`}
             </TabsTrigger>
-            <TabsTrigger value="ideas" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1" data-testid="tab-ideas">Ideas</TabsTrigger>
-            <TabsTrigger value="coach" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 gap-0.5" data-testid="tab-coach">
+            <TabsTrigger value="ideas" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-ideas">Ideas</TabsTrigger>
+            <TabsTrigger value="coach" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 gap-0.5 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-coach">
               <Bot className="w-3 h-3 shrink-0" />Coach
             </TabsTrigger>
           </TabsList>
@@ -477,7 +477,7 @@ export default function SuggestionsSidebar({
                   </h3>
                   <button
                     onClick={onClearHistory}
-                    className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 hover:bg-muted/50 px-1.5 py-0.5 rounded"
+                    className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 hover:bg-muted/50 px-1.5 py-0.5 rounded [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:px-3"
                     data-testid="btn-clear-history"
                   >
                     <Trash2 className="w-3 h-3" />
@@ -579,7 +579,7 @@ export default function SuggestionsSidebar({
                     <button
                       key={i}
                       onClick={() => handleCoachSend(prompt)}
-                      className="w-full text-left text-xs p-2.5 rounded-lg border border-border/60 bg-card hover:border-primary/40 hover:bg-primary/5 transition-all"
+                      className="w-full text-left text-xs p-2.5 rounded-lg border border-border/60 bg-card hover:border-primary/40 hover:bg-primary/5 transition-all [@media(pointer:coarse)]:min-h-[44px]"
                       data-testid={`btn-coach-starter-${i}`}
                     >
                       <span className="text-primary/70 mr-1.5">→</span>
@@ -604,7 +604,7 @@ export default function SuggestionsSidebar({
                         {msg.role === 'assistant' && msg.content && !(coachLoading && i === coachMessages.length - 1) && onInsertText && (
                           <button
                             onClick={() => onInsertText(msg.content)}
-                            className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-primary/10 transition-colors"
+                            className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-primary/10 transition-colors [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:px-3"
                             data-testid={`btn-coach-insert-${i}`}
                           >
                             <ClipboardCopy className="w-2.5 h-2.5" />
@@ -619,7 +619,7 @@ export default function SuggestionsSidebar({
 
               <div className="border-t border-border/50 p-3 space-y-2">
                 {coachMessages.length > 0 && (
-                  <button onClick={handleCoachReset} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors" data-testid="btn-coach-reset">
+                  <button onClick={handleCoachReset} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:px-2" data-testid="btn-coach-reset">
                     <RotateCcw className="w-3 h-3" />
                     Start over
                   </button>
@@ -637,7 +637,7 @@ export default function SuggestionsSidebar({
                   />
                   <Button
                     size="icon"
-                    className="h-8 w-8 shrink-0 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground"
+                    className="h-8 w-8 shrink-0 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
                     onClick={() => handleCoachSend()}
                     disabled={coachLoading || !coachInput.trim()}
                     data-testid="btn-coach-send"

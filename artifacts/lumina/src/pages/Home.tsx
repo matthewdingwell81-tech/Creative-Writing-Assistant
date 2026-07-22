@@ -349,7 +349,7 @@ export default function Home() {
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Select value={documentType} onValueChange={(v) => { setDocumentType(v); if (activeDocId) updateDocument(activeDocId, { documentType: v }).catch((err) => { if (err instanceof SessionExpiredError) return; toast({ title: "Could not save document type", description: "Your change may not have been saved.", variant: "destructive" }); }); }}>
-            <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-doc-type">
+            <SelectTrigger className="w-[140px] h-8 text-xs [@media(pointer:coarse)]:min-h-[44px]" data-testid="select-doc-type">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -367,7 +367,7 @@ export default function Home() {
               {renamingChapterId === activeChapterId ? (
                 <div className="flex items-center gap-1">
                   <input
-                    className="h-8 w-[130px] rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="h-8 w-[130px] rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring [@media(pointer:coarse)]:min-h-[44px]"
                     value={chapterTitleInput}
                     autoFocus
                     onChange={(e) => setChapterTitleInput(e.target.value)}
@@ -381,7 +381,7 @@ export default function Home() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                    className="h-7 w-7 text-muted-foreground hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
                     onMouseDown={(e) => { e.preventDefault(); handleSaveChapterTitle(); }}
                     data-testid="btn-save-chapter-title"
                   >
@@ -400,7 +400,7 @@ export default function Home() {
                       }
                     }}
                   >
-                    <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-chapter">
+                    <SelectTrigger className="w-[140px] h-8 text-xs [@media(pointer:coarse)]:min-h-[44px]" data-testid="select-chapter">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -419,7 +419,7 @@ export default function Home() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                    className="h-7 w-7 text-muted-foreground hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
                     onClick={() => {
                       const chapter = docChapters.find(c => c.id === activeChapterId);
                       if (chapter) { setRenamingChapterId(chapter.id); setChapterTitleInput(chapter.title); }
