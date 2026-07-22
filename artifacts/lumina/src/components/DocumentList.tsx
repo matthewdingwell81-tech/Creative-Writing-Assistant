@@ -1,7 +1,8 @@
-import { FileText, Plus, Trash2 } from 'lucide-react';
+import { FileText, Plus, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { deleteDocument } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 export interface DocumentItem {
   id: number;
@@ -15,15 +16,20 @@ interface DocumentListProps {
   activeId: number | null;
   onSelect: (id: number) => void;
   onNew: () => void;
+  isCreating?: boolean;
 }
 
-export default function DocumentList({ documents, activeId, onSelect, onNew }: DocumentListProps) {
+export default function DocumentList({ documents, activeId, onSelect, onNew, isCreating }: DocumentListProps) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const deleteMutation = useMutation({
     mutationFn: deleteDocument,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+    },
+    onError: () => {
+      toast({ title: "Could not delete document", description: "Please try again.", variant: "destructive" });
     },
   });
 
@@ -31,8 +37,8 @@ export default function DocumentList({ documents, activeId, onSelect, onNew }: D
     <div className="p-3">
       <div className="flex items-center justify-between mb-3 px-1">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Documents</h3>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onNew} data-testid="btn-new-doc-sidebar">
-          <Plus className="w-3.5 h-3.5" />
+        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onNew} disabled={isCreating} data-testid="btn-new-doc-sidebar">
+          {isCreating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
         </Button>
       </div>
       <div className="space-y-1">

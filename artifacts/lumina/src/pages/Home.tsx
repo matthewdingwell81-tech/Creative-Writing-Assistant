@@ -5,7 +5,7 @@ import SuggestionsSidebar from '@/components/SuggestionsSidebar';
 import DocumentList from '@/components/DocumentList';
 import GoogleDocsDialog from '@/components/GoogleDocsDialog';
 import IdeasPanel from '@/components/IdeasPanel';
-import { Sparkles, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus, Pencil, Plus, Check } from 'lucide-react';
+import { Sparkles, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus, Pencil, Plus, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -142,6 +142,13 @@ export default function Home() {
       setTitle(doc.title);
       setDocumentType(doc.documentType);
       await loadChaptersForDoc(doc.id, doc.content);
+    },
+    onError: () => {
+      toast({
+        title: "Could not create document",
+        description: "Please check your connection and try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -441,9 +448,12 @@ export default function Home() {
             size="icon"
             className="text-muted-foreground hover:text-foreground"
             onClick={handleNewDocument}
+            disabled={createMutation.isPending}
             data-testid="btn-new-doc"
           >
-            <FilePlus className="w-4 h-4" />
+            {createMutation.isPending
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <FilePlus className="w-4 h-4" />}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -487,7 +497,7 @@ export default function Home() {
       <main className="flex-1 flex overflow-hidden relative">
         {showDocList && (
           <aside className="w-[260px] border-r border-border/50 bg-card/30 overflow-y-auto">
-            <DocumentList documents={documents} activeId={activeDocId} onSelect={handleSelectDoc} onNew={handleNewDocument} />
+            <DocumentList documents={documents} activeId={activeDocId} onSelect={handleSelectDoc} onNew={handleNewDocument} isCreating={createMutation.isPending} />
           </aside>
         )}
 
@@ -510,8 +520,11 @@ export default function Home() {
                   <Sparkles className="w-12 h-12 text-primary/30 mx-auto mb-4" />
                   <h2 className="text-xl font-medium text-muted-foreground mb-2">Welcome to Lumina</h2>
                   <p className="text-sm text-muted-foreground/70 mb-6">Create a new document to start writing</p>
-                  <Button onClick={handleNewDocument} className="bg-primary text-primary-foreground" data-testid="btn-create-first">
-                    <FilePlus className="w-4 h-4 mr-2" /> New Document
+                  <Button onClick={handleNewDocument} className="bg-primary text-primary-foreground" disabled={createMutation.isPending} data-testid="btn-create-first">
+                    {createMutation.isPending
+                      ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      : <FilePlus className="w-4 h-4 mr-2" />}
+                    New Document
                   </Button>
                 </div>
               )}
