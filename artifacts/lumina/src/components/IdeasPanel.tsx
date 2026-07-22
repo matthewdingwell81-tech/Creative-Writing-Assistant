@@ -100,7 +100,7 @@ export default function IdeasPanel({ documentId, onAskAssistant, assistantLoadin
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="mt-1.5 h-6 text-[11px] text-primary/70 hover:text-primary hover:bg-primary/10 gap-1 px-2"
+                        className="mt-1.5 h-6 [@media(hover:none)]:min-h-[44px] text-[11px] text-primary/70 hover:text-primary hover:bg-primary/10 gap-1 px-2"
                         onClick={() => onAskAssistant(idea.content)}
                         disabled={assistantLoading}
                         data-testid={`btn-ask-assistant-${idea.id}`}
@@ -188,7 +188,7 @@ export default function IdeasPanel({ documentId, onAskAssistant, assistantLoadin
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="mt-1.5 h-6 text-[11px] text-primary/70 hover:text-primary hover:bg-primary/10 gap-1 px-2"
+                        className="mt-1.5 h-6 [@media(hover:none)]:min-h-[44px] text-[11px] text-primary/70 hover:text-primary hover:bg-primary/10 gap-1 px-2"
                         onClick={() => onAskAssistant(idea.content)}
                         disabled={assistantLoading}
                         data-testid={`btn-ask-assistant-${idea.id}`}
