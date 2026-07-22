@@ -1,4 +1,5 @@
-import { Switch, Route, Redirect, Router as WouterRouter } from "wouter";
+import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
+import { useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -7,6 +8,23 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import AuthPage from "@/pages/AuthPage";
 import { useAuth } from "@/hooks/useAuth";
+
+function SessionExpiredHandler() {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    function handleExpired() {
+      queryClient.setQueryData(["/api/auth/me"], null);
+      queryClient.clear();
+      setLocation("/auth?expired=1");
+    }
+
+    window.addEventListener("lumina:session-expired", handleExpired);
+    return () => window.removeEventListener("lumina:session-expired", handleExpired);
+  }, [setLocation]);
+
+  return null;
+}
 
 function Router() {
   const { user, isLoading } = useAuth();
@@ -37,6 +55,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <SessionExpiredHandler />
           <Toaster />
           <Router />
         </WouterRouter>

@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Download, Upload, Loader2, ExternalLink, Check, Link } from 'lucide-react';
+import { apiFetch, SessionExpiredError } from '@/lib/api';
 
 interface GoogleDocsDialogProps {
   open: boolean;
@@ -45,11 +46,10 @@ export default function GoogleDocsDialog({
     setImporting(true);
     setImportError(null);
     try {
-      const res = await fetch('/api/gdocs/import', {
+      const res = await apiFetch('/api/gdocs/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ documentId: docId }),
-        credentials: 'include',
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -60,6 +60,7 @@ export default function GoogleDocsDialog({
       setDocInput('');
       onOpenChange(false);
     } catch (e: any) {
+      if (e instanceof SessionExpiredError) return;
       setImportError(e.message || 'Import failed. Please check the URL and try again.');
     } finally {
       setImporting(false);
@@ -72,11 +73,10 @@ export default function GoogleDocsDialog({
     setExportResult(null);
     setExportError(null);
     try {
-      const res = await fetch('/api/gdocs/export', {
+      const res = await apiFetch('/api/gdocs/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ documentId: activeDocId, googleDocTitle: activeDocTitle }),
-        credentials: 'include',
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -85,6 +85,7 @@ export default function GoogleDocsDialog({
       const result = await res.json();
       setExportResult(result);
     } catch (e: any) {
+      if (e instanceof SessionExpiredError) return;
       setExportError(e.message || 'Export failed. Please try again.');
     } finally {
       setExporting(false);

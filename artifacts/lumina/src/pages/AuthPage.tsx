@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { useSearch } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function AuthPage() {
+  const search = useSearch();
+  const sessionExpired = new URLSearchParams(search).get("expired") === "1";
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -51,6 +54,12 @@ export default function AuthPage() {
           <h1 className="text-4xl font-bold text-white mb-2">Lumina</h1>
           <p className="text-slate-400 text-sm">Your AI-powered writing companion</p>
         </div>
+
+        {sessionExpired && (
+          <div className="mb-4 px-4 py-3 rounded-lg bg-amber-950/40 border border-amber-700/50 text-amber-300 text-sm text-center">
+            Your session expired — please sign in again.
+          </div>
+        )}
 
         <div className="bg-[#16213e] rounded-2xl p-8 shadow-2xl border border-slate-700/50">
           <div className="flex rounded-lg bg-slate-800/50 p-1 mb-6">

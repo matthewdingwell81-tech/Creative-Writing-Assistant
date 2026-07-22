@@ -9,7 +9,7 @@ import { Sparkles, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightb
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { fetchDocuments, fetchDocument, createDocument, updateDocument, fetchChapters, createChapter, updateChapter as updateChapterApi } from '@/lib/api';
+import { fetchDocuments, fetchDocument, createDocument, updateDocument, fetchChapters, createChapter, updateChapter as updateChapterApi, SessionExpiredError } from '@/lib/api';
 import { useSuggestions } from '@/hooks/useSuggestions';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useToast } from '@/hooks/use-toast';
@@ -137,7 +137,8 @@ export default function Home() {
         setActiveChapterId(chapterList[0].id);
         setContent(chapterList[0].content);
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof SessionExpiredError) return;
       toast({ title: "Could not load chapters", description: "Your document sections failed to load.", variant: "destructive" });
     }
   }, [toast]);
@@ -151,7 +152,8 @@ export default function Home() {
       setDocumentType(doc.documentType);
       await loadChaptersForDoc(doc.id, doc.content);
     },
-    onError: () => {
+    onError: (err: unknown) => {
+      if (err instanceof SessionExpiredError) return;
       toast({
         title: "Could not create document",
         description: "Please check your connection and try again.",
@@ -192,7 +194,8 @@ export default function Home() {
       try {
         await updateChapterApi(activeChapterId, { content });
         setDocChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, content } : c));
-      } catch {
+      } catch (err) {
+        if (err instanceof SessionExpiredError) return;
         toast({ title: "Could not save chapter", description: "Your changes may not have been saved.", variant: "destructive" });
       }
     }
@@ -210,7 +213,8 @@ export default function Home() {
       try {
         await updateChapterApi(activeChapterId, { content });
         setDocChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, content } : c));
-      } catch {
+      } catch (err) {
+        if (err instanceof SessionExpiredError) return;
         toast({ title: "Could not save chapter", description: "Your changes may not have been saved.", variant: "destructive" });
       }
     }
@@ -221,7 +225,8 @@ export default function Home() {
       setActiveChapterId(chapter.id);
       setContent('');
       setRenamingChapterId(null);
-    } catch {
+    } catch (err) {
+      if (err instanceof SessionExpiredError) return;
       toast({ title: "Could not add chapter", description: "Please try again.", variant: "destructive" });
     }
   }, [activeDocId, activeChapterId, content, docChapters, toast]);
@@ -235,7 +240,8 @@ export default function Home() {
     try {
       await updateChapterApi(renamingChapterId, { title: trimmed });
       setDocChapters(prev => prev.map(c => c.id === renamingChapterId ? { ...c, title: trimmed } : c));
-    } catch {
+    } catch (err) {
+      if (err instanceof SessionExpiredError) return;
       toast({ title: "Could not rename chapter", description: "Please try again.", variant: "destructive" });
     }
     setRenamingChapterId(null);
@@ -252,7 +258,8 @@ export default function Home() {
   const handleTitleChange = useCallback((newTitle: string) => {
     setTitle(newTitle);
     if (activeDocId) {
-      updateDocument(activeDocId, { title: newTitle }).catch(() => {
+      updateDocument(activeDocId, { title: newTitle }).catch((err) => {
+        if (err instanceof SessionExpiredError) return;
         toast({ title: "Could not save title", description: "Your title change may not have been saved.", variant: "destructive" });
       });
     }
@@ -341,7 +348,7 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Select value={documentType} onValueChange={(v) => { setDocumentType(v); if (activeDocId) updateDocument(activeDocId, { documentType: v }).catch(() => { toast({ title: "Could not save document type", description: "Your change may not have been saved.", variant: "destructive" }); }); }}>
+          <Select value={documentType} onValueChange={(v) => { setDocumentType(v); if (activeDocId) updateDocument(activeDocId, { documentType: v }).catch((err) => { if (err instanceof SessionExpiredError) return; toast({ title: "Could not save document type", description: "Your change may not have been saved.", variant: "destructive" }); }); }}>
             <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-doc-type">
               <SelectValue />
             </SelectTrigger>

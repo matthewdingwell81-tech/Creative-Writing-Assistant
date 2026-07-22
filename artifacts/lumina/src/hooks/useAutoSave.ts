@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState } from "react";
-import { updateDocument, updateChapter } from "@/lib/api";
+import { updateDocument, updateChapter, SessionExpiredError } from "@/lib/api";
 
 interface UseAutoSaveOptions {
   onSaveError?: () => void;
@@ -33,7 +33,8 @@ export function useAutoSave(documentId: number | null, chapterId?: number | null
             await updateDocument(documentId, updates);
           }
           setLastSaved(new Date());
-        } catch {
+        } catch (err) {
+          if (err instanceof SessionExpiredError) return;
           onSaveErrorRef.current?.();
         } finally {
           setSaving(false);

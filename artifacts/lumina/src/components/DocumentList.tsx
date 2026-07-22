@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { deleteDocument } from '@/lib/api';
+import { deleteDocument, SessionExpiredError } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 export interface DocumentItem {
@@ -40,7 +40,8 @@ export default function DocumentList({ documents, activeId, onSelect, onNew, isC
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
     },
-    onError: () => {
+    onError: (err: unknown) => {
+      if (err instanceof SessionExpiredError) return;
       toast({ title: "Could not delete document", description: "Please try again.", variant: "destructive" });
     },
   });
