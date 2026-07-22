@@ -109,7 +109,15 @@ export default function Home() {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
     requestSuggestions, cancelPending, dismissSuggestion, applySuggestionById, saveSuggestion, removeSaved, clearHistory
   } = useSuggestions();
-  const { save, saving, lastSaved } = useAutoSave(activeDocId, activeChapterId);
+  const { save, saving, lastSaved } = useAutoSave(activeDocId, activeChapterId, {
+    onSaveError: () => {
+      toast({
+        title: "Could not save your changes",
+        description: "Your last edits may not have been saved. Check your connection.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const { data: documents = [] } = useQuery<Document[]>({
     queryKey: ['/api/documents'],
@@ -244,9 +252,11 @@ export default function Home() {
   const handleTitleChange = useCallback((newTitle: string) => {
     setTitle(newTitle);
     if (activeDocId) {
-      updateDocument(activeDocId, { title: newTitle });
+      updateDocument(activeDocId, { title: newTitle }).catch(() => {
+        toast({ title: "Could not save title", description: "Your title change may not have been saved.", variant: "destructive" });
+      });
     }
-  }, [activeDocId]);
+  }, [activeDocId, toast]);
 
   const applySuggestion = useCallback((suggestionId: string, originalText: string, newText: string) => {
     if (!content) return;
@@ -331,7 +341,7 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Select value={documentType} onValueChange={(v) => { setDocumentType(v); if (activeDocId) updateDocument(activeDocId, { documentType: v }); }}>
+          <Select value={documentType} onValueChange={(v) => { setDocumentType(v); if (activeDocId) updateDocument(activeDocId, { documentType: v }).catch(() => { toast({ title: "Could not save document type", description: "Your change may not have been saved.", variant: "destructive" }); }); }}>
             <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-doc-type">
               <SelectValue />
             </SelectTrigger>

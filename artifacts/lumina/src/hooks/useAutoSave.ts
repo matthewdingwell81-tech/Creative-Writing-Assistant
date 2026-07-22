@@ -1,11 +1,17 @@
 import { useRef, useCallback, useState } from "react";
 import { updateDocument, updateChapter } from "@/lib/api";
 
-export function useAutoSave(documentId: number | null, chapterId?: number | null) {
+interface UseAutoSaveOptions {
+  onSaveError?: () => void;
+}
+
+export function useAutoSave(documentId: number | null, chapterId?: number | null, options?: UseAutoSaveOptions) {
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastContentRef = useRef("");
+  const onSaveErrorRef = useRef(options?.onSaveError);
+  onSaveErrorRef.current = options?.onSaveError;
 
   const save = useCallback(
     (content: string, title?: string) => {
@@ -28,7 +34,7 @@ export function useAutoSave(documentId: number | null, chapterId?: number | null
           }
           setLastSaved(new Date());
         } catch {
-          // silent fail on auto-save
+          onSaveErrorRef.current?.();
         } finally {
           setSaving(false);
         }
