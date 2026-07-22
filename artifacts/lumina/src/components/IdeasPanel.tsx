@@ -130,7 +130,7 @@ export default function IdeasPanel({ documentId, onAskAssistant, assistantLoadin
     <div className="border-t border-border/50 bg-card/40 backdrop-blur-sm" data-testid="ideas-panel">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+        className="w-full flex items-center justify-between px-4 py-2.5 [@media(pointer:coarse)]:min-h-[44px] text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
         data-testid="toggle-ideas-panel"
       >
         <div className="flex items-center gap-2">
