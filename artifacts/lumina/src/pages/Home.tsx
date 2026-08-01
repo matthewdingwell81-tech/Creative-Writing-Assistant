@@ -5,15 +5,17 @@ import SuggestionsSidebar from '@/components/SuggestionsSidebar';
 import DocumentList from '@/components/DocumentList';
 import GoogleDocsDialog from '@/components/GoogleDocsDialog';
 import IdeasPanel from '@/components/IdeasPanel';
-import { Sparkles, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus, Pencil, Plus, Check, Loader2 } from 'lucide-react';
+import { Sparkles, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus, Pencil, Plus, Check, Loader2, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from '@/components/ui/select';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { fetchDocuments, fetchDocument, createDocument, updateDocument, fetchChapters, createChapter, updateChapter as updateChapterApi, SessionExpiredError } from '@/lib/api';
 import { useSuggestions } from '@/hooks/useSuggestions';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsMobile } from '@/hooks/use-mobile';
 import type { Document, Chapter } from '@/types/schema';
 
 function normalizeNbsp(s: string): string {
@@ -86,11 +88,13 @@ export default function Home() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user, logout } = useAuth();
+  const isMobile = useIsMobile();
   const [activeDocId, setActiveDocId] = useState<number | null>(null);
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
   const [documentType, setDocumentType] = useState('fiction');
   const [showDocList, setShowDocList] = useState(false);
+  const [showSuggestionsSheet, setShowSuggestionsSheet] = useState(false);
   const [gdocsMode, setGdocsMode] = useState<'import' | 'export'>('import');
   const [gdocsOpen, setGdocsOpen] = useState(false);
   const [selectedText, setSelectedText] = useState('');
@@ -328,10 +332,97 @@ export default function Home() {
 
   const wordCount = content.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length;
 
+  const saveStatusChip = (
+    <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap" data-testid="save-status">
+      {saving ? 'Saving...' : lastSaved ? 'Saved' : 'Ready'}
+    </span>
+  );
+
+  // Chapter selector used in both desktop header and mobile overflow menu
+  const chapterSelector = activeDocId && docChapters.length > 0 ? (
+    renamingChapterId === activeChapterId ? (
+      <div className="flex items-center gap-1">
+        <input
+          className="h-8 w-[130px] rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring [@media(pointer:coarse)]:min-h-[44px]"
+          value={chapterTitleInput}
+          autoFocus
+          onChange={(e) => setChapterTitleInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSaveChapterTitle();
+            if (e.key === 'Escape') setRenamingChapterId(null);
+          }}
+          onBlur={handleSaveChapterTitle}
+          data-testid="input-chapter-title"
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
+          onMouseDown={(e) => { e.preventDefault(); handleSaveChapterTitle(); }}
+          data-testid="btn-save-chapter-title"
+        >
+          <Check className="w-3 h-3" />
+        </Button>
+      </div>
+    ) : (
+      <>
+        <Select
+          value={activeChapterId?.toString() ?? ''}
+          onValueChange={(v) => {
+            if (v === '__new__') {
+              handleAddChapter();
+            } else {
+              handleSwitchChapter(parseInt(v));
+            }
+          }}
+        >
+          <SelectTrigger className="w-[140px] h-8 text-xs [@media(pointer:coarse)]:min-h-[44px]" data-testid="select-chapter">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {docChapters.map((ch) => (
+              <SelectItem key={ch.id} value={ch.id.toString()}>{ch.title}</SelectItem>
+            ))}
+            <SelectSeparator />
+            <SelectItem value="__new__" className="text-primary">
+              <span className="flex items-center gap-1.5">
+                <Plus className="w-3 h-3" />
+                Add Chapter
+              </span>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
+          onClick={() => {
+            const chapter = docChapters.find(c => c.id === activeChapterId);
+            if (chapter) { setRenamingChapterId(chapter.id); setChapterTitleInput(chapter.title); }
+          }}
+          title="Rename chapter"
+          data-testid="btn-rename-chapter"
+        >
+          <Pencil className="w-3 h-3" />
+        </Button>
+      </>
+    )
+  ) : null;
+
+  const docTypeLabels: Record<string, string> = {
+    fiction: 'Fiction',
+    nonfiction: 'Non-Fiction',
+    essay: 'Essay',
+    blog: 'Blog Post',
+    script: 'Script',
+    general: 'General',
+  };
+
   return (
-    <div className="min-h-screen bg-background flex flex-col font-sans">
-      <header className="h-14 border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between px-6">
-        <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-background flex flex-col font-sans overflow-x-hidden">
+      <header className="h-14 border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between px-3 sm:px-6 gap-2">
+        {/* Left: doc-list toggle + logo */}
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="ghost"
             size="icon"
@@ -347,180 +438,254 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Select value={documentType} onValueChange={(v) => { setDocumentType(v); if (activeDocId) updateDocument(activeDocId, { documentType: v }).catch((err) => { if (err instanceof SessionExpiredError) return; toast({ title: "Could not save document type", description: "Your change may not have been saved.", variant: "destructive" }); }); }}>
-            <SelectTrigger className="w-[140px] h-8 text-xs [@media(pointer:coarse)]:min-h-[44px]" data-testid="select-doc-type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="fiction">Fiction</SelectItem>
-              <SelectItem value="nonfiction">Non-Fiction</SelectItem>
-              <SelectItem value="essay">Essay</SelectItem>
-              <SelectItem value="blog">Blog Post</SelectItem>
-              <SelectItem value="script">Script</SelectItem>
-              <SelectItem value="general">General</SelectItem>
-            </SelectContent>
-          </Select>
+        {/* Desktop center: doc type + chapter + save status */}
+        {!isMobile && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Select value={documentType} onValueChange={(v) => { setDocumentType(v); if (activeDocId) updateDocument(activeDocId, { documentType: v }).catch((err) => { if (err instanceof SessionExpiredError) return; toast({ title: "Could not save document type", description: "Your change may not have been saved.", variant: "destructive" }); }); }}>
+              <SelectTrigger className="w-[140px] h-8 text-xs [@media(pointer:coarse)]:min-h-[44px]" data-testid="select-doc-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="fiction">Fiction</SelectItem>
+                <SelectItem value="nonfiction">Non-Fiction</SelectItem>
+                <SelectItem value="essay">Essay</SelectItem>
+                <SelectItem value="blog">Blog Post</SelectItem>
+                <SelectItem value="script">Script</SelectItem>
+                <SelectItem value="general">General</SelectItem>
+              </SelectContent>
+            </Select>
 
-          {activeDocId && docChapters.length > 0 && (
-            <div className="flex items-center gap-1">
-              {renamingChapterId === activeChapterId ? (
-                <div className="flex items-center gap-1">
-                  <input
-                    className="h-8 w-[130px] rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring [@media(pointer:coarse)]:min-h-[44px]"
-                    value={chapterTitleInput}
-                    autoFocus
-                    onChange={(e) => setChapterTitleInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveChapterTitle();
-                      if (e.key === 'Escape') setRenamingChapterId(null);
-                    }}
-                    onBlur={handleSaveChapterTitle}
-                    data-testid="input-chapter-title"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
-                    onMouseDown={(e) => { e.preventDefault(); handleSaveChapterTitle(); }}
-                    data-testid="btn-save-chapter-title"
-                  >
-                    <Check className="w-3 h-3" />
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <Select
-                    value={activeChapterId?.toString() ?? ''}
-                    onValueChange={(v) => {
-                      if (v === '__new__') {
-                        handleAddChapter();
-                      } else {
-                        handleSwitchChapter(parseInt(v));
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-[140px] h-8 text-xs [@media(pointer:coarse)]:min-h-[44px]" data-testid="select-chapter">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {docChapters.map((ch) => (
-                        <SelectItem key={ch.id} value={ch.id.toString()}>{ch.title}</SelectItem>
-                      ))}
-                      <SelectSeparator />
-                      <SelectItem value="__new__" className="text-primary">
-                        <span className="flex items-center gap-1.5">
-                          <Plus className="w-3 h-3" />
-                          Add Chapter
-                        </span>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
-                    onClick={() => {
-                      const chapter = docChapters.find(c => c.id === activeChapterId);
-                      if (chapter) { setRenamingChapterId(chapter.id); setChapterTitleInput(chapter.title); }
-                    }}
-                    title="Rename chapter"
-                    data-testid="btn-rename-chapter"
-                  >
-                    <Pencil className="w-3 h-3" />
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
-
-          <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs font-medium" data-testid="save-status">
-            {saving ? 'Saving...' : lastSaved ? 'Saved' : 'Ready'}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={focusMode ? "text-primary bg-primary/10 hover:bg-primary/20 hover:text-primary" : "text-muted-foreground hover:text-foreground"}
-            onClick={() => { if (!focusMode) cancelPending(); setFocusMode(!focusMode); }}
-            title={focusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
-            data-testid="btn-toggle-focus-mode"
-          >
-            <Focus className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() => { setGdocsMode('import'); setGdocsOpen(true); }}
-            title="Import from Google Docs"
-            data-testid="btn-import-gdocs"
-          >
-            <Download className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={handleNewDocument}
-            disabled={createMutation.isPending}
-            data-testid="btn-new-doc"
-          >
-            {createMutation.isPending
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <FilePlus className="w-4 h-4" />}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-full px-6" data-testid="btn-export-menu">
-                <Upload className="w-4 h-4 mr-2" />
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleExport} data-testid="btn-export-txt">
-                <Download className="w-4 h-4 mr-2" />
-                Download as .txt
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => { setGdocsMode('export'); setGdocsOpen(true); }} data-testid="btn-export-gdocs">
-                <Upload className="w-4 h-4 mr-2" />
-                Export to Google Docs
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="btn-user-menu" title={user?.username}>
-                <User className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <div className="px-2 py-1.5 text-xs text-muted-foreground border-b border-border mb-1">
-                Signed in as <span className="font-medium text-foreground" data-testid="text-username">{user?.username}</span>
+            {activeDocId && docChapters.length > 0 && (
+              <div className="flex items-center gap-1">
+                {chapterSelector}
               </div>
-              <DropdownMenuItem onClick={() => logout()} data-testid="btn-logout" className="text-red-500 focus:text-red-500">
-                <LogOut className="w-4 h-4 mr-2" />
-                Sign Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+            )}
+
+            {saveStatusChip}
+          </div>
+        )}
+
+        {/* Mobile save status chip (always visible) */}
+        {isMobile && (
+          <div className="flex-1 flex justify-center">
+            {saveStatusChip}
+          </div>
+        )}
+
+        {/* Desktop right: actions */}
+        {!isMobile && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={focusMode ? "text-primary bg-primary/10 hover:bg-primary/20 hover:text-primary" : "text-muted-foreground hover:text-foreground"}
+              onClick={() => { if (!focusMode) cancelPending(); setFocusMode(!focusMode); }}
+              title={focusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
+              data-testid="btn-toggle-focus-mode"
+            >
+              <Focus className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => { setGdocsMode('import'); setGdocsOpen(true); }}
+              title="Import from Google Docs"
+              data-testid="btn-import-gdocs"
+            >
+              <Download className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={handleNewDocument}
+              disabled={createMutation.isPending}
+              data-testid="btn-new-doc"
+            >
+              {createMutation.isPending
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <FilePlus className="w-4 h-4" />}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-full px-6" data-testid="btn-export-menu">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExport} data-testid="btn-export-txt">
+                  <Download className="w-4 h-4 mr-2" />
+                  Download as .txt
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => { setGdocsMode('export'); setGdocsOpen(true); }} data-testid="btn-export-gdocs">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Export to Google Docs
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="btn-user-menu" title={user?.username}>
+                  <User className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <div className="px-2 py-1.5 text-xs text-muted-foreground border-b border-border mb-1">
+                  Signed in as <span className="font-medium text-foreground" data-testid="text-username">{user?.username}</span>
+                </div>
+                <DropdownMenuItem onClick={() => logout()} data-testid="btn-logout" className="text-red-500 focus:text-red-500">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+
+        {/* Mobile right: overflow menu + user */}
+        {isMobile && (
+          <div className="flex items-center gap-1 shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="btn-mobile-overflow">
+                  <MoreHorizontal className="w-5 h-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {/* Doc type */}
+                <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">Document Type</DropdownMenuLabel>
+                {['fiction', 'nonfiction', 'essay', 'blog', 'script', 'general'].map((type) => (
+                  <DropdownMenuItem
+                    key={type}
+                    onClick={() => {
+                      setDocumentType(type);
+                      if (activeDocId) updateDocument(activeDocId, { documentType: type }).catch((err) => {
+                        if (err instanceof SessionExpiredError) return;
+                        toast({ title: "Could not save document type", variant: "destructive" });
+                      });
+                    }}
+                    data-testid={`mobile-doc-type-${type}`}
+                    className={documentType === type ? 'text-primary' : ''}
+                  >
+                    {documentType === type && <Check className="w-3.5 h-3.5 mr-2 shrink-0" />}
+                    {documentType !== type && <span className="w-3.5 h-3.5 mr-2 inline-block shrink-0" />}
+                    {docTypeLabels[type]}
+                  </DropdownMenuItem>
+                ))}
+
+                {activeDocId && docChapters.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">Chapter</DropdownMenuLabel>
+                    {docChapters.map((ch) => (
+                      <DropdownMenuItem
+                        key={ch.id}
+                        onClick={() => handleSwitchChapter(ch.id)}
+                        className={activeChapterId === ch.id ? 'text-primary' : ''}
+                        data-testid={`mobile-chapter-${ch.id}`}
+                      >
+                        {activeChapterId === ch.id && <Check className="w-3.5 h-3.5 mr-2 shrink-0" />}
+                        {activeChapterId !== ch.id && <span className="w-3.5 h-3.5 mr-2 inline-block shrink-0" />}
+                        {ch.title}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuItem onClick={handleAddChapter} data-testid="mobile-add-chapter">
+                      <Plus className="w-3.5 h-3.5 mr-2" />
+                      Add Chapter
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => { if (!focusMode) cancelPending(); setFocusMode(!focusMode); }}
+                  data-testid="btn-toggle-focus-mode"
+                >
+                  <Focus className="w-4 h-4 mr-2" />
+                  {focusMode ? 'Exit Focus Mode' : 'Focus Mode'}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => { setGdocsMode('import'); setGdocsOpen(true); }}
+                  data-testid="btn-import-gdocs"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Import from Google Docs
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleNewDocument}
+                  disabled={createMutation.isPending}
+                  data-testid="btn-new-doc"
+                >
+                  {createMutation.isPending
+                    ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    : <FilePlus className="w-4 h-4 mr-2" />}
+                  New Document
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExport} data-testid="btn-export-txt">
+                  <Download className="w-4 h-4 mr-2" />
+                  Download as .txt
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setGdocsMode('export'); setGdocsOpen(true); }} data-testid="btn-export-gdocs">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Export to Google Docs
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="btn-user-menu" title={user?.username}>
+                  <User className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <div className="px-2 py-1.5 text-xs text-muted-foreground border-b border-border mb-1">
+                  Signed in as <span className="font-medium text-foreground" data-testid="text-username">{user?.username}</span>
+                </div>
+                <DropdownMenuItem onClick={() => logout()} data-testid="btn-logout" className="text-red-500 focus:text-red-500">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </header>
 
       <main className="flex-1 flex overflow-hidden relative">
-        {showDocList && (
-          <aside className="w-[260px] border-r border-border/50 bg-card/30 overflow-y-auto">
-            <DocumentList documents={documents} activeId={activeDocId} onSelect={handleSelectDoc} onNew={handleNewDocument} isCreating={createMutation.isPending} />
-          </aside>
+        {/* Document list: sheet on mobile, aside on desktop */}
+        {isMobile ? (
+          <Sheet open={showDocList} onOpenChange={setShowDocList}>
+            <SheetContent side="left" className="w-full max-w-sm p-0 flex flex-col">
+              <SheetHeader className="px-4 py-3 border-b border-border/50 shrink-0">
+                <SheetTitle className="text-sm">Documents</SheetTitle>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto">
+                <DocumentList
+                  documents={documents}
+                  activeId={activeDocId}
+                  onSelect={(id) => { handleSelectDoc(id); setShowDocList(false); }}
+                  onNew={handleNewDocument}
+                  isCreating={createMutation.isPending}
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
+        ) : (
+          showDocList && (
+            <aside className="w-[260px] border-r border-border/50 bg-card/30 overflow-y-auto">
+              <DocumentList documents={documents} activeId={activeDocId} onSelect={handleSelectDoc} onNew={handleNewDocument} isCreating={createMutation.isPending} />
+            </aside>
+          )
         )}
 
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto relative">
-            <div className="max-w-3xl mx-auto px-8 py-12">
+            <div className="max-w-3xl mx-auto px-4 sm:px-8 py-12">
               {activeDocId ? (
                 <Editor
                   ref={editorHandle}
@@ -547,39 +712,84 @@ export default function Home() {
               )}
             </div>
             {activeDocId && (
-              <div className="fixed bottom-6 left-1/2 -translate-x-[calc(50%+190px)] text-xs text-muted-foreground/60 font-medium tracking-wide" data-testid="word-count">
+              <div
+                className="fixed bottom-6 text-xs text-muted-foreground/60 font-medium tracking-wide pointer-events-none"
+                style={{ left: '50%', transform: 'translateX(-50%)' }}
+                data-testid="word-count"
+              >
                 {wordCount} words
               </div>
             )}
           </div>
         </div>
 
+        {/* Suggestions sidebar: sheet FAB on mobile, aside on desktop */}
         {activeDocId && !focusMode && (
-          <aside className="w-[380px] border-l border-border/50 bg-card/30 backdrop-blur flex flex-col overflow-hidden">
-            <SuggestionsSidebar
-              suggestions={suggestions}
-              savedSuggestions={savedSuggestions}
-              savedCount={savedCount}
-              changeHistory={changeHistory}
-              loading={suggestionsLoading}
-              onApplySuggestion={applySuggestion}
-              onDismiss={dismissSuggestion}
-              onSave={saveSuggestion}
-              onRemoveSaved={removeSaved}
-              onClearHistory={clearHistory}
-              documentContent={content}
-              documentType={documentType}
-              selectedText={selectedText}
-              externalIdeaPrompt={ideaAssistantPrompt}
-              onExternalIdeaHandled={() => { setIdeaAssistantPrompt(null); setIdeaAssistantLoading(false); }}
-              onScrollToSuggestion={(text) => editorHandle.current?.scrollToSuggestion(text)}
-              onInsertText={(text) => {
-                const appended = (content ? content + '\n\n' : '') + text;
-                setContent(appended);
-                save(appended, title);
-              }}
-            />
-          </aside>
+          isMobile ? (
+            <>
+              <button
+                onClick={() => setShowSuggestionsSheet(true)}
+                className="fixed bottom-16 right-4 z-30 bg-primary text-primary-foreground rounded-full w-12 h-12 flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors"
+                data-testid="btn-open-suggestions-sheet"
+                aria-label="Open Creative Assistant"
+              >
+                <Sparkles className="w-5 h-5" />
+              </button>
+              <Sheet open={showSuggestionsSheet} onOpenChange={setShowSuggestionsSheet}>
+                <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+                  <SuggestionsSidebar
+                    suggestions={suggestions}
+                    savedSuggestions={savedSuggestions}
+                    savedCount={savedCount}
+                    changeHistory={changeHistory}
+                    loading={suggestionsLoading}
+                    onApplySuggestion={applySuggestion}
+                    onDismiss={dismissSuggestion}
+                    onSave={saveSuggestion}
+                    onRemoveSaved={removeSaved}
+                    onClearHistory={clearHistory}
+                    documentContent={content}
+                    documentType={documentType}
+                    selectedText={selectedText}
+                    externalIdeaPrompt={ideaAssistantPrompt}
+                    onExternalIdeaHandled={() => { setIdeaAssistantPrompt(null); setIdeaAssistantLoading(false); }}
+                    onScrollToSuggestion={(text) => editorHandle.current?.scrollToSuggestion(text)}
+                    onInsertText={(text) => {
+                      const appended = (content ? content + '\n\n' : '') + text;
+                      setContent(appended);
+                      save(appended, title);
+                    }}
+                  />
+                </SheetContent>
+              </Sheet>
+            </>
+          ) : (
+            <aside className="w-[380px] border-l border-border/50 bg-card/30 backdrop-blur flex flex-col overflow-hidden">
+              <SuggestionsSidebar
+                suggestions={suggestions}
+                savedSuggestions={savedSuggestions}
+                savedCount={savedCount}
+                changeHistory={changeHistory}
+                loading={suggestionsLoading}
+                onApplySuggestion={applySuggestion}
+                onDismiss={dismissSuggestion}
+                onSave={saveSuggestion}
+                onRemoveSaved={removeSaved}
+                onClearHistory={clearHistory}
+                documentContent={content}
+                documentType={documentType}
+                selectedText={selectedText}
+                externalIdeaPrompt={ideaAssistantPrompt}
+                onExternalIdeaHandled={() => { setIdeaAssistantPrompt(null); setIdeaAssistantLoading(false); }}
+                onScrollToSuggestion={(text) => editorHandle.current?.scrollToSuggestion(text)}
+                onInsertText={(text) => {
+                  const appended = (content ? content + '\n\n' : '') + text;
+                  setContent(appended);
+                  save(appended, title);
+                }}
+              />
+            </aside>
+          )
         )}
 
         {activeDocId && (
