@@ -1,8 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useTutorial } from '@/hooks/useTutorial';
-import type { Placement } from '@/lib/tutorial';
+import type { Placement, TourKey } from '@/lib/tutorial';
+import { TOUR_LABELS, FEATURE_TOURS } from '@/lib/tutorial';
 import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import { X, ChevronDown } from 'lucide-react';
+
+/** Feature tour keys that can be launched individually (excludes the composite 'full' tour) */
+const LAUNCHABLE_TOURS = Object.keys(FEATURE_TOURS).filter(
+  (k): k is TourKey => k !== 'full' && FEATURE_TOURS[k as TourKey].length > 0,
+);
 
 interface Rect {
   top: number;
@@ -84,8 +90,10 @@ function computeCardStyle(
 }
 
 export default function TutorialOverlay() {
-  const { currentStep, stepIndex, steps, next, prev, dismiss, complete, skipCurrentStep, triggerSideEffect } = useTutorial();
+  const { currentStep, stepIndex, steps, next, prev, dismiss, complete, skipCurrentStep, triggerSideEffect, start } = useTutorial();
   const [spotlightRect, setSpotlightRect] = useState<Rect | null>(null);
+  const [toursMenuOpen, setToursMenuOpen] = useState(false);
+  const toursMenuRef = useRef<HTMLDivElement>(null);
   /** True while we are still searching for the target element (before rect is known) */
   const [locating, setLocating] = useState(false);
   /** True when all retries exhausted and target was never found (and step is not auto-skipped) */
@@ -214,6 +222,18 @@ export default function TutorialOverlay() {
     if (cardRef.current) setCardHeight(cardRef.current.offsetHeight || 160);
   });
 
+  // Close tours menu when clicking outside the card
+  useEffect(() => {
+    if (!toursMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (toursMenuRef.current && !toursMenuRef.current.contains(e.target as Node)) {
+        setToursMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [toursMenuOpen]);
+
   if (!currentStep) return null;
 
   const vw = window.innerWidth;
@@ -287,19 +307,72 @@ export default function TutorialOverlay() {
         <p className="text-xs text-muted-foreground leading-relaxed mb-4">{currentStep.body}</p>
 
         {targetMissing && currentStep.missingTargetHint && (
-          <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mb-4 leading-relaxed">
+          <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mb-3 leading-relaxed">
             {currentStep.missingTargetHint}
           </p>
         )}
 
-        <div className="flex items-center justify-between gap-2">
+        {/* Shortcut: when target missing and step belongs to a named feature tour,
+            offer a one-click way to switch to just that feature's tour. */}
+        {targetMissing && currentStep.featureKey !== 'full' && (
           <button
-            onClick={dismiss}
-            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-            data-testid="tutorial-skip"
+            className="w-full text-left text-[11px] text-primary hover:text-primary/80 underline underline-offset-2 mb-3 transition-colors"
+            onClick={() => { setToursMenuOpen(false); start(currentStep.featureKey); }}
+            data-testid={`tutorial-start-feature-tour-${currentStep.featureKey}`}
           >
-            Skip tour
+            Start just the {TOUR_LABELS[currentStep.featureKey]} tour →
           </button>
+        )}
+
+        <div className="flex items-center justify-between gap-2">
+          {/* Left: Skip button + Tours dropdown */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={dismiss}
+              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              data-testid="tutorial-skip"
+            >
+              Skip tour
+            </button>
+            <span className="text-muted-foreground/40 text-[11px]">·</span>
+            {/* Tours dropdown: lets users jump directly to any feature tour */}
+            <div className="relative" ref={toursMenuRef}>
+              <button
+                onClick={() => setToursMenuOpen(o => !o)}
+                className="flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                data-testid="tutorial-tours-menu-trigger"
+                aria-haspopup="true"
+                aria-expanded={toursMenuOpen}
+              >
+                Tours
+                <ChevronDown className={`w-3 h-3 transition-transform ${toursMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {toursMenuOpen && (
+                <div
+                  className="absolute bottom-full left-0 mb-1.5 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[170px] z-10"
+                  role="menu"
+                  data-testid="tutorial-tours-menu"
+                >
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-3 py-1 font-semibold">
+                    Jump to a tour
+                  </p>
+                  {LAUNCHABLE_TOURS.map(key => (
+                    <button
+                      key={key}
+                      role="menuitem"
+                      className="w-full text-left text-xs px-3 py-1.5 hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => { setToursMenuOpen(false); start(key); }}
+                      data-testid={`tutorial-tours-menu-item-${key}`}
+                    >
+                      {TOUR_LABELS[key]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="flex items-center gap-2">
             {!isFirst && (
               <Button variant="outline" size="sm" className="h-7 text-xs px-3" onClick={prev} data-testid="tutorial-prev">
