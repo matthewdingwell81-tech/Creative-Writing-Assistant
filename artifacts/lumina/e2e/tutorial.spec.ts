@@ -363,6 +363,101 @@ test.describe('Tutorial system', () => {
     await page.getByTestId('tutorial-skip').click();
     await expect(page.getByTestId('tutorial-card')).not.toBeVisible({ timeout: 3_000 });
   });
+
+  // -------------------------------------------------------------------------
+  // Full-tour end-to-end completion on a fresh account (no document open)
+  //
+  // Uses the shared e2e session but deletes all server-side documents via the
+  // authenticated API before starting, so the DOM is in exactly the state of
+  // a brand-new account: no editor, no chapters, no assistant tabs.
+  // -------------------------------------------------------------------------
+
+  test('full tour completes end-to-end on a fresh account without freezing', async ({ page }) => {
+    test.setTimeout(60_000);
+
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    // ── 1. Delete every server-side document for this account ────────────
+    // This is the only reliable way to reach the "no document" state, because
+    // earlier tests in the suite create documents for the shared e2e account.
+    const docsRes = await page.request.get('/api/documents');
+    expect(docsRes.ok(), `GET /api/documents failed: ${docsRes.status()}`).toBe(true);
+    const docs: { id: number }[] = await docsRes.json();
+    for (const doc of docs) {
+      const del = await page.request.delete(`/api/documents/${doc.id}`);
+      expect(del.ok(), `DELETE /api/documents/${doc.id} failed: ${del.status()}`).toBe(true);
+    }
+
+    // ── 2. Clear tutorial flags and reload so both server and client are clean
+    await page.evaluate(() => {
+      localStorage.removeItem('lumina_tutorial_done');
+      localStorage.removeItem('lumina_first_use');
+    });
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    // ── 3. Assert the no-document state explicitly ────────────────────────
+    // The "create your first document" CTA must be visible; this proves no
+    // documents exist server-side and the UI reflects the empty state.
+    await expect(
+      page.getByTestId('btn-create-first'),
+      'Expected empty-state CTA after deleting all documents',
+    ).toBeVisible({ timeout: 5_000 });
+
+    // ── 4. Full tour auto-launches on first visit ─────────────────────────
+    await expect(page.getByTestId('tutorial-card')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('tutorial-card')).toContainText(/Step 1 of \d+/);
+
+    // ── 5. Walk every step ───────────────────────────────────────────────
+    // Per-step timeout budget covers:
+    //   - sideEffect delay (200 ms)
+    //   - target-locate retry loop (20 × 50 ms = 1 000 ms)
+    //   - a safety buffer
+    // If a step ever freezes the card will vanish or the Next button will
+    // never appear, causing the assertion below to time out and fail the test.
+    const MAX_STEPS = 30; // FULL_TOUR has ~18 steps; headroom for future additions
+    const STEP_TIMEOUT_MS = 4_000;
+
+    let reachedDone = false;
+
+    for (let i = 0; i < MAX_STEPS; i++) {
+      const card = page.getByTestId('tutorial-card');
+
+      // The card MUST remain visible at every step — a freeze shows up here
+      await expect(card).toBeVisible({ timeout: STEP_TIMEOUT_MS });
+
+      // If we're on the final step the Done button replaces Next
+      const doneBtn = page.getByTestId('tutorial-done');
+      if (await doneBtn.isVisible({ timeout: 600 }).catch(() => false)) {
+        await doneBtn.click();
+        reachedDone = true;
+        break;
+      }
+
+      // Otherwise advance to the next step
+      const nextBtn = page.getByTestId('tutorial-next');
+      await expect(nextBtn).toBeVisible({ timeout: STEP_TIMEOUT_MS });
+      await nextBtn.click();
+    }
+
+    // ── 6. Assert completion ─────────────────────────────────────────────
+    // The loop must have found and clicked Done — not just exhausted iterations
+    expect(reachedDone, 'Done button was never reached; tour may have frozen').toBe(true);
+
+    // Overlay must be gone after Done is clicked
+    await expect(page.getByTestId('tutorial-card')).not.toBeVisible({ timeout: 3_000 });
+
+    // localStorage must record the full tour as completed
+    const storedDone = await page.evaluate(() => {
+      try {
+        return JSON.parse(localStorage.getItem('lumina_tutorial_done') || '{}')['full'] === true;
+      } catch {
+        return false;
+      }
+    });
+    expect(storedDone, 'lumina_tutorial_done[full] not set after completing tour').toBe(true);
+  });
 });
 
 // Export helper for use in mobile-layout.spec.ts
