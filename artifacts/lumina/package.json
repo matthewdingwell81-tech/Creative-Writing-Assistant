@@ -8,13 +8,15 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "validate-url": "node scripts/validate-production-url.js"
+    "validate-url": "node scripts/validate-production-url.js",
+    "test:e2e": "LD_LIBRARY_PATH=$HOME/.nix-profile/lib:$LD_LIBRARY_PATH playwright test --config playwright.config.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
     "@capacitor/core": "^8.4.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@capacitor/cli": "^8.4.1",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",

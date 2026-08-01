@@ -24,6 +24,10 @@ args = "Sync Android"
 task = "workflow.run"
 args = "api-server-test"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "lumina-mobile-e2e"
+
 [[workflows.workflow]]
 name = "Sync Android"
 author = "agent"
@@ -46,6 +50,17 @@ args = "pnpm --filter @workspace/api-server run test"
 [workflows.workflow.metadata]
 isValidation = true
 
+[[workflows.workflow]]
+name = "lumina-mobile-e2e"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/lumina run test:e2e"
+
+[workflows.workflow.metadata]
+isValidation = true
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
@@ -56,3 +71,4 @@ timeoutMs = 20000
 
 [nix]
 packages = ["zulu"]
+channel = "stable-25_05"
