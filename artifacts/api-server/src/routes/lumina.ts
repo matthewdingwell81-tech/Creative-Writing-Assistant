@@ -74,6 +74,14 @@ router.post("/auth/login", async (req: Request, res: Response) => {
   }
 
   req.session.userId = user.id;
+
+  // "Remember me" extends the session to 30 days (or SESSION_REMEMBER_ME_TTL_MS if set)
+  if (req.body.rememberMe === true) {
+    req.session.cookie.maxAge =
+      parseInt(process.env.SESSION_REMEMBER_ME_TTL_MS || "") ||
+      30 * 24 * 60 * 60 * 1000;
+  }
+
   res.json({ id: user.id, username: user.username });
 });
 

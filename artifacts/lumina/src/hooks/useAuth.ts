@@ -26,7 +26,7 @@ export function useAuth() {
   });
 
   const loginMutation = useMutation({
-    mutationFn: async (data: { username: string; password: string }) => {
+    mutationFn: async (data: { username: string; password: string; rememberMe?: boolean }) => {
       const res = await apiRequest("POST", "/api/auth/login", data);
       return res.json() as Promise<AuthUser>;
     },

@@ -19,6 +19,7 @@ export default function AuthPage() {
   }, [sessionExpired]);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { login, register, isLoggingIn, isRegistering } = useAuth();
@@ -36,7 +37,7 @@ export default function AuthPage() {
 
     try {
       if (mode === "login") {
-        await login({ username: username.trim(), password });
+        await login({ username: username.trim(), password, rememberMe });
       } else {
         if (password.length < 6) {
           setError("Password must be at least 6 characters.");
@@ -130,6 +131,20 @@ export default function AuthPage() {
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
               />
             </div>
+
+            {mode === "login" && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  data-testid="checkbox-remember-me"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={isLoading}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-800 accent-indigo-500"
+                />
+                <span className="text-slate-400 text-sm">Remember me for 30 days</span>
+              </label>
+            )}
 
             {error && (
               <p data-testid="text-auth-error" className="text-red-400 text-sm bg-red-950/30 border border-red-800/40 rounded-lg px-3 py-2">
