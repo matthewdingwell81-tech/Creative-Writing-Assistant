@@ -57,7 +57,7 @@ export default function IdeasPanel({ documentId, onAskAssistant, assistantLoadin
 
   if (drawerMode) {
     return (
-      <div className="flex flex-col h-full" data-testid="ideas-panel">
+      <div className="flex flex-col h-full" data-testid="ideas-panel" data-tutorial="scratchpad-content">
         <div className="px-4 pt-4 pb-3 space-y-3 flex-1 overflow-y-auto">
           <form onSubmit={handleSubmit} className="flex gap-2">
             <textarea

@@ -5,7 +5,7 @@ import SuggestionsSidebar from '@/components/SuggestionsSidebar';
 import DocumentList from '@/components/DocumentList';
 import GoogleDocsDialog from '@/components/GoogleDocsDialog';
 import IdeasPanel from '@/components/IdeasPanel';
-import { Sparkles, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus, Pencil, Plus, Check, Loader2, MoreHorizontal } from 'lucide-react';
+import { Sparkles, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus, Pencil, Plus, Check, Loader2, MoreHorizontal, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
@@ -17,6 +17,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { Document, Chapter } from '@/types/schema';
+import { useTutorial } from '@/hooks/useTutorial';
+import { TOUR_LABELS, type TourKey, getFirstUse, setFirstUseSeen, getTutorialDone } from '@/lib/tutorial';
+import { ToastAction } from '@/components/ui/toast';
 
 function normalizeNbsp(s: string): string {
   return s.replace(/\u00A0/g, ' ');
@@ -109,10 +112,59 @@ export default function Home() {
   const [renamingChapterId, setRenamingChapterId] = useState<number | null>(null);
   const [chapterTitleInput, setChapterTitleInput] = useState('');
 
+  const { start: startTutorial, registerSideEffect } = useTutorial();
+
+  // First-use tracking for contextual prompts
+  const firstUseShownRef = useRef<Record<string, boolean>>({});
+
+  const showFirstUsePrompt = useCallback((featureKey: TourKey, label: string) => {
+    const seen = getFirstUse();
+    if (seen[featureKey] || firstUseShownRef.current[featureKey]) return;
+    firstUseShownRef.current[featureKey] = true;
+    setFirstUseSeen(featureKey);
+    // Capture startTutorial in a local var to avoid stale closure issues inside setTimeout
+    const launchTour = () => startTutorial(featureKey);
+    setTimeout(() => {
+      toast({
+        title: `New to ${label}?`,
+        description: 'See how it works',
+        action: <ToastAction altText="Take tour" onClick={launchTour}>Take tour →</ToastAction>,
+      });
+    }, 600);
+  }, [toast, startTutorial]);
+
   const {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
     requestSuggestions, cancelPending, dismissSuggestion, applySuggestionById, saveSuggestion, removeSaved, clearHistory
   } = useSuggestions();
+
+  // Auto-launch the full tour on first visit (once, after UI is ready)
+  useEffect(() => {
+    const done = getTutorialDone();
+    if (done['full']) return;
+    const timer = setTimeout(() => {
+      startTutorial('full');
+    }, 800);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount
+
+  // Register tutorial side effects — must come after cancelPending is in scope
+  useEffect(() => {
+    registerSideEffect('openAssistant', () => {
+      // On mobile, open the sheet; on desktop the aside is always visible when !focusMode
+      setShowSuggestionsSheet(true);
+      // If focus mode is on, exit it so the sidebar becomes visible
+      setFocusMode(prev => {
+        if (prev) cancelPending();
+        return false;
+      });
+    });
+    registerSideEffect('openScratchpad', () => {
+      setShowScratchpad(true);
+    });
+  }, [registerSideEffect, cancelPending]);
+
   const { save, saving, lastSaved } = useAutoSave(activeDocId, activeChapterId, {
     onSaveError: () => {
       toast({
@@ -479,12 +531,40 @@ export default function Home() {
               variant="ghost"
               size="icon"
               className={focusMode ? "text-primary bg-primary/10 hover:bg-primary/20 hover:text-primary" : "text-muted-foreground hover:text-foreground"}
-              onClick={() => { if (!focusMode) cancelPending(); setFocusMode(!focusMode); }}
+              onClick={() => {
+                if (!focusMode) {
+                  cancelPending();
+                  showFirstUsePrompt('focusMode', 'Focus Mode');
+                }
+                setFocusMode(!focusMode);
+              }}
               title={focusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
               data-testid="btn-toggle-focus-mode"
             >
               <Focus className="w-4 h-4" />
             </Button>
+            {/* Help menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-foreground"
+                  title="Help & tours"
+                  data-testid="btn-help-menu"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">Tours</DropdownMenuLabel>
+                {(Object.keys(TOUR_LABELS) as TourKey[]).map((key) => (
+                  <DropdownMenuItem key={key} onClick={() => startTutorial(key)} data-testid={`tour-${key}`}>
+                    {TOUR_LABELS[key]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="ghost"
               size="icon"
@@ -602,7 +682,13 @@ export default function Home() {
 
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => { if (!focusMode) cancelPending(); setFocusMode(!focusMode); }}
+                  onClick={() => {
+                    if (!focusMode) {
+                      cancelPending();
+                      showFirstUsePrompt('focusMode', 'Focus Mode');
+                    }
+                    setFocusMode(!focusMode);
+                  }}
                   data-testid="btn-toggle-focus-mode"
                 >
                   <Focus className="w-4 h-4 mr-2" />
@@ -633,6 +719,14 @@ export default function Home() {
                   <Upload className="w-4 h-4 mr-2" />
                   Export to Google Docs
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">Help &amp; Tours</DropdownMenuLabel>
+                {(Object.keys(TOUR_LABELS) as TourKey[]).map((key) => (
+                  <DropdownMenuItem key={key} onClick={() => startTutorial(key)} data-testid={`tour-mobile-${key}`}>
+                    <HelpCircle className="w-4 h-4 mr-2" />
+                    {TOUR_LABELS[key]}
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -728,7 +822,10 @@ export default function Home() {
           isMobile ? (
             <>
               <button
-                onClick={() => setShowSuggestionsSheet(true)}
+                onClick={() => {
+                  showFirstUsePrompt('assistant', 'Creative Assistant');
+                  setShowSuggestionsSheet(true);
+                }}
                 className="fixed bottom-16 right-4 z-30 bg-primary text-primary-foreground rounded-full w-12 h-12 flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors"
                 data-testid="btn-open-suggestions-sheet"
                 aria-label="Open Creative Assistant"
@@ -794,7 +891,10 @@ export default function Home() {
 
         {activeDocId && (
           <button
-            onClick={() => setShowScratchpad(!showScratchpad)}
+            onClick={() => {
+              if (!showScratchpad) showFirstUsePrompt('scratchpad', 'Ideas Scratchpad');
+              setShowScratchpad(!showScratchpad);
+            }}
             className="fixed left-0 top-1/2 -translate-y-1/2 z-30 bg-card border border-border/50 border-l-0 rounded-r-lg px-1.5 py-3 flex flex-col items-center gap-1.5 text-muted-foreground hover:text-foreground hover:bg-card/90 shadow-md transition-all"
             data-testid="btn-toggle-scratchpad"
             title="Ideas Scratchpad"

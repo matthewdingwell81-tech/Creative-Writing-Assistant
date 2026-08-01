@@ -13,12 +13,31 @@ import { test, expect } from '@playwright/test';
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Dismiss the in-app tutorial overlay if it is currently visible. */
+async function dismissTutorialIfPresent(page: import('@playwright/test').Page) {
+  const card = page.getByTestId('tutorial-card');
+  const isVisible = await card.isVisible({ timeout: 2_000 }).catch(() => false);
+  if (isVisible) {
+    const skipBtn = page.getByTestId('tutorial-skip');
+    if (await skipBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await skipBtn.click();
+    } else {
+      const dismissBtn = page.getByTestId('tutorial-dismiss');
+      await dismissBtn.click();
+    }
+    await expect(card).not.toBeVisible({ timeout: 3_000 });
+  }
+}
+
 /** Navigate to home and, if no document exists yet, create one. */
 async function ensureDocument(page: import('@playwright/test').Page) {
   await page.goto('/');
 
   // The app may briefly show a loading spinner — wait for it to resolve.
   await page.waitForLoadState('networkidle');
+
+  // Dismiss tutorial overlay if the first-visit auto-launch fired
+  await dismissTutorialIfPresent(page);
 
   const createFirstBtn = page.getByTestId('btn-create-first');
   const isNewUser = await createFirstBtn.isVisible({ timeout: 3_000 }).catch(() => false);

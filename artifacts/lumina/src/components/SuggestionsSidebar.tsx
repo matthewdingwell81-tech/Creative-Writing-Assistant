@@ -410,20 +410,20 @@ export default function SuggestionsSidebar({
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col w-full min-h-0">
         <div className="px-4 pt-3 pb-0 border-b border-border/50">
           <TabsList className="w-full bg-muted/50 grid grid-cols-6 p-1 rounded-lg">
-            <TabsTrigger value="grammar" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-grammar">
+            <TabsTrigger value="grammar" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-grammar" data-tutorial="grammar-tab">
               Grammar {grammarSuggestions.length > 0 && `(${grammarSuggestions.length})`}
             </TabsTrigger>
-            <TabsTrigger value="suggestions" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-review">
+            <TabsTrigger value="suggestions" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-review" data-tutorial="review-tab">
               Review {reviewSuggestions.length > 0 && `(${reviewSuggestions.length})`}
             </TabsTrigger>
-            <TabsTrigger value="story" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-story">
+            <TabsTrigger value="story" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-story" data-tutorial="story-tab">
               Story {storySuggestions.length > 0 && `(${storySuggestions.length})`}
             </TabsTrigger>
             <TabsTrigger value="history" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-history">
               History {changeHistory.length > 0 && `(${changeHistory.length})`}
             </TabsTrigger>
-            <TabsTrigger value="ideas" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-ideas">Ideas</TabsTrigger>
-            <TabsTrigger value="coach" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 gap-0.5 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-coach">
+            <TabsTrigger value="ideas" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-ideas" data-tutorial="ideas-tab">Ideas</TabsTrigger>
+            <TabsTrigger value="coach" className="text-[10px] rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm px-1 gap-0.5 [@media(pointer:coarse)]:min-h-[44px]" data-testid="tab-coach" data-tutorial="coach-tab">
               <Bot className="w-3 h-3 shrink-0" />Coach
             </TabsTrigger>
           </TabsList>

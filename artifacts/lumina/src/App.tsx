@@ -9,6 +9,8 @@ import Home from "@/pages/Home";
 import AuthPage from "@/pages/AuthPage";
 import { useAuth } from "@/hooks/useAuth";
 import { setSessionExpired } from "@/lib/sessionState";
+import { TutorialProvider } from "@/hooks/useTutorial";
+import TutorialOverlay from "@/components/TutorialOverlay";
 
 function SessionExpiredHandler() {
   const [, setLocation] = useLocation();
@@ -56,11 +58,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <SessionExpiredHandler />
-          <Toaster />
-          <Router />
-        </WouterRouter>
+        <TutorialProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <SessionExpiredHandler />
+            <Toaster />
+            <Router />
+            <TutorialOverlay />
+          </WouterRouter>
+        </TutorialProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

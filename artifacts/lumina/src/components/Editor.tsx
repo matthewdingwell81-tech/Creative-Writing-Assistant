@@ -297,6 +297,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
         className="w-full text-4xl font-serif font-medium text-foreground mb-8 bg-transparent border-none outline-none placeholder:text-muted-foreground/40"
         placeholder="Untitled"
         data-testid="input-title"
+        data-tutorial="editor-title"
       />
 
       <div
@@ -310,6 +311,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
         spellCheck="false"
         data-testid="editor-area"
         data-placeholder="Start writing..."
+        data-tutorial="editor-area"
       />
 
       {popover.visible && popover.alternatives.length > 0 && (

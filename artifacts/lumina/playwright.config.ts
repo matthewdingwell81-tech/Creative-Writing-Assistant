@@ -46,5 +46,16 @@ export default defineConfig({
       dependencies: ['setup'],
       testMatch: '**/mobile-layout.spec.ts',
     },
+    // Tutorial system tests – desktop Chromium
+    {
+      name: 'tutorial',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 1280, height: 720 },
+        storageState: 'e2e/.auth/mobile.json',
+      },
+      dependencies: ['setup'],
+      testMatch: '**/tutorial.spec.ts',
+    },
   ],
 });
