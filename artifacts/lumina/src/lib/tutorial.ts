@@ -47,7 +47,7 @@ export const FULL_TOUR: TutorialStep[] = [
     title: 'Create a New Document',
     body: 'Click the new document icon to start a fresh document. Each document is saved to your account automatically.',
     placement: 'bottom',
-    skipIfTargetMissing: true,
+    missingTargetHint: 'Open the document panel first (tap the panel icon in the top-left) to see the New Document button.',
   },
   // 2. Chapters (only visible when a document is open)
   {
@@ -57,7 +57,7 @@ export const FULL_TOUR: TutorialStep[] = [
     title: 'Chapters',
     body: 'Use the chapter selector to add chapters, switch between them, and organise your document into sections.',
     placement: 'bottom',
-    skipIfTargetMissing: true,
+    missingTargetHint: 'Open or create a document first — the chapter selector appears in the editor toolbar.',
   },
   {
     id: 'rename-chapter',
@@ -66,7 +66,7 @@ export const FULL_TOUR: TutorialStep[] = [
     title: 'Rename a Chapter',
     body: 'Click the pencil icon next to the chapter selector to rename the current chapter.',
     placement: 'bottom',
-    skipIfTargetMissing: true,
+    missingTargetHint: 'Open a document to see the chapter controls in the toolbar.',
   },
   // 3. Document type (desktop only)
   {
@@ -76,7 +76,7 @@ export const FULL_TOUR: TutorialStep[] = [
     title: 'Document Type',
     body: 'Set the genre of your work — Fiction, Non-Fiction, Essay, Blog Post, Script, or General. This shapes the AI suggestions you receive.',
     placement: 'bottom',
-    skipIfTargetMissing: true,
+    missingTargetHint: 'Open a document to see the Document Type selector in the toolbar.',
   },
   // 4. Writing editor (requires an open document)
   {
@@ -86,7 +86,7 @@ export const FULL_TOUR: TutorialStep[] = [
     title: 'Document Title',
     body: 'Type your document title here. Changes are saved automatically so you never lose your work.',
     placement: 'bottom',
-    skipIfTargetMissing: true,
+    missingTargetHint: 'Open or create a document to see the title field.',
   },
   {
     id: 'editor-area',
@@ -95,7 +95,7 @@ export const FULL_TOUR: TutorialStep[] = [
     title: 'The Writing Area',
     body: 'Write your prose here. Lumina automatically saves as you type and analyses your writing in the background.',
     placement: 'top',
-    skipIfTargetMissing: true,
+    missingTargetHint: 'Open or create a document to see the writing area.',
   },
   {
     id: 'save-status',
@@ -115,7 +115,6 @@ export const FULL_TOUR: TutorialStep[] = [
     body: 'The Grammar tab highlights issues in your writing. Click any card to jump to the passage, then apply or dismiss the suggestion.',
     placement: 'bottom',
     sideEffect: 'openAssistant',
-    skipIfTargetMissing: true,
   },
   {
     id: 'review-tab',
@@ -125,7 +124,6 @@ export const FULL_TOUR: TutorialStep[] = [
     body: 'The Review tab offers vocabulary and style suggestions to make your writing clearer and more compelling.',
     placement: 'bottom',
     sideEffect: 'openAssistant',
-    skipIfTargetMissing: true,
   },
   {
     id: 'story-tab',
@@ -135,7 +133,6 @@ export const FULL_TOUR: TutorialStep[] = [
     body: 'The Story tab analyses pacing and plot structure, giving you high-level feedback on your narrative.',
     placement: 'bottom',
     sideEffect: 'openAssistant',
-    skipIfTargetMissing: true,
   },
   {
     id: 'coach-tab',
@@ -145,7 +142,6 @@ export const FULL_TOUR: TutorialStep[] = [
     body: 'Chat directly with your AI writing coach. Ask questions, brainstorm plot points, or get feedback on any aspect of your work.',
     placement: 'bottom',
     sideEffect: 'openAssistant',
-    skipIfTargetMissing: true,
   },
   // 7. Ideas tab
   {
@@ -156,7 +152,6 @@ export const FULL_TOUR: TutorialStep[] = [
     body: 'The Ideas tab lets you ask the AI to generate ideas, brainstorm alternatives, or explore "what if" scenarios based on your document.',
     placement: 'bottom',
     sideEffect: 'openAssistant',
-    skipIfTargetMissing: true,
   },
   // 8. Review selection — only visible when text is selected
   {
@@ -176,7 +171,7 @@ export const FULL_TOUR: TutorialStep[] = [
     title: 'Ideas Scratchpad',
     body: 'Click the lightbulb tab on the left edge to open your scratchpad — a quick notepad for ideas, snippets, and inspiration.',
     placement: 'right',
-    skipIfTargetMissing: true,
+    missingTargetHint: 'Open a document first — the scratchpad button appears on the left edge of the editor.',
   },
   // 10. Focus Mode (desktop header only)
   {
@@ -186,7 +181,7 @@ export const FULL_TOUR: TutorialStep[] = [
     title: 'Focus Mode',
     body: 'Focus Mode hides the AI sidebar so you can write without distractions. Grammar analysis is paused while active. Click again to return to normal view.',
     placement: 'bottom',
-    skipIfTargetMissing: true,
+    missingTargetHint: 'Focus Mode is available in the desktop toolbar — open a document on a wider screen to see it.',
   },
   // 11. Export (desktop only)
   {
@@ -196,7 +191,7 @@ export const FULL_TOUR: TutorialStep[] = [
     title: 'Export Your Work',
     body: 'Click Export to download your document as a plain-text .txt file that you can open in any editor.',
     placement: 'bottom',
-    skipIfTargetMissing: true,
+    missingTargetHint: 'Open a document to see the Export button in the toolbar.',
   },
   // 12. Google Docs (desktop only)
   {
@@ -206,7 +201,7 @@ export const FULL_TOUR: TutorialStep[] = [
     title: 'Import from Google Docs',
     body: 'Import an existing Google Doc directly into Lumina, or export your work back to Google Docs at any time.',
     placement: 'bottom',
-    skipIfTargetMissing: true,
+    missingTargetHint: 'Open a document to see the Google Docs import button in the toolbar.',
   },
 ];
 
