@@ -460,5 +460,58 @@ test.describe('Tutorial system', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Mobile-viewport: tour stays paused until the user taps Next
+// ---------------------------------------------------------------------------
+
+test.describe('Tour pauses on each step on mobile', () => {
+  // 375 × 812 matches a typical small phone (iPhone SE / 12 mini)
+  test.use({
+    viewport: { width: 375, height: 812 },
+    hasTouch: true,
+    isMobile: true,
+  });
+
+  test('step 1 stays visible for 3 s without interaction, then Next advances to step 2', async ({ page }) => {
+    // Boot to a clean state with the tour auto-launched
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+    await clearTutorialState(page);
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    // The full tour must auto-launch and show step 1
+    const card = page.getByTestId('tutorial-card');
+    await expect(card).toBeVisible({ timeout: 5_000 });
+    await expect(card).toContainText(/Step 1 of \d+/);
+
+    // ── Assert the step does NOT auto-advance for at least 3 seconds ─────
+    // Poll every 500 ms for 3 s; if step 1 disappears the assertion fires.
+    const POLL_MS = 500;
+    const HOLD_MS = 3_000;
+    const iterations = HOLD_MS / POLL_MS;
+
+    for (let i = 0; i < iterations; i++) {
+      await page.waitForTimeout(POLL_MS);
+      await expect(
+        card,
+        `Tour auto-advanced away from step 1 after ~${(i + 1) * POLL_MS} ms`,
+      ).toContainText(/Step 1 of \d+/);
+    }
+
+    // ── Tap Next and confirm the step advances to 2 ───────────────────────
+    const nextBtn = page.getByTestId('tutorial-next');
+    await expect(nextBtn).toBeVisible({ timeout: 3_000 });
+    await nextBtn.tap();
+
+    // After tapping Next the counter must move past 1
+    await expect(card).toContainText(/Step [2-9]/, { timeout: 5_000 });
+
+    // Clean up
+    await page.getByTestId('tutorial-skip').click();
+    await expect(card).not.toBeVisible({ timeout: 3_000 });
+  });
+});
+
 // Export helper for use in mobile-layout.spec.ts
 export { dismissTutorialIfPresent };
