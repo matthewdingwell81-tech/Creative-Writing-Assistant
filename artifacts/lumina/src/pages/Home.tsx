@@ -625,7 +625,11 @@ export default function Home() {
                 <div className="px-2 py-1.5 text-xs text-muted-foreground border-b border-border mb-1">
                   Signed in as <span className="font-medium text-foreground" data-testid="text-username">{user?.username}</span>
                 </div>
-                <DropdownMenuItem onClick={() => logout()} data-testid="btn-logout" className="text-red-500 focus:text-red-500">
+                <DropdownMenuItem
+                  onClick={() => logout().catch(() => toast({ title: "Sign out failed", description: "Please try again.", variant: "destructive" }))}
+                  data-testid="btn-logout"
+                  className="text-red-500 focus:text-red-500"
+                >
                   <LogOut className="w-4 h-4 mr-2" />
                   Sign Out
                 </DropdownMenuItem>
@@ -757,7 +761,11 @@ export default function Home() {
                 <div className="px-2 py-1.5 text-xs text-muted-foreground border-b border-border mb-1">
                   Signed in as <span className="font-medium text-foreground" data-testid="text-username">{user?.username}</span>
                 </div>
-                <DropdownMenuItem onClick={() => logout()} data-testid="btn-logout" className="text-red-500 focus:text-red-500">
+                <DropdownMenuItem
+                  onClick={() => logout().catch(() => toast({ title: "Sign out failed", description: "Please try again.", variant: "destructive" }))}
+                  data-testid="btn-logout"
+                  className="text-red-500 focus:text-red-500"
+                >
                   <LogOut className="w-4 h-4 mr-2" />
                   Sign Out
                 </DropdownMenuItem>
