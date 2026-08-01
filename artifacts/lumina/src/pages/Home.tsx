@@ -18,7 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { Document, Chapter } from '@/types/schema';
 import { useTutorial } from '@/hooks/useTutorial';
-import { TOUR_LABELS, type TourKey, getFirstUse, setFirstUseSeen, getTutorialDone } from '@/lib/tutorial';
+import { TOUR_LABELS, type TourKey, getFirstUse, setFirstUseSeen, getTutorialDone, resetTourProgress } from '@/lib/tutorial';
 import { ToastAction } from '@/components/ui/toast';
 
 function normalizeNbsp(s: string): string {
@@ -563,6 +563,14 @@ export default function Home() {
                     {TOUR_LABELS[key]}
                   </DropdownMenuItem>
                 ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => { resetTourProgress(); toast({ title: 'Tour progress reset', description: 'Contextual prompts and the full tour will appear again on your next visit.' }); }}
+                  data-testid="btn-reset-tour-progress"
+                  className="text-muted-foreground focus:text-foreground"
+                >
+                  Reset tour progress
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <Button
@@ -727,6 +735,15 @@ export default function Home() {
                     {TOUR_LABELS[key]}
                   </DropdownMenuItem>
                 ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => { resetTourProgress(); toast({ title: 'Tour progress reset', description: 'Contextual prompts and the full tour will appear again on your next visit.' }); }}
+                  data-testid="btn-reset-tour-progress-mobile"
+                  className="text-muted-foreground focus:text-foreground"
+                >
+                  <HelpCircle className="w-4 h-4 mr-2" />
+                  Reset tour progress
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 

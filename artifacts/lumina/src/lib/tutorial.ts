@@ -253,3 +253,12 @@ export function setFirstUseSeen(key: string): void {
   seen[key] = true;
   localStorage.setItem(FIRST_USE_KEY, JSON.stringify(seen));
 }
+
+/**
+ * Clears all stored tutorial progress so that the full tour auto-launches
+ * again on next load and all contextual first-use prompts re-fire.
+ */
+export function resetTourProgress(): void {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(FIRST_USE_KEY);
+}
