@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearch } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,14 @@ export default function AuthPage() {
   const search = useSearch();
   const sessionExpired = new URLSearchParams(search).get("expired") === "1";
   const [mode, setMode] = useState<"login" | "register">("login");
+
+  // Replace the history entry to strip ?expired=1 so pressing back won't
+  // re-show the expired banner after a successful sign-in.
+  useEffect(() => {
+    if (sessionExpired) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [sessionExpired]);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
