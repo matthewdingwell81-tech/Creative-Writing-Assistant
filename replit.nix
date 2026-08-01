@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.libgbm
     pkgs.libGL
     pkgs.systemd
     pkgs.dbus

@@ -298,6 +298,71 @@ test.describe('Tutorial system', () => {
     // After completing/skipping, card should be gone
     await expect(page.getByTestId('tutorial-card')).not.toBeVisible({ timeout: 5_000 });
   });
+
+  test('review-selection step shows hint and spotlights button once text is selected', async ({ page }) => {
+    await bootWithTutorialDismissed(page);
+
+    // Mark full tour done to prevent auto-launch interference
+    await page.evaluate(() => {
+      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
+    });
+
+    // Type some content into the editor so there is text to select
+    const editorArea = page.getByTestId('editor-area');
+    if (await editorArea.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await editorArea.click();
+      await page.keyboard.type('Tutorial selection test content');
+      await page.waitForTimeout(300);
+    }
+
+    // Launch the assistant feature tour which includes the review-selection step
+    await page.getByTestId('btn-help-menu').click();
+    await page.getByTestId('tour-assistant').click();
+
+    await expect(page.getByTestId('tutorial-card')).toBeVisible({ timeout: 5_000 });
+
+    // Navigate through steps until we reach "Review a Selection"
+    for (let i = 0; i < 15; i++) {
+      const card = page.getByTestId('tutorial-card');
+      if (!(await card.isVisible({ timeout: 2_000 }).catch(() => false))) break;
+      if (await card.getByText('Review a Selection').isVisible({ timeout: 400 }).catch(() => false)) break;
+      const doneBtn = page.getByTestId('tutorial-done');
+      if (await doneBtn.isVisible({ timeout: 300 }).catch(() => false)) break;
+      const nextBtn = page.getByTestId('tutorial-next');
+      if (await nextBtn.isVisible({ timeout: 300 }).catch(() => false)) {
+        await nextBtn.click();
+        await page.waitForTimeout(300);
+      } else {
+        break;
+      }
+    }
+
+    // Should now be on the "Review a Selection" step
+    await expect(page.getByTestId('tutorial-card')).toContainText('Review a Selection', { timeout: 5_000 });
+
+    // The hint text should be visible
+    await expect(page.getByTestId('tutorial-card')).toContainText('Select some text', { timeout: 3_000 });
+
+    // The full blocking backdrop must NOT be present — the page stays interactive
+    await expect(page.locator('[data-testid="tutorial-backdrop-full"]')).not.toBeAttached();
+
+    // The passthrough backdrop (pointer-events: none) should be present instead
+    await expect(page.locator('[data-testid="tutorial-backdrop-missing"]')).toBeAttached({ timeout: 3_000 });
+
+    // Now select text in the editor — the overlay is passthrough so this works
+    const editor = page.getByTestId('editor-area');
+    await editor.click();
+    await page.keyboard.press('Control+a');
+    await page.waitForTimeout(600); // allow selectionchange → state update → MutationObserver
+
+    // Once text is selected the "Review This Selection" button appears, the
+    // MutationObserver fires, and the overlay should spotlight it
+    await expect(page.locator('[data-testid="tutorial-backdrop-missing"]')).not.toBeAttached({ timeout: 5_000 });
+
+    // Clean up
+    await page.getByTestId('tutorial-skip').click();
+    await expect(page.getByTestId('tutorial-card')).not.toBeVisible({ timeout: 3_000 });
+  });
 });
 
 // Export helper for use in mobile-layout.spec.ts

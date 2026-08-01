@@ -9,7 +9,7 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "validate-url": "node scripts/validate-production-url.js",
-    "test:e2e": "LD_LIBRARY_PATH=$HOME/.nix-profile/lib:$LD_LIBRARY_PATH playwright test --config playwright.config.ts"
+    "test:e2e": "LD_LIBRARY_PATH=$REPLIT_LD_LIBRARY_PATH:$LD_LIBRARY_PATH playwright test --config playwright.config.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",

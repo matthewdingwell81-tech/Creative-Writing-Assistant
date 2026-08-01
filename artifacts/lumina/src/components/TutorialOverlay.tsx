@@ -88,6 +88,8 @@ export default function TutorialOverlay() {
   const [spotlightRect, setSpotlightRect] = useState<Rect | null>(null);
   /** True while we are still searching for the target element (before rect is known) */
   const [locating, setLocating] = useState(false);
+  /** True when all retries exhausted and target was never found (and step is not auto-skipped) */
+  const [targetMissing, setTargetMissing] = useState(false);
   const [cardHeight, setCardHeight] = useState(160);
   const cardRef = useRef<HTMLDivElement>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -108,6 +110,7 @@ export default function TutorialOverlay() {
     if (rect) {
       setSpotlightRect(rect);
       setLocating(false);
+      setTargetMissing(false);
       retryCountRef.current = 0;
       return;
     }
@@ -122,8 +125,10 @@ export default function TutorialOverlay() {
       if (skipIfMissing) {
         // Auto-advance to skip this step
         skipCurrentStep();
+      } else {
+        // Gracefully degrade: show centred card with no spotlight; flag that target is missing
+        setTargetMissing(true);
       }
-      // else: fall through — show centred card with full backdrop
     }
   }, [skipCurrentStep]);
 
@@ -140,6 +145,7 @@ export default function TutorialOverlay() {
 
     currentStepIdRef.current = currentStep.id;
     setSpotlightRect(null);
+    setTargetMissing(false);
     setLocating(true); // don't block interactions while searching for the target
 
     // Fire side effect first (e.g. open assistant sheet), then locate
@@ -171,6 +177,37 @@ export default function TutorialOverlay() {
       window.removeEventListener('scroll', handler, true);
     };
   }, [currentStep]);
+
+  // When target is missing: watch the DOM with a MutationObserver so that
+  // as soon as the target element appears (e.g. user selects text, opens a
+  // panel) we can spotlight it automatically without requiring a scroll/resize.
+  useEffect(() => {
+    if (!targetMissing || !currentStep) return;
+
+    const stepId = currentStep.id;
+    const target = currentStep.target;
+
+    const check = () => {
+      if (currentStepIdRef.current !== stepId) return;
+      const rect = rectFromEl(target);
+      if (rect) {
+        setSpotlightRect(rect);
+        setTargetMissing(false);
+      }
+    };
+
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+
+    // Also run a lightweight poll (500 ms) in case the element appears via a
+    // CSS change that doesn't trigger MutationObserver (e.g. visibility toggle)
+    const pollId = setInterval(check, 500);
+
+    return () => {
+      observer.disconnect();
+      clearInterval(pollId);
+    };
+  }, [targetMissing, currentStep]);
 
   // Measure card height after render
   useEffect(() => {
@@ -213,9 +250,14 @@ export default function TutorialOverlay() {
           {/* spotlight ring */}
           <div style={{ position: 'fixed', top: sr.top, left: sr.left, width: sr.width, height: sr.height, borderRadius: 8, boxShadow: '0 0 0 2px rgba(139,92,246,0.8)', pointerEvents: 'none' }} />
         </>
-      ) : !locating ? (
-        // Target not found after retries (and skipIfTargetMissing is false) — show full backdrop
-        <div style={{ position: 'fixed', inset: 0, background: bgColor, pointerEvents: 'auto' }} data-testid="tutorial-backdrop-full" />
+      ) : targetMissing ? (
+        // Target not found — keep overlay fully transparent to pointer events so
+        // the user can interact with the page (e.g. select text) to fulfil the
+        // step's prerequisites. The tooltip card is still visible (pointerEvents: 'auto'
+        // set on the card element below). A subtle ambient dim is applied via the
+        // card's own shadow rather than a blocking full backdrop.
+        // data-testid retained for assertions.
+        <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }} data-testid="tutorial-backdrop-missing" />
       ) : null}
 
       {/* Tooltip card */}
@@ -243,6 +285,12 @@ export default function TutorialOverlay() {
         </div>
 
         <p className="text-xs text-muted-foreground leading-relaxed mb-4">{currentStep.body}</p>
+
+        {targetMissing && currentStep.missingTargetHint && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mb-4 leading-relaxed">
+            {currentStep.missingTargetHint}
+          </p>
+        )}
 
         <div className="flex items-center justify-between gap-2">
           <button

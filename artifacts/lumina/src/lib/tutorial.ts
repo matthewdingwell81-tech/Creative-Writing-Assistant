@@ -16,6 +16,13 @@ export interface TutorialStep {
    */
   skipIfTargetMissing?: boolean;
   /**
+   * When the target element cannot be found after retries and `skipIfTargetMissing`
+   * is false, this message is shown in the tooltip card so the user understands
+   * why there is no spotlight highlight.
+   * e.g. "Select some text in the editor first to see this feature."
+   */
+  missingTargetHint?: string;
+  /**
    * Optional key for a side-effect handler registered by Home.tsx.
    * Called when this step becomes active so the required UI panel is opened.
    * e.g. 'openAssistant', 'openScratchpad'
@@ -151,7 +158,7 @@ export const FULL_TOUR: TutorialStep[] = [
     sideEffect: 'openAssistant',
     skipIfTargetMissing: true,
   },
-  // 8. Review selection — only visible when text is selected; always skip if missing
+  // 8. Review selection — only visible when text is selected
   {
     id: 'review-selection',
     featureKey: 'assistant',
@@ -159,7 +166,7 @@ export const FULL_TOUR: TutorialStep[] = [
     title: 'Review a Selection',
     body: 'Select any passage in the editor, then click "Review This Selection" to get focused AI feedback on just that text.',
     placement: 'top',
-    skipIfTargetMissing: true,
+    missingTargetHint: 'Select some text in the editor first — the "Review This Selection" button will appear above it.',
   },
   // 9. Ideas Scratchpad toggle (fixed button; only shown when doc is active)
   {
