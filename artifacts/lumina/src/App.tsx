@@ -8,6 +8,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import AuthPage from "@/pages/AuthPage";
 import { useAuth } from "@/hooks/useAuth";
+import { setSessionExpired } from "@/lib/sessionState";
 
 function SessionExpiredHandler() {
   const [, setLocation] = useLocation();
@@ -16,7 +17,8 @@ function SessionExpiredHandler() {
     function handleExpired() {
       queryClient.setQueryData(["/api/auth/me"], null);
       queryClient.clear();
-      setLocation("/auth?expired=1", { replace: true });
+      setSessionExpired();
+      setLocation("/auth", { replace: true });
     }
 
     window.addEventListener("lumina:session-expired", handleExpired);

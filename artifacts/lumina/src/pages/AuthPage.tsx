@@ -1,22 +1,15 @@
-import { useState, useEffect } from "react";
-import { useSearch } from "wouter";
+import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { consumeSessionExpired } from "@/lib/sessionState";
 
 export default function AuthPage() {
-  const search = useSearch();
-  const sessionExpired = new URLSearchParams(search).get("expired") === "1";
+  // Consume the flag once at mount — clears it immediately so back-navigation
+  // or re-renders never show a stale banner.
+  const [sessionExpired] = useState(() => consumeSessionExpired());
   const [mode, setMode] = useState<"login" | "register">("login");
-
-  // Replace the history entry to strip ?expired=1 so pressing back won't
-  // re-show the expired banner after a successful sign-in.
-  useEffect(() => {
-    if (sessionExpired) {
-      window.history.replaceState(null, "", window.location.pathname);
-    }
-  }, [sessionExpired]);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
