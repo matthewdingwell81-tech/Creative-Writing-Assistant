@@ -804,24 +804,42 @@ export default function Home() {
           </button>
         )}
 
-        {activeDocId && showScratchpad && (
-          <>
-            <div className="fixed inset-0 z-20 animate-in fade-in duration-150" onClick={() => setShowScratchpad(false)} data-testid="scratchpad-backdrop" />
-            <div className="fixed left-0 top-14 bottom-0 z-20 w-[300px] bg-card/95 backdrop-blur-sm border-r border-border/50 shadow-xl flex flex-col animate-in slide-in-from-left duration-200" data-testid="scratchpad-drawer">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 shrink-0">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Lightbulb className="w-4 h-4 text-primary" />
-                  <span>Ideas Scratchpad</span>
+        {activeDocId && (
+          isMobile ? (
+            <Sheet open={showScratchpad} onOpenChange={setShowScratchpad}>
+              <SheetContent side="left" className="w-full max-w-sm p-0 flex flex-col" data-testid="scratchpad-drawer">
+                <SheetHeader className="px-4 py-3 border-b border-border/50 shrink-0">
+                  <SheetTitle className="text-sm flex items-center gap-2">
+                    <Lightbulb className="w-4 h-4 text-primary" />
+                    Ideas Scratchpad
+                  </SheetTitle>
+                </SheetHeader>
+                <div className="flex-1 overflow-y-auto">
+                  <IdeasPanel documentId={activeDocId} onAskAssistant={handleAskAssistantForIdea} assistantLoading={ideaAssistantLoading} drawerMode />
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setShowScratchpad(false)} data-testid="btn-close-scratchpad">
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                <IdeasPanel documentId={activeDocId} onAskAssistant={handleAskAssistantForIdea} assistantLoading={ideaAssistantLoading} drawerMode />
-              </div>
-            </div>
-          </>
+              </SheetContent>
+            </Sheet>
+          ) : (
+            showScratchpad && (
+              <>
+                <div className="fixed inset-0 z-20 animate-in fade-in duration-150" onClick={() => setShowScratchpad(false)} data-testid="scratchpad-backdrop" />
+                <div className="fixed left-0 top-14 bottom-0 z-20 w-[300px] bg-card/95 backdrop-blur-sm border-r border-border/50 shadow-xl flex flex-col animate-in slide-in-from-left duration-200" data-testid="scratchpad-drawer">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 shrink-0">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Lightbulb className="w-4 h-4 text-primary" />
+                      <span>Ideas Scratchpad</span>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setShowScratchpad(false)} data-testid="btn-close-scratchpad">
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto">
+                    <IdeasPanel documentId={activeDocId} onAskAssistant={handleAskAssistantForIdea} assistantLoading={ideaAssistantLoading} drawerMode />
+                  </div>
+                </div>
+              </>
+            )
+          )
         )}
       </main>
 
