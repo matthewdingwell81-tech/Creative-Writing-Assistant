@@ -129,15 +129,31 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     path.join(distDir, "table.sql")
   );
 
-  // Post-build assertion: verify all required non-JS assets are present in dist/.
-  // If any file is missing the build exits non-zero so a broken server never ships.
-  const requiredAssets = [
-    "table.sql", // session store schema — copied from connect-pg-simple above
+  // ─── Required non-JS runtime assets ────────────────────────────────────────
+  // List every file that must be present in dist/ at server startup.
+  // esbuild only bundles JS — any file read at runtime via fs/path must be
+  // copied here explicitly and registered in this array.
+  //
+  // HOW TO ADD A NEW ASSET:
+  //   1. Add a copyFile() call above that copies the file into dist/.
+  //   2. Add an entry to REQUIRED_ASSETS below with a "hint" describing
+  //      where the source file lives (so the error message is actionable).
+  //
+  // The post-build assertion below will exit the build non-zero if any
+  // registered asset is missing, preventing a broken server from shipping.
+  // ───────────────────────────────────────────────────────────────────────────
+  const REQUIRED_ASSETS = [
+    {
+      file: "table.sql",
+      hint: "copied from connect-pg-simple package — see the copyFile() call above",
+    },
+    // Example for future assets:
+    // { file: "emails/welcome.html", hint: "copied from src/emails/welcome.html" },
   ];
 
   const missing = [];
-  for (const asset of requiredAssets) {
-    const assetPath = path.join(distDir, asset);
+  for (const asset of REQUIRED_ASSETS) {
+    const assetPath = path.join(distDir, asset.file);
     try {
       await access(assetPath);
     } catch {
@@ -148,13 +164,17 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   if (missing.length > 0) {
     console.error(
       `\nBuild error: the following required asset files are missing from dist/:\n` +
-        missing.map((f) => `  - ${f}`).join("\n") +
-        `\n\nEnsure each file is copied into dist/ before this assertion runs.`
+        missing.map(({ file, hint }) => `  - ${file}  (${hint})`).join("\n") +
+        `\n\nAdd a copyFile() call in build.mjs to copy each missing file into dist/,` +
+        `\nthen register it in the REQUIRED_ASSETS array so future builds catch regressions.`
     );
     process.exit(1);
   }
 
-  console.log("Post-build asset check passed:", requiredAssets.join(", "));
+  console.log(
+    "Post-build asset check passed:",
+    REQUIRED_ASSETS.map(({ file }) => file).join(", ")
+  );
 }
 
 buildAll().catch((err) => {
