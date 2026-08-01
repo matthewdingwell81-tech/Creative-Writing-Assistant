@@ -16,7 +16,7 @@ function SessionExpiredHandler() {
     function handleExpired() {
       queryClient.setQueryData(["/api/auth/me"], null);
       queryClient.clear();
-      setLocation("/auth?expired=1");
+      setLocation("/auth?expired=1", { replace: true });
     }
 
     window.addEventListener("lumina:session-expired", handleExpired);
