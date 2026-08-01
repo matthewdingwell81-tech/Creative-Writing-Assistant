@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm, copyFile } from "node:fs/promises";
+import { rm, copyFile, access } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -128,6 +128,33 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     path.join(pgSimpleDir, "table.sql"),
     path.join(distDir, "table.sql")
   );
+
+  // Post-build assertion: verify all required non-JS assets are present in dist/.
+  // If any file is missing the build exits non-zero so a broken server never ships.
+  const requiredAssets = [
+    "table.sql", // session store schema — copied from connect-pg-simple above
+  ];
+
+  const missing = [];
+  for (const asset of requiredAssets) {
+    const assetPath = path.join(distDir, asset);
+    try {
+      await access(assetPath);
+    } catch {
+      missing.push(asset);
+    }
+  }
+
+  if (missing.length > 0) {
+    console.error(
+      `\nBuild error: the following required asset files are missing from dist/:\n` +
+        missing.map((f) => `  - ${f}`).join("\n") +
+        `\n\nEnsure each file is copied into dist/ before this assertion runs.`
+    );
+    process.exit(1);
+  }
+
+  console.log("Post-build asset check passed:", requiredAssets.join(", "));
 }
 
 buildAll().catch((err) => {
