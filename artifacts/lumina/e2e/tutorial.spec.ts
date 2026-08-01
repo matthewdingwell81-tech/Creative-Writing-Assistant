@@ -2,10 +2,12 @@
  * Tutorial system E2E tests.
  *
  * Covers:
- *  - First-visit auto-launch of the full tour
- *  - Tutorial card renders with correct step counter
+ *  - Full tour launches via Help menu → card shows "Step 1 of N"
  *  - "Next" advances the step counter
+ *  - "Prev" goes back one step
  *  - "Skip tour" dismisses the overlay
+ *  - Focus Mode mini-tour launches from the first-use toast "Take tour →" action
+ *  - Clicking "Done" on the last step persists the completion flag to localStorage
  *  - Help-menu replay launches a completed tour on demand
  *  - Missing-target auto-skip: a tour can be navigated through without hanging
  */
@@ -85,9 +87,29 @@ test.describe('Tutorial system', () => {
 
     // Tutorial card should appear automatically within a few seconds
     await expect(page.getByTestId('tutorial-card')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('tutorial-card')).toContainText('Step 1');
+    // Verify step counter reads "Step 1 of N"
+    await expect(page.getByTestId('tutorial-card')).toContainText(/Step 1 of \d+/);
 
     // Clean up
+    await page.getByTestId('tutorial-skip').click();
+  });
+
+  test('Help-menu full tour shows "Step 1 of N" on the card', async ({ page }) => {
+    await bootWithTutorialDismissed(page);
+
+    // Mark full tour done so the reload in boot doesn't auto-launch it
+    await page.evaluate(() => {
+      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
+    });
+
+    // Launch full tour from Help menu
+    await page.getByTestId('btn-help-menu').click();
+    await page.getByTestId('tour-full').click();
+
+    await expect(page.getByTestId('tutorial-card')).toBeVisible({ timeout: 5_000 });
+    // Confirm the step counter text is "Step 1 of <number>"
+    await expect(page.getByTestId('tutorial-card')).toContainText(/Step 1 of \d+/);
+
     await page.getByTestId('tutorial-skip').click();
   });
 
@@ -99,12 +121,34 @@ test.describe('Tutorial system', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page.getByTestId('tutorial-card')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('tutorial-card')).toContainText('Step 1');
+    await expect(page.getByTestId('tutorial-card')).toContainText(/Step 1 of \d+/);
 
     await page.getByTestId('tutorial-next').click();
 
     // Step counter should now read 2 (or higher if step 2 was auto-skipped)
     await expect(page.getByTestId('tutorial-card')).toContainText(/Step [2-9]/, { timeout: 5_000 });
+
+    await page.getByTestId('tutorial-skip').click();
+  });
+
+  test('"Prev" goes back one step', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+    await clearTutorialState(page);
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByTestId('tutorial-card')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('tutorial-card')).toContainText(/Step 1 of \d+/);
+
+    // Advance to step 2
+    await page.getByTestId('tutorial-next').click();
+    await expect(page.getByTestId('tutorial-card')).toContainText(/Step [2-9]/, { timeout: 5_000 });
+
+    // Go back — should return to step 1
+    await expect(page.getByTestId('tutorial-prev')).toBeVisible({ timeout: 3_000 });
+    await page.getByTestId('tutorial-prev').click();
+    await expect(page.getByTestId('tutorial-card')).toContainText(/Step 1/, { timeout: 5_000 });
 
     await page.getByTestId('tutorial-skip').click();
   });
@@ -121,6 +165,77 @@ test.describe('Tutorial system', () => {
     await page.getByTestId('tutorial-skip').click();
 
     await expect(page.getByTestId('tutorial-card')).not.toBeVisible({ timeout: 3_000 });
+  });
+
+  test('Focus Mode mini-tour launches from the first-use toast "Take tour →" action', async ({ page }) => {
+    await bootWithTutorialDismissed(page);
+
+    // Mark everything done so no auto-launches interfere
+    await page.evaluate(() => {
+      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
+    });
+    // Clear first-use flags so the focusMode toast fires on next toggle
+    await page.evaluate(() => {
+      localStorage.removeItem('lumina_first_use');
+    });
+
+    // Click the Focus Mode button to trigger the first-use toast
+    await page.getByTestId('btn-toggle-focus-mode').first().click();
+
+    // The first-use toast appears after ~600 ms with a "Take tour →" action
+    const toastAction = page.getByRole('button', { name: /Take tour/i });
+    await expect(toastAction).toBeVisible({ timeout: 5_000 });
+    await toastAction.click();
+
+    // Tutorial card should now be visible showing the Focus Mode tour
+    await expect(page.getByTestId('tutorial-card')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('tutorial-card')).toContainText('Focus Mode');
+
+    await page.getByTestId('tutorial-skip').click();
+  });
+
+  test('"Done" on the last step persists the completion flag to localStorage', async ({ page }) => {
+    await bootWithTutorialDismissed(page);
+
+    // Mark full tour done to prevent auto-launch interference
+    await page.evaluate(() => {
+      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
+    });
+
+    // Launch the Focus Mode tour — it has only one visible step (shortest tour)
+    await page.getByTestId('btn-help-menu').click();
+    await page.getByTestId('tour-focusMode').click();
+
+    await expect(page.getByTestId('tutorial-card')).toBeVisible({ timeout: 5_000 });
+
+    // Navigate to the last step: click Next until we see Done, then click Done
+    for (let i = 0; i < 20; i++) {
+      const doneBtn = page.getByTestId('tutorial-done');
+      if (await doneBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+        await doneBtn.click();
+        break;
+      }
+      const nextBtn = page.getByTestId('tutorial-next');
+      if (await nextBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+        await nextBtn.click();
+      } else {
+        break;
+      }
+    }
+
+    // Overlay should be gone
+    await expect(page.getByTestId('tutorial-card')).not.toBeVisible({ timeout: 5_000 });
+
+    // localStorage must have the focusMode tour flagged as done
+    const isDone = await page.evaluate(() => {
+      try {
+        const stored = JSON.parse(localStorage.getItem('lumina_tutorial_done') || '{}');
+        return stored['focusMode'] === true;
+      } catch {
+        return false;
+      }
+    });
+    expect(isDone).toBe(true);
   });
 
   test('Help-menu button launches a tour on demand', async ({ page }) => {
