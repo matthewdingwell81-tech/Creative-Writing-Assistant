@@ -34,7 +34,7 @@ interface SuggestionsSidebarProps {
   externalIdeaPrompt?: { prompt: string; id: number } | null;
   onExternalIdeaHandled?: () => void;
   onScrollToSuggestion?: (original: string) => void;
-  onInsertText?: (text: string) => void;
+  onInsertText?: (text: string) => Promise<boolean>;
 }
 
 const severityConfig = {
@@ -207,6 +207,8 @@ export default function SuggestionsSidebar({
   const [coachMessages, setCoachMessages] = useState<CoachMessage[]>([]);
   const [coachInput, setCoachInput] = useState('');
   const [coachLoading, setCoachLoading] = useState(false);
+  const [coachInsertStates, setCoachInsertStates] = useState<Record<number, 'inserting' | 'inserted'>>({});
+  const coachInsertInFlightRef = useRef<Set<number>>(new Set());
   const coachScrollRef = useRef<HTMLDivElement>(null);
   const coachInputRef = useRef<HTMLTextAreaElement>(null);
   const coachAbortRef = useRef<AbortController | null>(null);
@@ -313,7 +315,33 @@ export default function SuggestionsSidebar({
 
   const handleCoachReset = () => {
     if (coachAbortRef.current) { coachAbortRef.current.abort(); coachAbortRef.current = null; }
+    coachInsertInFlightRef.current.clear();
+    setCoachInsertStates({});
     setCoachMessages([]); setCoachInput(''); setCoachLoading(false);
+  };
+
+  const handleCoachInsert = async (messageIndex: number, text: string) => {
+    if (!onInsertText || coachInsertInFlightRef.current.has(messageIndex) || coachInsertStates[messageIndex] === 'inserted') return;
+
+    coachInsertInFlightRef.current.add(messageIndex);
+    setCoachInsertStates(prev => ({ ...prev, [messageIndex]: 'inserting' }));
+    try {
+      const inserted = await onInsertText(text);
+      setCoachInsertStates(prev => {
+        if (inserted) return { ...prev, [messageIndex]: 'inserted' };
+        const next = { ...prev };
+        delete next[messageIndex];
+        return next;
+      });
+    } catch {
+      setCoachInsertStates(prev => {
+        const next = { ...prev };
+        delete next[messageIndex];
+        return next;
+      });
+    } finally {
+      coachInsertInFlightRef.current.delete(messageIndex);
+    }
   };
 
   const grammarSuggestions = suggestions.filter(s => s.type === 'grammar');
@@ -603,12 +631,19 @@ export default function SuggestionsSidebar({
                         </div>
                         {msg.role === 'assistant' && msg.content && !(coachLoading && i === coachMessages.length - 1) && onInsertText && (
                           <button
-                            onClick={() => onInsertText(msg.content)}
+                            onClick={() => void handleCoachInsert(i, msg.content)}
+                            disabled={coachInsertStates[i] !== undefined}
                             className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-primary/10 transition-colors [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:px-3"
                             data-testid={`btn-coach-insert-${i}`}
                           >
-                            <ClipboardCopy className="w-2.5 h-2.5" />
-                            Insert
+                            {coachInsertStates[i] === 'inserting' ? (
+                              <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                            ) : coachInsertStates[i] === 'inserted' ? (
+                              <Check className="w-2.5 h-2.5" />
+                            ) : (
+                              <ClipboardCopy className="w-2.5 h-2.5" />
+                            )}
+                            {coachInsertStates[i] === 'inserting' ? 'Inserting…' : coachInsertStates[i] === 'inserted' ? 'Inserted' : 'Insert'}
                           </button>
                         )}
                       </div>

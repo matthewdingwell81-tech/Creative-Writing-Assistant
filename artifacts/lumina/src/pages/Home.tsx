@@ -377,7 +377,7 @@ export default function Home() {
   }, [save, title, requestSuggestions, documentType]);
 
   const handleInsertCoachText = useCallback(async (text: string) => {
-    if (!activeDocId) return;
+    if (!activeDocId) return false;
 
     const liveContent = editorHandle.current?.getCleanContent();
     const currentContent = liveContent !== undefined ? liveContent : content;
@@ -392,6 +392,7 @@ export default function Home() {
     if (saved && !focusMode) {
       requestSuggestions(appended, documentType);
     }
+    return saved;
   }, [activeDocId, activeChapterId, content, saveNow, title, focusMode, requestSuggestions, documentType]);
 
   const handleNewDocument = useCallback(() => {

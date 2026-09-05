@@ -64,13 +64,25 @@ test('Coach Insert preserves current text and persists the response', async ({ p
     const insertButton = page.locator('[data-testid^="btn-coach-insert-"]').last();
     await expect(insertButton).toBeVisible();
 
+    let saveRequestCount = 0;
+    page.on('request', request => {
+      if (request.url().endsWith(`/api/chapters/${chapter.id}`) && request.method() === 'PATCH') {
+        saveRequestCount += 1;
+      }
+    });
     const persisted = page.waitForResponse(response =>
       response.url().endsWith(`/api/chapters/${chapter.id}`) &&
       response.request().method() === 'PATCH' &&
       response.ok()
     );
-    await insertButton.click();
+    await insertButton.evaluate((button: HTMLButtonElement) => {
+      button.click();
+      button.click();
+    });
+    await expect(insertButton).toBeDisabled();
     await persisted;
+    await expect(insertButton).toHaveText('Inserted');
+    expect(saveRequestCount).toBe(1);
 
     await expect(editor).toContainText(typedText);
     await expect(editor).toContainText(coachText);
