@@ -57,5 +57,27 @@ export default defineConfig({
       dependencies: ['setup'],
       testMatch: '**/tutorial.spec.ts',
     },
+    {
+      name: 'coach-insert-desktop',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 1280, height: 720 },
+        storageState: 'e2e/.auth/mobile.json',
+      },
+      dependencies: ['setup'],
+      testMatch: '**/coach-insert.spec.ts',
+    },
+    {
+      name: 'coach-insert-mobile',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 375, height: 812 },
+        hasTouch: true,
+        isMobile: true,
+        storageState: 'e2e/.auth/mobile.json',
+      },
+      dependencies: ['setup'],
+      testMatch: '**/coach-insert.spec.ts',
+    },
   ],
 });

@@ -87,6 +87,26 @@ function replaceTextInHtml(html: string, originalText: string, newText: string):
   return tempDiv.innerHTML;
 }
 
+function appendPlainTextToHtml(html: string, text: string): string {
+  const container = document.createElement('div');
+  container.innerHTML = html;
+
+  if (container.childNodes.length > 0) {
+    const spacer = document.createElement('p');
+    spacer.appendChild(document.createElement('br'));
+    container.appendChild(spacer);
+  }
+
+  const paragraph = document.createElement('p');
+  text.split('\n').forEach((line, index) => {
+    if (index > 0) paragraph.appendChild(document.createElement('br'));
+    paragraph.appendChild(document.createTextNode(line));
+  });
+  container.appendChild(paragraph);
+
+  return container.innerHTML;
+}
+
 export default function Home() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -165,7 +185,7 @@ export default function Home() {
     });
   }, [registerSideEffect, cancelPending]);
 
-  const { save, saving, lastSaved } = useAutoSave(activeDocId, activeChapterId, {
+  const { save, saveNow, saving, lastSaved } = useAutoSave(activeDocId, activeChapterId, {
     onSaveError: () => {
       toast({
         title: "Could not save your changes",
@@ -355,6 +375,24 @@ export default function Home() {
       });
     }, 100);
   }, [save, title, requestSuggestions, documentType]);
+
+  const handleInsertCoachText = useCallback(async (text: string) => {
+    if (!activeDocId) return;
+
+    const liveContent = editorHandle.current?.getCleanContent();
+    const currentContent = liveContent !== undefined ? liveContent : content;
+    const appended = appendPlainTextToHtml(currentContent, text);
+
+    setContent(appended);
+    setDocChapters(prev => prev.map(chapter =>
+      chapter.id === activeChapterId ? { ...chapter, content: appended } : chapter
+    ));
+
+    const saved = await saveNow(appended, title);
+    if (saved && !focusMode) {
+      requestSuggestions(appended, documentType);
+    }
+  }, [activeDocId, activeChapterId, content, saveNow, title, focusMode, requestSuggestions, documentType]);
 
   const handleNewDocument = useCallback(() => {
     createMutation.mutate({ title: 'Untitled', content: '', documentType: 'fiction' });
@@ -876,11 +914,7 @@ export default function Home() {
                     externalIdeaPrompt={ideaAssistantPrompt}
                     onExternalIdeaHandled={() => { setIdeaAssistantPrompt(null); setIdeaAssistantLoading(false); }}
                     onScrollToSuggestion={(text) => editorHandle.current?.scrollToSuggestion(text)}
-                    onInsertText={(text) => {
-                      const appended = (content ? content + '\n\n' : '') + text;
-                      setContent(appended);
-                      save(appended, title);
-                    }}
+                    onInsertText={handleInsertCoachText}
                   />
                 </SheetContent>
               </Sheet>
@@ -904,11 +938,7 @@ export default function Home() {
                 externalIdeaPrompt={ideaAssistantPrompt}
                 onExternalIdeaHandled={() => { setIdeaAssistantPrompt(null); setIdeaAssistantLoading(false); }}
                 onScrollToSuggestion={(text) => editorHandle.current?.scrollToSuggestion(text)}
-                onInsertText={(text) => {
-                  const appended = (content ? content + '\n\n' : '') + text;
-                  setContent(appended);
-                  save(appended, title);
-                }}
+                onInsertText={handleInsertCoachText}
               />
             </aside>
           )
