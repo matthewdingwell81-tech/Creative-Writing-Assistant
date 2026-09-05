@@ -31,6 +31,7 @@ export interface IStorage {
   getChapter(id: number): Promise<Chapter | undefined>;
   createChapter(chapter: InsertChapter): Promise<Chapter>;
   updateChapter(id: number, updates: Partial<InsertChapter>): Promise<Chapter | undefined>;
+  reorderChapters(documentId: number, chapterIds: number[]): Promise<Chapter[]>;
   deleteChapter(id: number): Promise<void>;
 }
 
@@ -111,6 +112,23 @@ export class DatabaseStorage implements IStorage {
       .where(eq(chapters.id, id))
       .returning();
     return updated;
+  }
+
+  async reorderChapters(documentId: number, chapterIds: number[]): Promise<Chapter[]> {
+    return db.transaction(async (tx) => {
+      for (const [position, chapterId] of chapterIds.entries()) {
+        await tx
+          .update(chapters)
+          .set({ position })
+          .where(and(eq(chapters.id, chapterId), eq(chapters.documentId, documentId)));
+      }
+
+      return tx
+        .select()
+        .from(chapters)
+        .where(eq(chapters.documentId, documentId))
+        .orderBy(asc(chapters.position));
+    });
   }
 
   async deleteChapter(id: number): Promise<void> {

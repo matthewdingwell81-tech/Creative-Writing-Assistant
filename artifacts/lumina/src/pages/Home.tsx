@@ -5,13 +5,13 @@ import SuggestionsSidebar from '@/components/SuggestionsSidebar';
 import DocumentList from '@/components/DocumentList';
 import GoogleDocsDialog from '@/components/GoogleDocsDialog';
 import IdeasPanel from '@/components/IdeasPanel';
-import { Sparkles, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus, Pencil, Plus, Check, Loader2, MoreHorizontal, HelpCircle } from 'lucide-react';
+import { Sparkles, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus, Pencil, Plus, Check, Loader2, MoreHorizontal, HelpCircle, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { fetchDocuments, fetchDocument, createDocument, updateDocument, fetchChapters, createChapter, updateChapter as updateChapterApi, SessionExpiredError } from '@/lib/api';
+import { fetchDocuments, fetchDocument, createDocument, updateDocument, fetchChapters, createChapter, updateChapter as updateChapterApi, reorderChapters, SessionExpiredError } from '@/lib/api';
 import { useSuggestions } from '@/hooks/useSuggestions';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useToast } from '@/hooks/use-toast';
@@ -133,6 +133,7 @@ export default function Home() {
   const [renamingChapterId, setRenamingChapterId] = useState<number | null>(null);
   const [chapterTitleInput, setChapterTitleInput] = useState('');
   const [chapterTitleSaving, setChapterTitleSaving] = useState(false);
+  const [chapterReorderSaving, setChapterReorderSaving] = useState(false);
 
   const { start: startTutorial, registerSideEffect } = useTutorial();
 
@@ -341,6 +342,34 @@ export default function Home() {
     }
   }, [renamingChapterId, chapterTitleInput, chapterTitleSaving, toast]);
 
+  const handleMoveChapter = useCallback(async (direction: 'up' | 'down') => {
+    if (!activeDocId || !activeChapterId || chapterReorderSaving) return;
+
+    const currentIndex = docChapters.findIndex((chapter) => chapter.id === activeChapterId);
+    const nextIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= docChapters.length) return;
+
+    const previousOrder = docChapters;
+    const nextOrder = [...docChapters];
+    [nextOrder[currentIndex], nextOrder[nextIndex]] = [nextOrder[nextIndex], nextOrder[currentIndex]];
+    setDocChapters(nextOrder);
+    setChapterReorderSaving(true);
+
+    try {
+      await reorderChapters(activeDocId, nextOrder.map((chapter) => chapter.id));
+    } catch (err) {
+      setDocChapters(previousOrder);
+      if (err instanceof SessionExpiredError) return;
+      toast({
+        title: "Could not reorder chapters",
+        description: "The chapter order was restored. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setChapterReorderSaving(false);
+    }
+  }, [activeDocId, activeChapterId, chapterReorderSaving, docChapters, toast]);
+
   const handleContentChange = useCallback((newContent: string) => {
     setContent(newContent);
     save(newContent, title);
@@ -489,6 +518,30 @@ export default function Home() {
           </SelectItem>
         </SelectContent>
       </Select>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 text-muted-foreground hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
+        onClick={() => handleMoveChapter('up')}
+        disabled={chapterReorderSaving || docChapters.findIndex((chapter) => chapter.id === activeChapterId) <= 0}
+        title="Move chapter earlier"
+        aria-label="Move chapter earlier"
+        data-testid="btn-move-chapter-up"
+      >
+        <ChevronUp className="w-3.5 h-3.5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 text-muted-foreground hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
+        onClick={() => handleMoveChapter('down')}
+        disabled={chapterReorderSaving || docChapters.findIndex((chapter) => chapter.id === activeChapterId) === docChapters.length - 1}
+        title="Move chapter later"
+        aria-label="Move chapter later"
+        data-testid="btn-move-chapter-down"
+      >
+        <ChevronDown className="w-3.5 h-3.5" />
+      </Button>
       <Button
         variant="ghost"
         size="icon"
@@ -736,6 +789,22 @@ export default function Home() {
                     >
                       <Pencil className="w-3.5 h-3.5 mr-2" />
                       Rename Chapter
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleMoveChapter('up')}
+                      disabled={chapterReorderSaving || docChapters.findIndex((chapter) => chapter.id === activeChapterId) <= 0}
+                      data-testid="mobile-move-chapter-up"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5 mr-2" />
+                      Move Chapter Earlier
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleMoveChapter('down')}
+                      disabled={chapterReorderSaving || docChapters.findIndex((chapter) => chapter.id === activeChapterId) === docChapters.length - 1}
+                      data-testid="mobile-move-chapter-down"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5 mr-2" />
+                      Move Chapter Later
                     </DropdownMenuItem>
                   </>
                 )}

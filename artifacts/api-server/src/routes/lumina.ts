@@ -336,6 +336,48 @@ const chapterUpdateSchema = z.object({
   position: z.number().int().optional(),
 });
 
+const chapterReorderSchema = z.object({
+  chapterIds: z.array(z.number().int()).min(1),
+});
+
+router.patch("/documents/:docId/chapters/order", requireAuth, async (req: Request, res: Response) => {
+  const docId = parseInt(req.params.docId as string);
+  if (isNaN(docId)) {
+    res.status(400).json({ error: "Invalid document ID" });
+    return;
+  }
+
+  const doc = await storage.getDocument(docId, req.session.userId!);
+  if (!doc) {
+    res.status(404).json({ error: "Document not found" });
+    return;
+  }
+
+  const parsed = chapterReorderSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const currentChapters = await storage.getChapters(docId);
+  const requestedIds = parsed.data.chapterIds;
+  const currentIds = currentChapters.map((chapter) => chapter.id);
+  const requestedIdSet = new Set(requestedIds);
+  const currentIdSet = new Set(currentIds);
+  const hasSameChapterIds =
+    requestedIds.length === currentIds.length &&
+    requestedIdSet.size === currentIdSet.size &&
+    requestedIds.every((chapterId) => currentIdSet.has(chapterId));
+
+  if (!hasSameChapterIds) {
+    res.status(400).json({ error: "Chapter order must include each chapter exactly once" });
+    return;
+  }
+
+  const reordered = await storage.reorderChapters(docId, requestedIds);
+  res.json(reordered);
+});
+
 router.patch("/chapters/:id", requireAuth, async (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) {

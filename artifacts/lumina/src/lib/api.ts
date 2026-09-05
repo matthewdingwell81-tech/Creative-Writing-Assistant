@@ -117,6 +117,16 @@ export async function updateChapter(id: number, data: { title?: string; content?
   return res.json();
 }
 
+export async function reorderChapters(documentId: number, chapterIds: number[]) {
+  const res = await apiFetch(`/api/documents/${documentId}/chapters/order`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chapterIds }),
+  });
+  if (!res.ok) throw new Error("Failed to reorder chapters");
+  return res.json();
+}
+
 export async function deleteChapter(id: number) {
   const res = await apiFetch(`/api/chapters/${id}`, {
     method: "DELETE",
