@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { fetchDocuments, fetchDocument, createDocument, updateDocument, fetchChapters, createChapter, updateChapter as updateChapterApi, SessionExpiredError } from '@/lib/api';
 import { useSuggestions } from '@/hooks/useSuggestions';
 import { useAutoSave } from '@/hooks/useAutoSave';
@@ -131,6 +132,7 @@ export default function Home() {
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
   const [renamingChapterId, setRenamingChapterId] = useState<number | null>(null);
   const [chapterTitleInput, setChapterTitleInput] = useState('');
+  const [chapterTitleSaving, setChapterTitleSaving] = useState(false);
 
   const { start: startTutorial, registerSideEffect } = useTutorial();
 
@@ -307,21 +309,37 @@ export default function Home() {
     }
   }, [activeDocId, activeChapterId, content, docChapters, toast]);
 
+  const beginRenameChapter = useCallback((chapterId: number | null) => {
+    if (!chapterId) return;
+    const chapter = docChapters.find(c => c.id === chapterId);
+    if (!chapter) return;
+    setRenamingChapterId(chapter.id);
+    setChapterTitleInput(chapter.title);
+  }, [docChapters]);
+
   const handleSaveChapterTitle = useCallback(async () => {
-    if (!renamingChapterId || !chapterTitleInput.trim()) {
-      setRenamingChapterId(null);
+    if (!renamingChapterId || chapterTitleSaving) return;
+    if (!chapterTitleInput.trim()) {
+      toast({
+        title: "Chapter name required",
+        description: "Enter a name before saving this chapter.",
+        variant: "destructive",
+      });
       return;
     }
     const trimmed = chapterTitleInput.trim();
+    setChapterTitleSaving(true);
     try {
       await updateChapterApi(renamingChapterId, { title: trimmed });
       setDocChapters(prev => prev.map(c => c.id === renamingChapterId ? { ...c, title: trimmed } : c));
+      setRenamingChapterId(null);
     } catch (err) {
       if (err instanceof SessionExpiredError) return;
       toast({ title: "Could not rename chapter", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setChapterTitleSaving(false);
     }
-    setRenamingChapterId(null);
-  }, [renamingChapterId, chapterTitleInput, toast]);
+  }, [renamingChapterId, chapterTitleInput, chapterTitleSaving, toast]);
 
   const handleContentChange = useCallback((newContent: string) => {
     setContent(newContent);
@@ -436,73 +454,52 @@ export default function Home() {
 
   // Chapter selector used in both desktop header and mobile overflow menu
   const chapterSelector = activeDocId && docChapters.length > 0 ? (
-    renamingChapterId === activeChapterId ? (
-      <div className="flex items-center gap-1">
-        <input
-          className="h-8 w-[130px] rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring [@media(pointer:coarse)]:min-h-[44px]"
-          value={chapterTitleInput}
-          autoFocus
-          onChange={(e) => setChapterTitleInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSaveChapterTitle();
-            if (e.key === 'Escape') setRenamingChapterId(null);
-          }}
-          onBlur={handleSaveChapterTitle}
-          data-testid="input-chapter-title"
-        />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
-          onMouseDown={(e) => { e.preventDefault(); handleSaveChapterTitle(); }}
-          data-testid="btn-save-chapter-title"
-        >
-          <Check className="w-3 h-3" />
-        </Button>
-      </div>
-    ) : (
-      <>
-        <Select
-          value={activeChapterId?.toString() ?? ''}
-          onValueChange={(v) => {
-            if (v === '__new__') {
-              handleAddChapter();
-            } else {
-              handleSwitchChapter(parseInt(v));
-            }
-          }}
-        >
-          <SelectTrigger className="w-[140px] h-8 text-xs [@media(pointer:coarse)]:min-h-[44px]" data-testid="select-chapter">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {docChapters.map((ch) => (
-              <SelectItem key={ch.id} value={ch.id.toString()}>{ch.title}</SelectItem>
-            ))}
-            <SelectSeparator />
-            <SelectItem value="__new__" className="text-primary">
-              <span className="flex items-center gap-1.5">
-                <Plus className="w-3 h-3" />
-                Add Chapter
-              </span>
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
-          onClick={() => {
-            const chapter = docChapters.find(c => c.id === activeChapterId);
-            if (chapter) { setRenamingChapterId(chapter.id); setChapterTitleInput(chapter.title); }
-          }}
-          title="Rename chapter"
-          data-testid="btn-rename-chapter"
-        >
-          <Pencil className="w-3 h-3" />
-        </Button>
-      </>
-    )
+    <>
+      <Select
+        value={activeChapterId?.toString() ?? ''}
+        onValueChange={(v) => {
+          if (v === '__rename__') {
+            beginRenameChapter(activeChapterId);
+          } else if (v === '__new__') {
+            handleAddChapter();
+          } else {
+            handleSwitchChapter(parseInt(v));
+          }
+        }}
+      >
+        <SelectTrigger className="w-[140px] h-8 text-xs [@media(pointer:coarse)]:min-h-[44px]" data-testid="select-chapter">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {docChapters.map((ch) => (
+            <SelectItem key={ch.id} value={ch.id.toString()}>{ch.title}</SelectItem>
+          ))}
+          <SelectSeparator />
+          <SelectItem value="__rename__" data-testid="desktop-rename-chapter">
+            <span className="flex items-center gap-1.5">
+              <Pencil className="w-3 h-3" />
+              Rename Chapter
+            </span>
+          </SelectItem>
+          <SelectItem value="__new__" className="text-primary">
+            <span className="flex items-center gap-1.5">
+              <Plus className="w-3 h-3" />
+              Add Chapter
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 text-muted-foreground hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
+        onClick={() => beginRenameChapter(activeChapterId)}
+        title="Rename chapter"
+        data-testid="btn-rename-chapter"
+      >
+        <Pencil className="w-3 h-3" />
+      </Button>
+    </>
   ) : null;
 
   const docTypeLabels: Record<string, string> = {
@@ -733,6 +730,13 @@ export default function Home() {
                       <Plus className="w-3.5 h-3.5 mr-2" />
                       Add Chapter
                     </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => beginRenameChapter(activeChapterId)}
+                      data-testid="mobile-rename-chapter"
+                    >
+                      <Pencil className="w-3.5 h-3.5 mr-2" />
+                      Rename Chapter
+                    </DropdownMenuItem>
                   </>
                 )}
 
@@ -818,6 +822,54 @@ export default function Home() {
           </div>
         )}
       </header>
+
+      <Dialog
+        open={renamingChapterId !== null}
+        onOpenChange={(open) => {
+          if (!open && !chapterTitleSaving) setRenamingChapterId(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md" data-testid="rename-chapter-dialog">
+          <DialogHeader>
+            <DialogTitle>Rename Chapter</DialogTitle>
+            <DialogDescription>
+              Choose a name that makes this section easy to find.
+            </DialogDescription>
+          </DialogHeader>
+          <input
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            value={chapterTitleInput}
+            autoFocus
+            aria-label="Chapter name"
+            onChange={(e) => setChapterTitleInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSaveChapterTitle();
+              }
+            }}
+            disabled={chapterTitleSaving}
+            data-testid="input-chapter-title"
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRenamingChapterId(null)}
+              disabled={chapterTitleSaving}
+              data-testid="btn-cancel-chapter-title"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveChapterTitle}
+              disabled={chapterTitleSaving}
+              data-testid="btn-save-chapter-title"
+            >
+              {chapterTitleSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <main className="flex-1 flex overflow-hidden relative">
         {/* Document list: sheet on mobile, aside on desktop */}

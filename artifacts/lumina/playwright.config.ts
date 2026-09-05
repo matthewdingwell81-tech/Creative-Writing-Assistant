@@ -79,5 +79,27 @@ export default defineConfig({
       dependencies: ['setup'],
       testMatch: '**/coach-insert.spec.ts',
     },
+    {
+      name: 'chapter-rename-desktop',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 1280, height: 720 },
+        storageState: 'e2e/.auth/mobile.json',
+      },
+      dependencies: ['tutorial'],
+      testMatch: '**/chapter-rename.spec.ts',
+    },
+    {
+      name: 'chapter-rename-mobile',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 375, height: 812 },
+        hasTouch: true,
+        isMobile: true,
+        storageState: 'e2e/.auth/mobile.json',
+      },
+      dependencies: ['tutorial'],
+      testMatch: '**/chapter-rename.spec.ts',
+    },
   ],
 });
