@@ -9,6 +9,7 @@ export interface GrammarHighlight {
 export interface EditorHandle {
   scrollToSuggestion: (text: string) => void;
   getCleanContent: () => string;
+  insertTextAtCursor: (text: string, replaceSelection?: boolean) => 'inserted' | 'needs-confirmation' | 'no-cursor';
 }
 
 interface EditorProps {
@@ -43,6 +44,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
   const grammarHighlightsRef = useRef<GrammarHighlight[]>(grammarHighlights);
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashedSpellElemRef = useRef<HTMLElement | null>(null);
+  const lastEditorRangeRef = useRef<Range | null>(null);
   const [isTypingState, setIsTypingState] = useState(false);
   const [popover, setPopover] = useState<PopoverState>({ visible: false, x: 0, y: 0, original: '', alternatives: [], targetSpan: null });
 
@@ -65,6 +67,61 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
         }
       });
       return clone.innerHTML;
+    },
+    insertTextAtCursor: (text: string, replaceSelection = false) => {
+      const editor = editorRef.current;
+      const savedRange = lastEditorRangeRef.current;
+      if (!editor || !savedRange) return 'no-cursor';
+
+      const range = savedRange.cloneRange();
+      if (
+        !editor.contains(range.startContainer) ||
+        !editor.contains(range.endContainer)
+      ) {
+        lastEditorRangeRef.current = null;
+        return 'no-cursor';
+      }
+
+      if (!range.collapsed && !replaceSelection) return 'needs-confirmation';
+
+      range.deleteContents();
+      const fragment = document.createDocumentFragment();
+      const lines = text.split('\n');
+      let lastInsertedNode: Node | null = null;
+      lines.forEach((line, index) => {
+        if (index > 0) {
+          const br = document.createElement('br');
+          fragment.appendChild(br);
+          lastInsertedNode = br;
+        }
+        if (line) {
+          const textNode = document.createTextNode(line);
+          fragment.appendChild(textNode);
+          lastInsertedNode = textNode;
+        }
+      });
+
+      if (!lastInsertedNode) {
+        lastInsertedNode = document.createTextNode('');
+        fragment.appendChild(lastInsertedNode);
+      }
+      range.insertNode(fragment);
+
+      const nextRange = document.createRange();
+      nextRange.setStartAfter(lastInsertedNode);
+      nextRange.collapse(true);
+      lastEditorRangeRef.current = nextRange.cloneRange();
+
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(nextRange);
+
+      clearHighlights(editor);
+      isInternalUpdate.current = true;
+      lastHighlightKey.current = '';
+      setContent(editor.innerHTML);
+      editor.focus();
+      return 'inserted';
     },
     scrollToSuggestion: (text: string) => {
       if (!editorRef.current || !text) return;
@@ -189,7 +246,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
     const handleSelectionChange = () => {
       if (!editorRef.current) return;
       const selection = window.getSelection();
-      if (!selection || selection.isCollapsed) {
+      if (!selection || selection.rangeCount === 0) {
         onSelectionChange('');
         return;
       }
@@ -197,7 +254,8 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
         selection.anchorNode && editorRef.current.contains(selection.anchorNode) &&
         selection.focusNode && editorRef.current.contains(selection.focusNode)
       ) {
-        onSelectionChange(selection.toString().trim());
+        lastEditorRangeRef.current = selection.getRangeAt(0).cloneRange();
+        onSelectionChange(selection.isCollapsed ? '' : selection.toString().trim());
       } else {
         onSelectionChange('');
       }

@@ -9,6 +9,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { streamIdeas, streamCoach } from '@/lib/api';
 import type { Suggestion, ChangeHistoryEntry } from '@/hooks/useSuggestions';
 
@@ -34,7 +38,7 @@ interface SuggestionsSidebarProps {
   externalIdeaPrompt?: { prompt: string; id: number } | null;
   onExternalIdeaHandled?: () => void;
   onScrollToSuggestion?: (original: string) => void;
-  onInsertText?: (text: string) => Promise<boolean>;
+  onInsertText?: (text: string, replaceSelection?: boolean) => Promise<boolean | 'needs-confirmation'>;
 }
 
 const severityConfig = {
@@ -212,6 +216,7 @@ export default function SuggestionsSidebar({
   const coachScrollRef = useRef<HTMLDivElement>(null);
   const coachInputRef = useRef<HTMLTextAreaElement>(null);
   const coachAbortRef = useRef<AbortController | null>(null);
+  const [pendingReplacement, setPendingReplacement] = useState<{ messageIndex: number; text: string } | null>(null);
 
   useEffect(() => {
     if (externalIdeaPrompt && externalIdeaPrompt.id !== externalPromptHandled.current) {
@@ -320,15 +325,18 @@ export default function SuggestionsSidebar({
     setCoachMessages([]); setCoachInput(''); setCoachLoading(false);
   };
 
-  const handleCoachInsert = async (messageIndex: number, text: string) => {
+  const handleCoachInsert = async (messageIndex: number, text: string, replaceSelection = false) => {
     if (!onInsertText || coachInsertInFlightRef.current.has(messageIndex) || coachInsertStates[messageIndex] === 'inserted') return;
 
     coachInsertInFlightRef.current.add(messageIndex);
     setCoachInsertStates(prev => ({ ...prev, [messageIndex]: 'inserting' }));
     try {
-      const inserted = await onInsertText(text);
+      const inserted = await onInsertText(text, replaceSelection);
+      if (inserted === 'needs-confirmation') {
+        setPendingReplacement({ messageIndex, text });
+      }
       setCoachInsertStates(prev => {
-        if (inserted) return { ...prev, [messageIndex]: 'inserted' };
+        if (inserted === true) return { ...prev, [messageIndex]: 'inserted' };
         const next = { ...prev };
         delete next[messageIndex];
         return next;
@@ -361,6 +369,7 @@ export default function SuggestionsSidebar({
   );
 
   return (
+    <>
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
       <div className="p-4 border-b border-border/50 bg-card/50">
         <div className="flex items-center justify-between">
@@ -687,5 +696,31 @@ export default function SuggestionsSidebar({
         </ScrollArea>
       </Tabs>
     </div>
+    <AlertDialog open={pendingReplacement !== null} onOpenChange={(open) => { if (!open) setPendingReplacement(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Replace selected text?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will remove the selected passage and insert the Coach response in its place.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep selection</AlertDialogCancel>
+          <AlertDialogAction
+            data-testid="btn-confirm-coach-replace"
+            onClick={() => {
+              if (pendingReplacement) {
+                const { messageIndex, text } = pendingReplacement;
+                setPendingReplacement(null);
+                void handleCoachInsert(messageIndex, text, true);
+              }
+            }}
+          >
+            Replace selection
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

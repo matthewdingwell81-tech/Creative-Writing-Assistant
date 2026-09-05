@@ -376,21 +376,26 @@ export default function Home() {
     }, 100);
   }, [save, title, requestSuggestions, documentType]);
 
-  const handleInsertCoachText = useCallback(async (text: string) => {
+  const handleInsertCoachText = useCallback(async (text: string, replaceSelection = false) => {
     if (!activeDocId) return false;
+
+    const insertionResult = editorHandle.current?.insertTextAtCursor(text, replaceSelection);
+    if (insertionResult === 'needs-confirmation') return 'needs-confirmation' as const;
 
     const liveContent = editorHandle.current?.getCleanContent();
     const currentContent = liveContent !== undefined ? liveContent : content;
-    const appended = appendPlainTextToHtml(currentContent, text);
+    const updatedContent = insertionResult === 'inserted'
+      ? currentContent
+      : appendPlainTextToHtml(currentContent, text);
 
-    setContent(appended);
+    setContent(updatedContent);
     setDocChapters(prev => prev.map(chapter =>
-      chapter.id === activeChapterId ? { ...chapter, content: appended } : chapter
+      chapter.id === activeChapterId ? { ...chapter, content: updatedContent } : chapter
     ));
 
-    const saved = await saveNow(appended, title);
+    const saved = await saveNow(updatedContent, title);
     if (saved && !focusMode) {
-      requestSuggestions(appended, documentType);
+      requestSuggestions(updatedContent, documentType);
     }
     return saved;
   }, [activeDocId, activeChapterId, content, saveNow, title, focusMode, requestSuggestions, documentType]);
