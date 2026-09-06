@@ -14,7 +14,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { streamIdeas, streamCoach } from '@/lib/api';
-import type { Suggestion, ChangeHistoryEntry } from '@/hooks/useSuggestions';
+import type { Suggestion, SuggestionAnalysisMode, ChangeHistoryEntry } from '@/hooks/useSuggestions';
 
 interface CoachMessage {
   role: 'user' | 'assistant';
@@ -37,6 +37,9 @@ interface SuggestionsSidebarProps {
   onClearHistory: () => void;
   documentContent: string;
   documentType: string;
+  analysisMode: SuggestionAnalysisMode;
+  onAnalysisModeChange: (mode: SuggestionAnalysisMode) => void;
+  onAnalyzeWriting: () => void;
   selectedText?: string;
   externalIdeaPrompt?: { prompt: string; id: number } | null;
   onExternalIdeaHandled?: () => void;
@@ -203,7 +206,8 @@ export default function SuggestionsSidebar({
   suggestions, savedSuggestions, savedCount, changeHistory, loading, onApplySuggestion,
   onDismiss, onSave, onRemoveSaved, onClearHistory, documentContent, documentType, selectedText,
   externalIdeaPrompt, onExternalIdeaHandled, onScrollToSuggestion, onInsertText,
-  hasSuggestionUpdate, pendingSuggestionCount, onShowLatestSuggestions
+  hasSuggestionUpdate, pendingSuggestionCount, onShowLatestSuggestions,
+  analysisMode, onAnalysisModeChange, onAnalyzeWriting
 }: SuggestionsSidebarProps) {
   const [ideaPrompt, setIdeaPrompt] = useState('');
   const [ideaResponse, setIdeaResponse] = useState('');
@@ -371,6 +375,11 @@ export default function SuggestionsSidebar({
   const truncatedSelection = selectedText && selectedText.length > 80
     ? selectedText.slice(0, 80) + '\u2026'
     : selectedText;
+  const hasEnoughTextToAnalyze = documentContent
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .length >= 30;
 
   const EmptyState = ({ message }: { message: string }) => (
     <div className="text-center py-8 text-muted-foreground">
@@ -420,6 +429,47 @@ export default function SuggestionsSidebar({
             Show latest suggestions ({pendingSuggestionCount})
           </Button>
         )}
+        <div className="mt-3 rounded-lg border border-border/60 bg-muted/30 p-2.5" data-testid="suggestion-analysis-controls">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-medium text-foreground">Suggestion analysis</p>
+              <p className="text-[10px] text-muted-foreground">
+                {analysisMode === 'automatic' ? 'Runs after you pause typing' : 'Runs only when you ask'}
+              </p>
+            </div>
+            <div className="flex rounded-md border border-border/60 bg-background p-0.5" role="group" aria-label="Suggestion analysis mode">
+              {(['automatic', 'manual'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onAnalysisModeChange(mode)}
+                  className={`rounded px-2 py-1 text-[10px] font-medium transition-colors [@media(pointer:coarse)]:min-h-[36px] ${
+                    analysisMode === mode
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  aria-pressed={analysisMode === mode}
+                  data-testid={`btn-analysis-mode-${mode}`}
+                >
+                  {mode === 'automatic' ? 'Automatic' : 'Manual'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {analysisMode === 'manual' && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full mt-2 h-8 text-xs gap-1.5 [@media(pointer:coarse)]:min-h-[44px]"
+              onClick={onAnalyzeWriting}
+              disabled={loading || !hasEnoughTextToAnalyze}
+              data-testid="btn-analyze-writing"
+            >
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              {loading ? 'Analyzing…' : 'Analyze writing'}
+            </Button>
+          )}
+        </div>
       </div>
 
       {showSaved && savedSuggestions.length > 0 && (

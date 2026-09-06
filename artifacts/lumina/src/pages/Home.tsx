@@ -13,6 +13,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { fetchDocuments, fetchDocument, createDocument, updateDocument, fetchChapters, createChapter, updateChapter as updateChapterApi, reorderChapters, SessionExpiredError } from '@/lib/api';
 import { useSuggestions } from '@/hooks/useSuggestions';
+import type { SuggestionAnalysisMode } from '@/hooks/useSuggestions';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -158,8 +159,9 @@ export default function Home() {
 
   const {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
-    hasSuggestionUpdate, pendingSuggestionCount, requestSuggestions, showLatestSuggestions,
-    cancelPending, dismissSuggestion, applySuggestionById, saveSuggestion, removeSaved, clearHistory
+    analysisMode, hasSuggestionUpdate, pendingSuggestionCount, requestSuggestions, analyzeSuggestions,
+    setAnalysisMode, showLatestSuggestions, cancelPending, dismissSuggestion, applySuggestionById,
+    saveSuggestion, removeSaved, clearHistory
   } = useSuggestions();
 
   // Auto-launch the full tour on first visit (once, after UI is ready)
@@ -378,6 +380,15 @@ export default function Home() {
       requestSuggestions(newContent, documentType);
     }
   }, [save, title, requestSuggestions, documentType, focusMode]);
+
+  const handleAnalysisModeChange = useCallback((mode: SuggestionAnalysisMode) => {
+    setAnalysisMode(mode);
+    if (mode === 'manual') {
+      cancelPending();
+    } else if (!focusMode) {
+      analyzeSuggestions(content, documentType);
+    }
+  }, [analyzeSuggestions, cancelPending, content, documentType, focusMode, setAnalysisMode]);
 
   const handleTitleChange = useCallback((newTitle: string) => {
     setTitle(newTitle);
@@ -1031,6 +1042,9 @@ export default function Home() {
                     savedCount={savedCount}
                     changeHistory={changeHistory}
                     loading={suggestionsLoading}
+                    analysisMode={analysisMode}
+                    onAnalysisModeChange={handleAnalysisModeChange}
+                    onAnalyzeWriting={() => analyzeSuggestions(content, documentType)}
                     hasSuggestionUpdate={hasSuggestionUpdate}
                     pendingSuggestionCount={pendingSuggestionCount}
                     onShowLatestSuggestions={showLatestSuggestions}
@@ -1058,6 +1072,9 @@ export default function Home() {
                 savedCount={savedCount}
                 changeHistory={changeHistory}
                 loading={suggestionsLoading}
+                analysisMode={analysisMode}
+                onAnalysisModeChange={handleAnalysisModeChange}
+                onAnalyzeWriting={() => analyzeSuggestions(content, documentType)}
                 hasSuggestionUpdate={hasSuggestionUpdate}
                 pendingSuggestionCount={pendingSuggestionCount}
                 onShowLatestSuggestions={showLatestSuggestions}

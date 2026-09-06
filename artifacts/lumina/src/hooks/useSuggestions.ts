@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import { fetchSuggestions } from "@/lib/api";
 
+export type SuggestionAnalysisMode = "automatic" | "manual";
+
 export interface Suggestion {
   id: string;
   type: "grammar" | "vocabulary" | "style" | "pacing" | "story" | "tone";
@@ -30,6 +32,34 @@ function generateSuggestionId(sug: Omit<Suggestion, "id">): string {
   return `sug-${sug.type}-${(hash >>> 0).toString(36)}`;
 }
 
+function normalizeText(text: string): string {
+  return text
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&mdash;/gi, "—")
+    .replace(/&ndash;/gi, "–")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const ANALYSIS_MODE_STORAGE_KEY = "lumina-suggestion-analysis-mode";
+
+function getStoredAnalysisMode(): SuggestionAnalysisMode {
+  if (typeof window === "undefined") return "automatic";
+  try {
+    return window.localStorage.getItem(ANALYSIS_MODE_STORAGE_KEY) === "manual"
+      ? "manual"
+      : "automatic";
+  } catch {
+    return "automatic";
+  }
+}
+
 export function useSuggestions() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
@@ -43,21 +73,56 @@ export function useSuggestions() {
   const abortRef = useRef<AbortController | null>(null);
   const requestVersionRef = useRef(0);
   const currentSuggestionsRef = useRef<Suggestion[]>([]);
+  const [analysisMode, setAnalysisModeState] = useState<SuggestionAnalysisMode>(getStoredAnalysisMode);
+
+  const setAnalysisMode = useCallback((mode: SuggestionAnalysisMode) => {
+    setAnalysisModeState(mode);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(ANALYSIS_MODE_STORAGE_KEY, mode);
+      } catch {
+        // Preference persistence is best effort when storage is unavailable.
+      }
+    }
+  }, []);
+
+  const runAnalysis = useCallback(async (
+    plainText: string,
+    documentType: string,
+    requestVersion: number,
+  ) => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setLoading(true);
+    try {
+      const result = await fetchSuggestions(plainText, documentType, controller.signal);
+      if (controller.signal.aborted || requestVersion !== requestVersionRef.current) return;
+      const raw: Omit<Suggestion, "id">[] = result.suggestions || [];
+      const withIds = raw.map((s) => ({ ...s, id: generateSuggestionId(s) }));
+      if (currentSuggestionsRef.current.length === 0) {
+        currentSuggestionsRef.current = withIds;
+        setSuggestions(withIds);
+        setPendingSuggestions(null);
+      } else {
+        setPendingSuggestions(withIds);
+      }
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
+    } finally {
+      if (!controller.signal.aborted && requestVersion === requestVersionRef.current) {
+        setLoading(false);
+      }
+    }
+  }, []);
 
   const requestSuggestions = useCallback((text: string, documentType: string = "fiction") => {
-    const plainText = text
-      .replace(/<[^>]*>/g, " ")
-      .replace(/&nbsp;/gi, " ")
-      .replace(/&amp;/gi, "&")
-      .replace(/&lt;/gi, "<")
-      .replace(/&gt;/gi, ">")
-      .replace(/&quot;/gi, '"')
-      .replace(/&#39;/gi, "'")
-      .replace(/&mdash;/gi, "—")
-      .replace(/&ndash;/gi, "–")
-      .replace(/\s+/g, " ")
-      .trim();
+    if (analysisMode !== "automatic") return;
 
+    const plainText = normalizeText(text);
     if (plainText === lastTextRef.current) return;
     if (plainText.length < 30) return;
 
@@ -67,35 +132,22 @@ export function useSuggestions() {
     debounceRef.current = setTimeout(async () => {
       debounceRef.current = null;
       lastTextRef.current = plainText;
-
-      if (abortRef.current) {
-        abortRef.current.abort();
-      }
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      setLoading(true);
-      try {
-        const result = await fetchSuggestions(plainText, documentType, controller.signal);
-        if (controller.signal.aborted || requestVersion !== requestVersionRef.current) return;
-        const raw: Omit<Suggestion, "id">[] = result.suggestions || [];
-        const withIds = raw.map((s) => ({ ...s, id: generateSuggestionId(s) }));
-        if (currentSuggestionsRef.current.length === 0) {
-          currentSuggestionsRef.current = withIds;
-          setSuggestions(withIds);
-          setPendingSuggestions(null);
-        } else {
-          setPendingSuggestions(withIds);
-        }
-      } catch (e: any) {
-        if (e?.name === "AbortError") return;
-      } finally {
-        if (!controller.signal.aborted && requestVersion === requestVersionRef.current) {
-          setLoading(false);
-        }
-      }
+      void runAnalysis(plainText, documentType, requestVersion);
     }, 2000);
-  }, []);
+  }, [analysisMode, runAnalysis]);
+
+  const analyzeSuggestions = useCallback((text: string, documentType: string = "fiction") => {
+    const plainText = normalizeText(text);
+    if (plainText.length < 30) return;
+
+    const requestVersion = ++requestVersionRef.current;
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    lastTextRef.current = plainText;
+    void runAnalysis(plainText, documentType, requestVersion);
+  }, [runAnalysis]);
 
   const showLatestSuggestions = useCallback(() => {
     setPendingSuggestions((pending) => {
@@ -178,9 +230,12 @@ export function useSuggestions() {
     savedCount: savedSuggestions.length,
     changeHistory,
     loading,
+    analysisMode,
     hasSuggestionUpdate: pendingSuggestions !== null,
     pendingSuggestionCount: pendingSuggestions?.length ?? 0,
     requestSuggestions,
+    analyzeSuggestions,
+    setAnalysisMode,
     showLatestSuggestions,
     cancelPending,
     setSuggestions,
