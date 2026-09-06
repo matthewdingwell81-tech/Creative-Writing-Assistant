@@ -37,9 +37,12 @@ export function useSuggestions() {
   const [savedSuggestions, setSavedSuggestions] = useState<Suggestion[]>([]);
   const [changeHistory, setChangeHistory] = useState<ChangeHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [pendingSuggestions, setPendingSuggestions] = useState<Suggestion[] | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTextRef = useRef("");
   const abortRef = useRef<AbortController | null>(null);
+  const requestVersionRef = useRef(0);
+  const currentSuggestionsRef = useRef<Suggestion[]>([]);
 
   const requestSuggestions = useCallback((text: string, documentType: string = "fiction") => {
     const plainText = text
@@ -58,9 +61,11 @@ export function useSuggestions() {
     if (plainText === lastTextRef.current) return;
     if (plainText.length < 30) return;
 
+    const requestVersion = ++requestVersionRef.current;
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     debounceRef.current = setTimeout(async () => {
+      debounceRef.current = null;
       lastTextRef.current = plainText;
 
       if (abortRef.current) {
@@ -72,18 +77,33 @@ export function useSuggestions() {
       setLoading(true);
       try {
         const result = await fetchSuggestions(plainText, documentType, controller.signal);
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || requestVersion !== requestVersionRef.current) return;
         const raw: Omit<Suggestion, "id">[] = result.suggestions || [];
         const withIds = raw.map((s) => ({ ...s, id: generateSuggestionId(s) }));
-        setSuggestions(withIds);
+        if (currentSuggestionsRef.current.length === 0) {
+          currentSuggestionsRef.current = withIds;
+          setSuggestions(withIds);
+          setPendingSuggestions(null);
+        } else {
+          setPendingSuggestions(withIds);
+        }
       } catch (e: any) {
         if (e?.name === "AbortError") return;
       } finally {
-        if (!controller.signal.aborted) {
+        if (!controller.signal.aborted && requestVersion === requestVersionRef.current) {
           setLoading(false);
         }
       }
     }, 2000);
+  }, []);
+
+  const showLatestSuggestions = useCallback(() => {
+    setPendingSuggestions((pending) => {
+      if (pending === null) return pending;
+      currentSuggestionsRef.current = pending;
+      setSuggestions(pending);
+      return null;
+    });
   }, []);
 
   const dismissSuggestion = useCallback((id: string) => {
@@ -135,6 +155,7 @@ export function useSuggestions() {
   }, []);
 
   const cancelPending = useCallback(() => {
+    requestVersionRef.current += 1;
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
@@ -157,7 +178,10 @@ export function useSuggestions() {
     savedCount: savedSuggestions.length,
     changeHistory,
     loading,
+    hasSuggestionUpdate: pendingSuggestions !== null,
+    pendingSuggestionCount: pendingSuggestions?.length ?? 0,
     requestSuggestions,
+    showLatestSuggestions,
     cancelPending,
     setSuggestions,
     dismissSuggestion,

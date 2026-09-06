@@ -27,6 +27,9 @@ interface SuggestionsSidebarProps {
   savedCount: number;
   changeHistory: ChangeHistoryEntry[];
   loading: boolean;
+  hasSuggestionUpdate: boolean;
+  pendingSuggestionCount: number;
+  onShowLatestSuggestions: () => void;
   onApplySuggestion?: (suggestionId: string, original: string, replacement: string) => void;
   onDismiss: (id: string) => void;
   onSave: (id: string) => void;
@@ -199,7 +202,8 @@ const STARTER_PROMPTS = [
 export default function SuggestionsSidebar({
   suggestions, savedSuggestions, savedCount, changeHistory, loading, onApplySuggestion,
   onDismiss, onSave, onRemoveSaved, onClearHistory, documentContent, documentType, selectedText,
-  externalIdeaPrompt, onExternalIdeaHandled, onScrollToSuggestion, onInsertText
+  externalIdeaPrompt, onExternalIdeaHandled, onScrollToSuggestion, onInsertText,
+  hasSuggestionUpdate, pendingSuggestionCount, onShowLatestSuggestions
 }: SuggestionsSidebarProps) {
   const [ideaPrompt, setIdeaPrompt] = useState('');
   const [ideaResponse, setIdeaResponse] = useState('');
@@ -207,6 +211,7 @@ export default function SuggestionsSidebar({
   const [activeTab, setActiveTab] = useState('grammar');
   const [showSaved, setShowSaved] = useState(false);
   const externalPromptHandled = useRef<number | null>(null);
+  const suggestionsScrollRef = useRef<HTMLDivElement>(null);
 
   const [coachMessages, setCoachMessages] = useState<CoachMessage[]>([]);
   const [coachInput, setCoachInput] = useState('');
@@ -275,6 +280,12 @@ export default function SuggestionsSidebar({
       coachScrollRef.current.scrollTop = coachScrollRef.current.scrollHeight;
     }
   }, [coachMessages]);
+
+  useEffect(() => {
+    if (suggestionsScrollRef.current) {
+      suggestionsScrollRef.current.scrollTop = 0;
+    }
+  }, [activeTab]);
 
   const handleCoachSend = async (messageText?: string) => {
     const text = (messageText ?? coachInput).trim();
@@ -392,11 +403,23 @@ export default function SuggestionsSidebar({
         </div>
         <p className="text-xs text-muted-foreground mt-1">
           {loading ? (
-            <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Analyzing...</span>
+            <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Analyzing… current suggestions stay available</span>
           ) : (
             `${suggestions.length} suggestion${suggestions.length !== 1 ? 's' : ''} found`
           )}
         </p>
+        {hasSuggestionUpdate && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full mt-3 h-8 text-xs"
+            onClick={onShowLatestSuggestions}
+            data-testid="btn-show-latest-suggestions"
+          >
+            <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+            Show latest suggestions ({pendingSuggestionCount})
+          </Button>
+        )}
       </div>
 
       {showSaved && savedSuggestions.length > 0 && (
@@ -466,7 +489,13 @@ export default function SuggestionsSidebar({
           </TabsList>
         </div>
 
-        <ScrollArea className="flex-1 min-h-0">
+        <div
+          ref={suggestionsScrollRef}
+          className="flex-1 min-h-0 overflow-y-auto"
+          role="region"
+          aria-label={`${activeTab} suggestions`}
+          data-testid="suggestions-scroll"
+        >
           <TabsContent value="grammar" className="p-4 space-y-4 m-0">
             {loading && grammarSuggestions.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
@@ -693,7 +722,7 @@ export default function SuggestionsSidebar({
               </div>
             </div>
           </TabsContent>
-        </ScrollArea>
+        </div>
       </Tabs>
     </div>
     <AlertDialog open={pendingReplacement !== null} onOpenChange={(open) => { if (!open) setPendingReplacement(null); }}>

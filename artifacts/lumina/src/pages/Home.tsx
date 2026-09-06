@@ -158,7 +158,8 @@ export default function Home() {
 
   const {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
-    requestSuggestions, cancelPending, dismissSuggestion, applySuggestionById, saveSuggestion, removeSaved, clearHistory
+    hasSuggestionUpdate, pendingSuggestionCount, requestSuggestions, showLatestSuggestions,
+    cancelPending, dismissSuggestion, applySuggestionById, saveSuggestion, removeSaved, clearHistory
   } = useSuggestions();
 
   // Auto-launch the full tour on first visit (once, after UI is ready)
@@ -1030,6 +1031,9 @@ export default function Home() {
                     savedCount={savedCount}
                     changeHistory={changeHistory}
                     loading={suggestionsLoading}
+                    hasSuggestionUpdate={hasSuggestionUpdate}
+                    pendingSuggestionCount={pendingSuggestionCount}
+                    onShowLatestSuggestions={showLatestSuggestions}
                     onApplySuggestion={applySuggestion}
                     onDismiss={dismissSuggestion}
                     onSave={saveSuggestion}
@@ -1054,6 +1058,9 @@ export default function Home() {
                 savedCount={savedCount}
                 changeHistory={changeHistory}
                 loading={suggestionsLoading}
+                hasSuggestionUpdate={hasSuggestionUpdate}
+                pendingSuggestionCount={pendingSuggestionCount}
+                onShowLatestSuggestions={showLatestSuggestions}
                 onApplySuggestion={applySuggestion}
                 onDismiss={dismissSuggestion}
                 onSave={saveSuggestion}
