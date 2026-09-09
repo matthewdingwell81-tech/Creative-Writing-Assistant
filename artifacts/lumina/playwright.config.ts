@@ -86,7 +86,7 @@ export default defineConfig({
         viewport: { width: 1280, height: 720 },
         storageState: 'e2e/.auth/mobile.json',
       },
-      dependencies: ['tutorial'],
+      dependencies: ['setup'],
       testMatch: '**/chapter-rename.spec.ts',
     },
     {
@@ -98,7 +98,7 @@ export default defineConfig({
         isMobile: true,
         storageState: 'e2e/.auth/mobile.json',
       },
-      dependencies: ['tutorial'],
+      dependencies: ['setup'],
       testMatch: '**/chapter-rename.spec.ts',
     },
     {
@@ -144,6 +144,28 @@ export default defineConfig({
       },
       dependencies: ['tutorial'],
       testMatch: '**/story-board.spec.ts',
+    },
+    {
+      name: 'research-library-desktop',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 1280, height: 800 },
+        storageState: 'e2e/.auth/mobile.json',
+      },
+      dependencies: ['setup'],
+      testMatch: '**/research-library.spec.ts',
+    },
+    {
+      name: 'research-library-mobile',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 375, height: 812 },
+        hasTouch: true,
+        isMobile: true,
+        storageState: 'e2e/.auth/mobile.json',
+      },
+      dependencies: ['setup'],
+      testMatch: '**/research-library.spec.ts',
     },
   ],
 });

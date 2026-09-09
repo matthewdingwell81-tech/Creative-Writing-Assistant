@@ -1,5 +1,6 @@
 import { useRef, useCallback, useState } from "react";
 import { updateDocument, updateChapter, SessionExpiredError } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 
 interface UseAutoSaveOptions {
   onSaveError?: () => void;
@@ -22,6 +23,7 @@ export function useAutoSave(documentId: number | null, chapterId?: number | null
       try {
         if (chapterId) {
           await updateChapter(chapterId, { content });
+          await queryClient.invalidateQueries({ queryKey: ['/api/research/related', documentId, chapterId] });
           if (title) await updateDocument(documentId, { title });
         } else {
           const updates: Record<string, string> = { content };

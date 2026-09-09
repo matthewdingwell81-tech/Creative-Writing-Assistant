@@ -57,6 +57,42 @@ export async function deleteDocument(id: number) {
   if (!res.ok) throw new Error("Failed to delete document");
 }
 
+export async function fetchResearch(documentId: number, filters?: { keyword?: string; tag?: string; chapterId?: number; scope?: "global" | "chapter" }) {
+  const query = new URLSearchParams();
+  Object.entries(filters || {}).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
+  const res = await apiFetch(`/api/documents/${documentId}/research${query.size ? `?${query}` : ""}`);
+  if (!res.ok) throw new Error("Failed to fetch research");
+  return res.json();
+}
+export async function createResearch(documentId: number, data: { title: string; content?: string; type?: "text" | "link" | "image"; url?: string | null; objectPath?: string | null; mimeType?: string | null; size?: number | null; tags?: string[]; isGlobal?: boolean; favorite?: boolean; important?: boolean; chapterIds?: number[] }) {
+  const res = await apiFetch(`/api/documents/${documentId}/research`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  if (!res.ok) throw new Error("Failed to create research");
+  return res.json();
+}
+export async function updateResearch(id: number, data: Partial<Parameters<typeof createResearch>[1]>) {
+  const res = await apiFetch(`/api/research/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  if (!res.ok) throw new Error("Failed to update research");
+  return res.json();
+}
+export async function deleteResearch(id: number) {
+  const res = await apiFetch(`/api/research/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete research");
+}
+export async function attachResearch(id: number, chapterId: number) {
+  const res = await apiFetch(`/api/research/${id}/chapters/${chapterId}`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to attach research");
+  return res.json();
+}
+export async function detachResearch(id: number, chapterId: number) {
+  const res = await apiFetch(`/api/research/${id}/chapters/${chapterId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to detach research");
+}
+export async function fetchRelatedResearch(documentId: number, chapterId: number) {
+  const res = await apiFetch(`/api/documents/${documentId}/chapters/${chapterId}/research/related`);
+  if (!res.ok) throw new Error("Failed to fetch related research");
+  return res.json();
+}
+
 export async function fetchSuggestions(text: string, documentType: string = "fiction", signal?: AbortSignal) {
   const res = await apiFetch("/api/suggestions", {
     method: "POST",

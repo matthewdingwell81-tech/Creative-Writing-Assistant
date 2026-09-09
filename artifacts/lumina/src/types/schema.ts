@@ -24,3 +24,21 @@ export interface Idea {
   content: string;
   createdAt: Date;
 }
+
+export interface Research {
+  id: number;
+  documentId: number;
+  title: string;
+  content: string;
+  type: "text" | "link" | "image";
+  url: string | null;
+  objectPath: string | null;
+  mimeType: string | null;
+  size: number | null;
+  tags: string[];
+  isGlobal: boolean;
+  favorite: boolean;
+  important: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}

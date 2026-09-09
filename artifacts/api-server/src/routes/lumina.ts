@@ -5,10 +5,12 @@ import {
   insertIdeaSchema,
   insertUserSchema,
   insertChapterSchema,
+  insertResearchSchema,
 } from "@workspace/db";
 import { z } from "zod";
 import OpenAI from "openai";
 import bcrypt from "bcryptjs";
+import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage";
 import {
   getUncachableGoogleDocsClient,
   googleDocsToHtml,
@@ -29,6 +31,185 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 const router = Router();
+const researchObjects = new ObjectStorageService();
+
+// === Research Library ===
+const researchUpdateSchema = insertResearchSchema.omit({ documentId: true }).partial();
+function parseChapterIds(value: unknown): number[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+  const ids = [...new Set(value.map(Number))];
+  return ids.every(Number.isInteger) ? ids : null;
+}
+async function verifyResearchUpload(objectPath: string, userId: string, existingResearchId?: number) {
+  const upload = await storage.getResearchUpload(objectPath, userId);
+  if (!upload || (upload.claimedResearchId !== null && upload.claimedResearchId !== existingResearchId)) return null;
+  try {
+    const metadata = await researchObjects.getObjectMetadata(objectPath);
+    if (
+      metadata.size <= 0 ||
+      metadata.size > 10 * 1024 * 1024 ||
+      metadata.size !== upload.size ||
+      metadata.mimeType !== upload.mimeType ||
+      !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(metadata.mimeType)
+    ) return null;
+    return metadata;
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) return null;
+    throw error;
+  }
+}
+async function processPendingResearchObjectDeletions(userId: string, log: Request["log"]) {
+  const paths = await storage.listResearchObjectDeletions(userId);
+  await Promise.all(paths.map(async objectPath => {
+    try {
+      await researchObjects.deleteObject(objectPath);
+      await storage.completeResearchObjectDeletion(objectPath, userId);
+    } catch (error) {
+      log.warn({ err: error, objectPath }, "Research object cleanup deferred");
+    }
+  }));
+}
+router.get("/documents/:docId/research", requireAuth, async (req, res) => {
+  const docId = Number(req.params.docId);
+  if (!Number.isInteger(docId) || !(await storage.getDocument(docId, req.session.userId!))) { res.status(404).json({ error: "Document not found" }); return; }
+  await processPendingResearchObjectDeletions(req.session.userId!, req.log);
+  const q = req.query;
+  res.json(await storage.getResearch(docId, {
+    keyword: typeof q.keyword === "string" ? q.keyword : undefined,
+    tag: typeof q.tag === "string" ? q.tag : undefined,
+    chapterId: typeof q.chapterId === "string" ? Number(q.chapterId) : undefined,
+    scope: typeof q.scope === "string" ? q.scope : undefined,
+  }));
+});
+router.post("/documents/:docId/research", requireAuth, async (req, res) => {
+  const documentId = Number(req.params.docId);
+  if (!(await storage.getDocument(documentId, req.session.userId!))) { res.status(404).json({ error: "Document not found" }); return; }
+  const chapterIds = parseChapterIds(req.body.chapterIds);
+  if (chapterIds === null) { res.status(400).json({ error: "Invalid chapter selection." }); return; }
+  const { chapterIds: _chapterIds, ...body } = req.body;
+  const parsed = insertResearchSchema.safeParse({ ...body, documentId });
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if ((parsed.data.isGlobal && chapterIds.length > 0) || (!parsed.data.isGlobal && chapterIds.length === 0)) {
+    res.status(400).json({ error: "Research must be global or attached to at least one chapter." });
+    return;
+  }
+  if (parsed.data.type === "link" && !parsed.data.url) {
+    res.status(400).json({ error: "A valid URL is required for link research." });
+    return;
+  }
+  if (parsed.data.type === "image" && !parsed.data.objectPath?.startsWith("/objects/uploads/")) {
+    res.status(400).json({ error: "An uploaded image is required for image research." });
+    return;
+  }
+  if (parsed.data.type !== "image" && (parsed.data.objectPath || parsed.data.mimeType || parsed.data.size)) {
+    res.status(400).json({ error: "Image upload fields are only valid for image research." });
+    return;
+  }
+  if (parsed.data.type === "image") {
+    const metadata = await verifyResearchUpload(parsed.data.objectPath!, req.session.userId!);
+    if (!metadata) { res.status(400).json({ error: "The uploaded image is missing, invalid, or belongs to another user." }); return; }
+    parsed.data.size = metadata.size;
+    parsed.data.mimeType = metadata.mimeType;
+  }
+  try {
+    const item = await storage.createResearchWithScope(parsed.data, chapterIds, req.session.userId!);
+    if (!item) { res.status(400).json({ error: "One or more selected chapters are invalid." }); return; }
+    res.status(201).json(item);
+  } catch (error) {
+    req.log.warn({ err: error }, "Research create conflict");
+    res.status(409).json({ error: "That upload is no longer available." });
+  }
+});
+router.get("/research/:id", requireAuth, async (req, res) => {
+  const item = await storage.getResearchById(Number(req.params.id), req.session.userId!);
+  if (!item) { res.status(404).json({ error: "Research not found" }); return; } res.json(item);
+});
+router.patch("/research/:id", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const existing = await storage.getResearchById(id, req.session.userId!);
+  if (!existing) { res.status(404).json({ error: "Research not found" }); return; }
+  const requestedChapterIds = req.body.chapterIds === undefined ? undefined : parseChapterIds(req.body.chapterIds);
+  if (requestedChapterIds === null) { res.status(400).json({ error: "Invalid chapter selection." }); return; }
+  const { chapterIds: _chapterIds, ...body } = req.body;
+  const parsed = researchUpdateSchema.safeParse(body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const isGlobal = parsed.data.isGlobal ?? existing.isGlobal;
+  if (requestedChapterIds !== undefined && ((isGlobal && requestedChapterIds.length > 0) || (!isGlobal && requestedChapterIds.length === 0))) {
+    res.status(400).json({ error: "Research must be global or attached to at least one chapter." });
+    return;
+  }
+  if ((parsed.data.type ?? existing.type) === "link" && !(parsed.data.url ?? existing.url)) {
+    res.status(400).json({ error: "A valid URL is required for link research." });
+    return;
+  }
+  const effectiveType = parsed.data.type ?? existing.type;
+  const effectiveObjectPath = parsed.data.objectPath === undefined ? existing.objectPath : parsed.data.objectPath;
+  if (effectiveType === "image" && !effectiveObjectPath?.startsWith("/objects/uploads/")) {
+    res.status(400).json({ error: "An uploaded image is required for image research." });
+    return;
+  }
+  if (effectiveType === "image" && (existing.type !== "image" || effectiveObjectPath !== existing.objectPath)) {
+    const metadata = await verifyResearchUpload(effectiveObjectPath!, req.session.userId!, id);
+    if (!metadata) { res.status(400).json({ error: "The uploaded image is missing, invalid, or belongs to another user." }); return; }
+    parsed.data.size = metadata.size;
+    parsed.data.mimeType = metadata.mimeType;
+  }
+  if (effectiveType !== "image") {
+    if (parsed.data.objectPath) {
+      res.status(400).json({ error: "Image upload fields are only valid for image research." });
+      return;
+    }
+    if (existing.objectPath) {
+      parsed.data.objectPath = null;
+      parsed.data.mimeType = null;
+      parsed.data.size = null;
+    }
+  }
+  const item = await storage.updateResearchWithScope(id, parsed.data, requestedChapterIds, req.session.userId!);
+  if (!item) { res.status(400).json({ error: "One or more selected chapters are invalid." }); return; }
+  await processPendingResearchObjectDeletions(req.session.userId!, req.log);
+  res.json(item);
+});
+router.delete("/research/:id", requireAuth, async (req, res) => {
+  const item = await storage.getResearchById(Number(req.params.id), req.session.userId!);
+  if (!item) { res.status(404).json({ error: "Research not found" }); return; }
+  await storage.deleteResearch(Number(req.params.id), req.session.userId!);
+  await processPendingResearchObjectDeletions(req.session.userId!, req.log);
+  res.status(204).send();
+});
+router.post("/research/:id/chapters/:chapterId", requireAuth, async (req, res) => {
+  const ok = await storage.attachResearch(Number(req.params.id), Number(req.params.chapterId), req.session.userId!);
+  if (!ok) { res.status(404).json({ error: "Research or chapter not found" }); return; } res.json({ ok: true });
+});
+router.delete("/research/:id/chapters/:chapterId", requireAuth, async (req, res) => {
+  if (!(await storage.getResearchById(Number(req.params.id), req.session.userId!))) { res.status(404).json({ error: "Research not found" }); return; }
+  await storage.detachResearch(Number(req.params.id), Number(req.params.chapterId), req.session.userId!); res.json({ ok: true });
+});
+router.post("/research/:id/attach", requireAuth, async (req, res) => {
+  const chapterId = Number(req.body.chapterId);
+  const ok = await storage.attachResearch(Number(req.params.id), chapterId, req.session.userId!);
+  if (!ok) { res.status(404).json({ error: "Research or chapter not found" }); return; } res.json({ ok: true });
+});
+router.post("/research/:id/detach", requireAuth, async (req, res) => {
+  const chapterId = Number(req.body.chapterId);
+  if (!(await storage.getResearchById(Number(req.params.id), req.session.userId!))) { res.status(404).json({ error: "Research not found" }); return; }
+  await storage.detachResearch(Number(req.params.id), chapterId, req.session.userId!); res.json({ ok: true });
+});
+router.get("/documents/:docId/chapters/:chapterId/research/related", requireAuth, async (req, res) => {
+  const docId = Number(req.params.docId), chapterId = Number(req.params.chapterId);
+  if (!(await storage.getDocument(docId, req.session.userId!))) { res.status(404).json({ error: "Document not found" }); return; }
+  const chapter = await storage.getChapter(chapterId);
+  if (!chapter || chapter.documentId !== docId) { res.status(404).json({ error: "Chapter not found" }); return; }
+  const words = new Set(`${chapter.title} ${chapter.content}`.toLowerCase().replace(/<[^>]+>/g, " ").match(/[a-z0-9]{3,}/g) || []);
+  const items = await storage.getResearch(docId);
+  const ranked = items.map(item => {
+    const hay = `${item.title} ${item.content} ${(item.tags || []).join(" ")}`.toLowerCase();
+    const score = [...words].reduce((n, word) => n + (hay.includes(word) ? 1 : 0), 0) + (item.important ? 0.25 : 0) + (item.favorite ? 0.1 : 0);
+    return { ...item, score };
+  }).filter(x => x.score > 0).sort((a, b) => b.score - a.score || a.id - b.id);
+  res.json(ranked);
+});
 
 function chapterSynopsis(content: string): string {
   const plainText = content
@@ -165,7 +346,14 @@ router.patch("/documents/:id", requireAuth, async (req: Request, res: Response) 
 });
 
 router.delete("/documents/:id", requireAuth, async (req: Request, res: Response) => {
-  await storage.deleteDocument(parseInt(req.params.id as string), req.session.userId!);
+  const documentId = parseInt(req.params.id as string);
+  const document = await storage.getDocument(documentId, req.session.userId!);
+  if (!document) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  await storage.deleteDocument(documentId, req.session.userId!);
+  await processPendingResearchObjectDeletions(req.session.userId!, req.log);
   res.status(204).send();
 });
 
@@ -457,7 +645,7 @@ router.delete("/chapters/:id", requireAuth, async (req: Request, res: Response) 
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-  await storage.deleteChapter(id);
+  await storage.deleteChapter(id, req.session.userId!);
   res.status(204).send();
 });
 

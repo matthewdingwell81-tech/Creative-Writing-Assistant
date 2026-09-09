@@ -5,7 +5,9 @@ import SuggestionsSidebar from '@/components/SuggestionsSidebar';
 import DocumentList from '@/components/DocumentList';
 import GoogleDocsDialog from '@/components/GoogleDocsDialog';
 import IdeasPanel from '@/components/IdeasPanel';
-import { Sparkles, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus, Pencil, Plus, Check, Loader2, MoreHorizontal, HelpCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { ResearchLibrary } from '@/components/ResearchLibrary';
+import { ResearchFloatingAction } from '@/components/ResearchFloatingAction';
+import { Sparkles, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus, Pencil, Plus, Check, Loader2, MoreHorizontal, HelpCircle, ChevronUp, ChevronDown, BookOpen } from 'lucide-react';
 import { StoryBoard } from '@/components/StoryBoard';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from '@/components/ui/select';
@@ -156,7 +158,7 @@ export default function Home() {
   const [chapterReorderSaving, setChapterReorderSaving] = useState(false);
   const [chapterColorSavingId, setChapterColorSavingId] = useState<number | null>(null);
   const [chapterAdding, setChapterAdding] = useState(false);
-  const [workspaceView, setWorkspaceView] = useState<'editor' | 'board'>('editor');
+  const [workspaceView, setWorkspaceView] = useState<'editor' | 'board' | 'research'>('editor');
   const [chaptersLoading, setChaptersLoading] = useState(false);
   const [documentSwitching, setDocumentSwitching] = useState(false);
   const chapterLoadVersionRef = useRef(0);
@@ -498,9 +500,9 @@ export default function Home() {
     }
   }, [chapterColorSavingId, docChapters, toast]);
 
-  const handleWorkspaceViewChange = useCallback(async (nextView: 'editor' | 'board') => {
+  const handleWorkspaceViewChange = useCallback(async (nextView: 'editor' | 'board' | 'research') => {
     if (nextView === workspaceView) return;
-    if (nextView === 'board' && activeChapterId) {
+    if (nextView !== 'editor' && activeChapterId) {
       const saved = await saveNow(content, title);
       if (!saved) return;
       setDocChapters(chapters => chapters.map(chapter =>
@@ -783,6 +785,15 @@ export default function Home() {
                 >
                   Story Board
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={workspaceView === 'research' ? 'h-7 bg-card text-foreground shadow-xs' : 'h-7 text-muted-foreground'}
+                  onClick={() => void handleWorkspaceViewChange('research')}
+                  data-testid="button-view-research"
+                >
+                  Research
+                </Button>
               </div>
             )}
 
@@ -920,7 +931,7 @@ export default function Home() {
         {/* Mobile right: overflow menu + user */}
         {isMobile && (
           <div className="flex items-center gap-1 shrink-0">
-            <DropdownMenu>
+            <DropdownMenu key={workspaceView}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="btn-mobile-overflow">
                   <MoreHorizontal className="w-5 h-5" />
@@ -947,6 +958,15 @@ export default function Home() {
                       {workspaceView === 'board' && <Check className="w-3.5 h-3.5 mr-2 shrink-0" />}
                       {workspaceView !== 'board' && <span className="w-3.5 h-3.5 mr-2 inline-block shrink-0" />}
                       Story Board
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => void handleWorkspaceViewChange('research')}
+                      className={workspaceView === 'research' ? 'text-primary' : ''}
+                      data-testid="mobile-view-research"
+                    >
+                      {workspaceView === 'research' && <Check className="w-3.5 h-3.5 mr-2 shrink-0" />}
+                      {workspaceView !== 'research' && <span className="w-3.5 h-3.5 mr-2 inline-block shrink-0" />}
+                      Research
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
@@ -1195,6 +1215,8 @@ export default function Home() {
                 onReorder={(chapterIds) => void handleBoardReorder(chapterIds)}
                 onColorChange={(chapterId, color) => void handleChapterColorChange(chapterId, color)}
               />
+            ) : activeDocId && workspaceView === 'research' ? (
+              <ResearchLibrary documentId={activeDocId} chapters={docChapters} />
             ) : (
               <div className="max-w-3xl mx-auto px-4 sm:px-8 py-12">
                 {activeDocId ? (
@@ -1224,13 +1246,16 @@ export default function Home() {
               </div>
             )}
             {activeDocId && workspaceView === 'editor' && (
-              <div
-                className="fixed bottom-6 text-xs text-muted-foreground/60 font-medium tracking-wide pointer-events-none"
-                style={{ left: '50%', transform: 'translateX(-50%)' }}
-                data-testid="word-count"
-              >
-                {wordCount} words
-              </div>
+              <>
+                <div
+                  className="fixed bottom-6 text-xs text-muted-foreground/60 font-medium tracking-wide pointer-events-none"
+                  style={{ left: '50%', transform: 'translateX(-50%)' }}
+                  data-testid="word-count"
+                >
+                  {wordCount} words
+                </div>
+                <ResearchFloatingAction documentId={activeDocId} chapterId={activeChapterId} chapters={docChapters} />
+              </>
             )}
           </div>
         </div>
