@@ -8,6 +8,8 @@ export const chapters = pgTable("chapters", {
   title: text("title").notNull().default("Chapter 1"),
   content: text("content").notNull().default(""),
   position: integer("position").notNull().default(0),
+  cardColor: text("card_color").notNull().default("lavender"),
+  synopsis: text("synopsis").notNull().default(""),
 });
 
 export const insertChapterSchema = z.object({
@@ -15,6 +17,8 @@ export const insertChapterSchema = z.object({
   title: z.string().optional(),
   content: z.string().optional(),
   position: z.number().int().optional(),
+  cardColor: z.enum(["lavender", "rose", "amber", "sage", "sky", "slate"]).optional(),
+  synopsis: z.string().optional(),
 });
 
 export type Chapter = typeof chapters.$inferSelect;

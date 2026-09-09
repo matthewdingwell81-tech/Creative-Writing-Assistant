@@ -6,6 +6,7 @@ import DocumentList from '@/components/DocumentList';
 import GoogleDocsDialog from '@/components/GoogleDocsDialog';
 import IdeasPanel from '@/components/IdeasPanel';
 import { Sparkles, PanelLeftClose, PanelLeft, FilePlus, Download, Upload, Lightbulb, X, LogOut, User, Focus, Pencil, Plus, Check, Loader2, MoreHorizontal, HelpCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { StoryBoard } from '@/components/StoryBoard';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
@@ -109,6 +110,24 @@ function appendPlainTextToHtml(html: string, text: string): string {
   return container.innerHTML;
 }
 
+function chapterSynopsis(content: string): string {
+  const plainText = content
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/(?:p|div|li|h[1-6])>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+  const words = plainText.split(' ').filter(Boolean);
+  const preview = words.slice(0, 50).join(' ');
+  return words.length > 50 ? `${preview}…` : preview;
+}
+
 export default function Home() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -135,6 +154,13 @@ export default function Home() {
   const [chapterTitleInput, setChapterTitleInput] = useState('');
   const [chapterTitleSaving, setChapterTitleSaving] = useState(false);
   const [chapterReorderSaving, setChapterReorderSaving] = useState(false);
+  const [chapterColorSavingId, setChapterColorSavingId] = useState<number | null>(null);
+  const [chapterAdding, setChapterAdding] = useState(false);
+  const [workspaceView, setWorkspaceView] = useState<'editor' | 'board'>('editor');
+  const [chaptersLoading, setChaptersLoading] = useState(false);
+  const [documentSwitching, setDocumentSwitching] = useState(false);
+  const chapterLoadVersionRef = useRef(0);
+  const documentSelectionVersionRef = useRef(0);
 
   const { start: startTutorial, registerSideEffect } = useTutorial();
 
@@ -206,33 +232,56 @@ export default function Home() {
     queryFn: fetchDocuments,
   });
 
+  const fetchChapterSet = useCallback(async (docId: number, docContent: string): Promise<Chapter[]> => {
+    const chapterList: Chapter[] = await fetchChapters(docId);
+    if (chapterList.length > 0) return chapterList;
+    const chapter = await createChapter(docId, { title: 'Chapter 1', content: docContent, position: 0 });
+    return [chapter];
+  }, []);
+
   const loadChaptersForDoc = useCallback(async (docId: number, docContent: string) => {
+    const loadVersion = ++chapterLoadVersionRef.current;
+    setChaptersLoading(true);
     try {
-      const chapterList: Chapter[] = await fetchChapters(docId);
-      if (chapterList.length === 0) {
-        const chapter = await createChapter(docId, { title: 'Chapter 1', content: docContent, position: 0 });
-        setDocChapters([chapter]);
-        setActiveChapterId(chapter.id);
-        setContent(chapter.content);
-      } else {
-        setDocChapters(chapterList);
-        setActiveChapterId(chapterList[0].id);
-        setContent(chapterList[0].content);
-      }
+      const chapterList = await fetchChapterSet(docId, docContent);
+      if (loadVersion !== chapterLoadVersionRef.current) return;
+      setDocChapters(chapterList);
+      setActiveChapterId(chapterList[0].id);
+      setContent(chapterList[0].content);
     } catch (err) {
+      if (loadVersion !== chapterLoadVersionRef.current) return;
       if (err instanceof SessionExpiredError) return;
       toast({ title: "Could not load chapters", description: "Your document sections failed to load.", variant: "destructive" });
+    } finally {
+      if (loadVersion === chapterLoadVersionRef.current) {
+        setChaptersLoading(false);
+      }
     }
-  }, [toast]);
+  }, [fetchChapterSet, toast]);
 
   const createMutation = useMutation({
     mutationFn: createDocument,
     onSuccess: async (doc: Document) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
-      setActiveDocId(doc.id);
-      setTitle(doc.title);
-      setDocumentType(doc.documentType);
-      await loadChaptersForDoc(doc.id, doc.content);
+      setChaptersLoading(true);
+      try {
+        const chapterList = await fetchChapterSet(doc.id, doc.content);
+        queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+        setActiveDocId(doc.id);
+        setTitle(doc.title);
+        setDocumentType(doc.documentType);
+        setDocChapters(chapterList);
+        setActiveChapterId(chapterList[0].id);
+        setContent(chapterList[0].content);
+      } catch (err) {
+        if (err instanceof SessionExpiredError) return;
+        toast({
+          title: "Document created, but could not be opened",
+          description: "Your current document is still open. Try selecting the new document again.",
+          variant: "destructive",
+        });
+      } finally {
+        setChaptersLoading(false);
+      }
     },
     onError: (err: unknown) => {
       if (err instanceof SessionExpiredError) return;
@@ -256,19 +305,45 @@ export default function Home() {
   }, [documents, activeDocId]);
 
   const handleSelectDoc = useCallback(async (id: number) => {
+    if (documentSwitching) return;
+    const isSameDocument = id === activeDocId;
+    const selectionVersion = ++documentSelectionVersionRef.current;
+    setDocumentSwitching(true);
+    if (!isSameDocument && activeChapterId) {
+      const saved = await saveNow(content, title);
+      if (!saved) {
+        if (selectionVersion === documentSelectionVersionRef.current) setDocumentSwitching(false);
+        return;
+      }
+    }
     try {
       const doc = await fetchDocument(id);
+      if (selectionVersion !== documentSelectionVersionRef.current) return;
+      const chapterList = await fetchChapterSet(doc.id, doc.content);
+      if (selectionVersion !== documentSelectionVersionRef.current) return;
       setActiveDocId(doc.id);
       setTitle(doc.title);
       setDocumentType(doc.documentType);
+      setDocChapters(chapterList);
+      setActiveChapterId(chapterList[0].id);
+      setContent(chapterList[0].content);
       setShowDocList(false);
       setSelectedText('');
       setRenamingChapterId(null);
-      await loadChaptersForDoc(doc.id, doc.content);
-    } catch {
-      // ignore
+    } catch (err) {
+      if (!(err instanceof SessionExpiredError)) {
+        toast({
+          title: "Could not switch documents",
+          description: "Your current document is still open. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      if (selectionVersion === documentSelectionVersionRef.current) {
+        setDocumentSwitching(false);
+      }
     }
-  }, [loadChaptersForDoc]);
+  }, [activeChapterId, activeDocId, content, documentSwitching, fetchChapterSet, saveNow, title, toast]);
 
   const handleSwitchChapter = useCallback(async (chapterId: number) => {
     if (chapterId === activeChapterId) return;
@@ -290,7 +365,7 @@ export default function Home() {
   }, [activeChapterId, content, docChapters, toast]);
 
   const handleAddChapter = useCallback(async () => {
-    if (!activeDocId) return;
+    if (!activeDocId || chapterAdding) return;
     if (activeChapterId) {
       try {
         await updateChapterApi(activeChapterId, { content });
@@ -300,6 +375,7 @@ export default function Home() {
         toast({ title: "Could not save chapter", description: "Your changes may not have been saved.", variant: "destructive" });
       }
     }
+    setChapterAdding(true);
     try {
       const position = docChapters.length;
       const chapter = await createChapter(activeDocId, { title: `Chapter ${position + 1}`, content: '', position });
@@ -310,8 +386,10 @@ export default function Home() {
     } catch (err) {
       if (err instanceof SessionExpiredError) return;
       toast({ title: "Could not add chapter", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setChapterAdding(false);
     }
-  }, [activeDocId, activeChapterId, content, docChapters, toast]);
+  }, [activeDocId, activeChapterId, chapterAdding, content, docChapters, toast]);
 
   const beginRenameChapter = useCallback((chapterId: number | null) => {
     if (!chapterId) return;
@@ -373,13 +451,85 @@ export default function Home() {
     }
   }, [activeDocId, activeChapterId, chapterReorderSaving, docChapters, toast]);
 
+  const handleBoardReorder = useCallback(async (chapterIds: number[]) => {
+    if (!activeDocId || chapterReorderSaving) return;
+    const chapterById = new Map(docChapters.map(chapter => [chapter.id, chapter]));
+    if (chapterIds.length !== docChapters.length || chapterIds.some(id => !chapterById.has(id))) return;
+
+    const previousOrder = docChapters;
+    const nextOrder = chapterIds.map((id, position) => ({ ...chapterById.get(id)!, position }));
+    setDocChapters(nextOrder);
+    setChapterReorderSaving(true);
+    try {
+      const persisted = await reorderChapters(activeDocId, chapterIds);
+      setDocChapters(persisted);
+    } catch (err) {
+      setDocChapters(previousOrder);
+      if (err instanceof SessionExpiredError) return;
+      toast({
+        title: "Could not reorder chapters",
+        description: "The chapter order was restored. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setChapterReorderSaving(false);
+    }
+  }, [activeDocId, chapterReorderSaving, docChapters, toast]);
+
+  const handleChapterColorChange = useCallback(async (chapterId: number, cardColor: Chapter['cardColor']) => {
+    if (chapterColorSavingId !== null) return;
+    const previous = docChapters.find(chapter => chapter.id === chapterId);
+    if (!previous || previous.cardColor === cardColor) return;
+    setDocChapters(chapters => chapters.map(chapter => chapter.id === chapterId ? { ...chapter, cardColor } : chapter));
+    setChapterColorSavingId(chapterId);
+    try {
+      const persisted = await updateChapterApi(chapterId, { cardColor });
+      setDocChapters(chapters => chapters.map(chapter => chapter.id === chapterId ? persisted : chapter));
+    } catch (err) {
+      setDocChapters(chapters => chapters.map(chapter => chapter.id === chapterId ? previous : chapter));
+      if (err instanceof SessionExpiredError) return;
+      toast({
+        title: "Could not save card color",
+        description: "The previous color was restored. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setChapterColorSavingId(null);
+    }
+  }, [chapterColorSavingId, docChapters, toast]);
+
+  const handleWorkspaceViewChange = useCallback(async (nextView: 'editor' | 'board') => {
+    if (nextView === workspaceView) return;
+    if (nextView === 'board' && activeChapterId) {
+      const saved = await saveNow(content, title);
+      if (!saved) return;
+      setDocChapters(chapters => chapters.map(chapter =>
+        chapter.id === activeChapterId
+          ? { ...chapter, content, synopsis: chapterSynopsis(content) }
+          : chapter
+      ));
+      cancelPending();
+      setShowSuggestionsSheet(false);
+      setFocusMode(false);
+    }
+    setWorkspaceView(nextView);
+  }, [activeChapterId, cancelPending, content, saveNow, title, workspaceView]);
+
+  const handleOpenChapterFromBoard = useCallback(async (chapterId: number) => {
+    await handleSwitchChapter(chapterId);
+    setWorkspaceView('editor');
+  }, [handleSwitchChapter]);
+
   const handleContentChange = useCallback((newContent: string) => {
     setContent(newContent);
+    setDocChapters(chapters => chapters.map(chapter =>
+      chapter.id === activeChapterId ? { ...chapter, content: newContent } : chapter
+    ));
     save(newContent, title);
     if (!focusMode) {
       requestSuggestions(newContent, documentType);
     }
-  }, [save, title, requestSuggestions, documentType, focusMode]);
+  }, [activeChapterId, save, title, requestSuggestions, documentType, focusMode]);
 
   const handleAnalysisModeChange = useCallback((mode: SuggestionAnalysisMode) => {
     setAnalysisMode(mode);
@@ -613,6 +763,29 @@ export default function Home() {
               </SelectContent>
             </Select>
 
+            {activeDocId && (
+              <div className="flex items-center rounded-lg bg-muted/70 p-0.5" role="group" aria-label="Workspace view">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={workspaceView === 'editor' ? 'h-7 bg-card text-foreground shadow-xs' : 'h-7 text-muted-foreground'}
+                  onClick={() => void handleWorkspaceViewChange('editor')}
+                  data-testid="button-view-editor"
+                >
+                  Editor
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={workspaceView === 'board' ? 'h-7 bg-card text-foreground shadow-xs' : 'h-7 text-muted-foreground'}
+                  onClick={() => void handleWorkspaceViewChange('board')}
+                  data-testid="button-view-board"
+                >
+                  Story Board
+                </Button>
+              </div>
+            )}
+
             {activeDocId && docChapters.length > 0 && (
               <div className="flex items-center gap-1">
                 {chapterSelector}
@@ -754,6 +927,30 @@ export default function Home() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
+                {activeDocId && (
+                  <>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">View</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onClick={() => void handleWorkspaceViewChange('editor')}
+                      className={workspaceView === 'editor' ? 'text-primary' : ''}
+                      data-testid="mobile-view-editor"
+                    >
+                      {workspaceView === 'editor' && <Check className="w-3.5 h-3.5 mr-2 shrink-0" />}
+                      {workspaceView !== 'editor' && <span className="w-3.5 h-3.5 mr-2 inline-block shrink-0" />}
+                      Editor
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => void handleWorkspaceViewChange('board')}
+                      className={workspaceView === 'board' ? 'text-primary' : ''}
+                      data-testid="mobile-view-board"
+                    >
+                      {workspaceView === 'board' && <Check className="w-3.5 h-3.5 mr-2 shrink-0" />}
+                      {workspaceView !== 'board' && <span className="w-3.5 h-3.5 mr-2 inline-block shrink-0" />}
+                      Story Board
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {/* Doc type */}
                 <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">Document Type</DropdownMenuLabel>
                 {['fiction', 'nonfiction', 'essay', 'blog', 'script', 'general'].map((type) => (
@@ -981,33 +1178,52 @@ export default function Home() {
 
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto relative">
-            <div className="max-w-3xl mx-auto px-4 sm:px-8 py-12">
-              {activeDocId ? (
-                <Editor
-                  ref={editorHandle}
-                  content={content}
-                  setContent={handleContentChange}
-                  title={title}
-                  setTitle={handleTitleChange}
-                  onSelectionChange={setSelectedText}
-                  grammarHighlights={grammarHighlights}
-                  onApplyCorrection={handleInlineCorrection}
-                />
-              ) : (
-                <div className="text-center py-32">
-                  <Sparkles className="w-12 h-12 text-primary/30 mx-auto mb-4" />
-                  <h2 className="text-xl font-medium text-muted-foreground mb-2">Welcome to Lumina</h2>
-                  <p className="text-sm text-muted-foreground/70 mb-6">Create a new document to start writing</p>
-                  <Button onClick={handleNewDocument} className="bg-primary text-primary-foreground" disabled={createMutation.isPending} data-testid="btn-create-first">
-                    {createMutation.isPending
-                      ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      : <FilePlus className="w-4 h-4 mr-2" />}
-                    New Document
-                  </Button>
-                </div>
-              )}
-            </div>
-            {activeDocId && (
+            {activeDocId && workspaceView === 'board' && (chaptersLoading || documentSwitching) ? (
+              <div className="h-full min-h-72 flex items-center justify-center text-sm text-muted-foreground" data-testid="board-loading">
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Loading Story Board…
+              </div>
+            ) : activeDocId && workspaceView === 'board' ? (
+              <StoryBoard
+                chapters={docChapters}
+                activeChapterId={activeChapterId}
+                reorderSaving={chapterReorderSaving}
+                colorSavingChapterId={chapterColorSavingId}
+                isAdding={chapterAdding}
+                onOpenChapter={(chapterId) => void handleOpenChapterFromBoard(chapterId)}
+                onAddChapter={() => void handleAddChapter()}
+                onReorder={(chapterIds) => void handleBoardReorder(chapterIds)}
+                onColorChange={(chapterId, color) => void handleChapterColorChange(chapterId, color)}
+              />
+            ) : (
+              <div className="max-w-3xl mx-auto px-4 sm:px-8 py-12">
+                {activeDocId ? (
+                  <Editor
+                    ref={editorHandle}
+                    content={content}
+                    setContent={handleContentChange}
+                    title={title}
+                    setTitle={handleTitleChange}
+                    onSelectionChange={setSelectedText}
+                    grammarHighlights={grammarHighlights}
+                    onApplyCorrection={handleInlineCorrection}
+                  />
+                ) : (
+                  <div className="text-center py-32">
+                    <Sparkles className="w-12 h-12 text-primary/30 mx-auto mb-4" />
+                    <h2 className="text-xl font-medium text-muted-foreground mb-2">Welcome to Lumina</h2>
+                    <p className="text-sm text-muted-foreground/70 mb-6">Create a new document to start writing</p>
+                    <Button onClick={handleNewDocument} className="bg-primary text-primary-foreground" disabled={createMutation.isPending} data-testid="btn-create-first">
+                      {createMutation.isPending
+                        ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        : <FilePlus className="w-4 h-4 mr-2" />}
+                      New Document
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+            {activeDocId && workspaceView === 'editor' && (
               <div
                 className="fixed bottom-6 text-xs text-muted-foreground/60 font-medium tracking-wide pointer-events-none"
                 style={{ left: '50%', transform: 'translateX(-50%)' }}
@@ -1020,7 +1236,7 @@ export default function Home() {
         </div>
 
         {/* Suggestions sidebar: sheet FAB on mobile, aside on desktop */}
-        {activeDocId && !focusMode && (
+        {activeDocId && !focusMode && workspaceView === 'editor' && (
           isMobile ? (
             <>
               <button

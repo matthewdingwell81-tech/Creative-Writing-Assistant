@@ -14,6 +14,8 @@ export interface Chapter {
   title: string;
   content: string;
   position: number;
+  cardColor: 'lavender' | 'rose' | 'amber' | 'sage' | 'sky' | 'slate';
+  synopsis: string;
 }
 
 export interface Idea {

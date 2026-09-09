@@ -123,5 +123,27 @@ export default defineConfig({
       dependencies: ['tutorial'],
       testMatch: '**/suggestion-navigation.spec.ts',
     },
+    {
+      name: 'story-board-desktop',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 1280, height: 800 },
+        storageState: 'e2e/.auth/mobile.json',
+      },
+      dependencies: ['tutorial'],
+      testMatch: '**/story-board.spec.ts',
+    },
+    {
+      name: 'story-board-mobile',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 375, height: 812 },
+        hasTouch: true,
+        isMobile: true,
+        storageState: 'e2e/.auth/mobile.json',
+      },
+      dependencies: ['tutorial'],
+      testMatch: '**/story-board.spec.ts',
+    },
   ],
 });

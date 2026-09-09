@@ -30,6 +30,26 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 const router = Router();
 
+function chapterSynopsis(content: string): string {
+  const plainText = content
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/(?:p|div|li|h[1-6])>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const words = plainText.split(" ").filter(Boolean);
+  if (words.length === 0) return "";
+  const preview = words.slice(0, 50).join(" ");
+  return words.length > 50 ? `${preview}…` : preview;
+}
+
 // === Auth Routes ===
 
 router.post("/auth/register", async (req: Request, res: Response) => {
@@ -307,7 +327,13 @@ router.get("/documents/:docId/chapters", requireAuth, async (req: Request, res: 
     return;
   }
   const chapterList = await storage.getChapters(docId);
-  res.json(chapterList);
+  const chaptersWithSynopses = await Promise.all(chapterList.map(async (chapter) => {
+    if (chapter.synopsis || !chapter.content.trim()) return chapter;
+    return await storage.updateChapter(chapter.id, {
+      synopsis: chapterSynopsis(chapter.content),
+    }) ?? chapter;
+  }));
+  res.json(chaptersWithSynopses);
 });
 
 router.post("/documents/:docId/chapters", requireAuth, async (req: Request, res: Response) => {
@@ -321,7 +347,11 @@ router.post("/documents/:docId/chapters", requireAuth, async (req: Request, res:
     res.status(404).json({ error: "Document not found" });
     return;
   }
-  const parsed = insertChapterSchema.safeParse({ ...req.body, documentId: docId });
+  const parsed = insertChapterSchema.safeParse({
+    ...req.body,
+    documentId: docId,
+    synopsis: chapterSynopsis(typeof req.body.content === "string" ? req.body.content : ""),
+  });
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -334,6 +364,7 @@ const chapterUpdateSchema = z.object({
   title: z.string().optional(),
   content: z.string().optional(),
   position: z.number().int().optional(),
+  cardColor: z.enum(["lavender", "rose", "amber", "sage", "sky", "slate"]).optional(),
 });
 
 const chapterReorderSchema = z.object({
@@ -399,7 +430,10 @@ router.patch("/chapters/:id", requireAuth, async (req: Request, res: Response) =
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const chapter = await storage.updateChapter(id, parsed.data);
+  const updates = parsed.data.content === undefined
+    ? parsed.data
+    : { ...parsed.data, synopsis: chapterSynopsis(parsed.data.content) };
+  const chapter = await storage.updateChapter(id, updates);
   if (!chapter) {
     res.status(404).json({ error: "Chapter not found" });
     return;

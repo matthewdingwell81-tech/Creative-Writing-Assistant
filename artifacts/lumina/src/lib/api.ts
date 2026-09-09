@@ -97,7 +97,12 @@ export async function fetchChapters(documentId: number) {
   return res.json();
 }
 
-export async function createChapter(documentId: number, data: { title: string; content?: string; position?: number }) {
+export async function createChapter(documentId: number, data: {
+  title: string;
+  content?: string;
+  position?: number;
+  cardColor?: "lavender" | "rose" | "amber" | "sage" | "sky" | "slate";
+}) {
   const res = await apiFetch(`/api/documents/${documentId}/chapters`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -107,7 +112,12 @@ export async function createChapter(documentId: number, data: { title: string; c
   return res.json();
 }
 
-export async function updateChapter(id: number, data: { title?: string; content?: string; position?: number }) {
+export async function updateChapter(id: number, data: {
+  title?: string;
+  content?: string;
+  position?: number;
+  cardColor?: "lavender" | "rose" | "amber" | "sage" | "sky" | "slate";
+}) {
   const res = await apiFetch(`/api/chapters/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
