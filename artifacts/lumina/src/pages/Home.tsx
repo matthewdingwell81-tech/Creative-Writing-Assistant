@@ -23,7 +23,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { Document, Chapter } from '@/types/schema';
 import { useTutorial } from '@/hooks/useTutorial';
-import { TOUR_LABELS, type TourKey, getFirstUse, setFirstUseSeen, getTutorialDone, resetTourProgress } from '@/lib/tutorial';
+import { TOUR_LABELS, type TourKey, getFirstUse, setFirstUseSeen, resetTourProgress } from '@/lib/tutorial';
 import { ToastAction } from '@/components/ui/toast';
 
 function normalizeNbsp(s: string): string {
@@ -164,7 +164,8 @@ export default function Home() {
   const chapterLoadVersionRef = useRef(0);
   const documentSelectionVersionRef = useRef(0);
 
-  const { start: startTutorial, registerSideEffect } = useTutorial();
+  const { start: startTutorial, registerSideEffect, isDone: isTutorialDone } = useTutorial();
+  const tutorialAutoLaunchUserRef = useRef<string | null>(null);
 
   // First-use tracking for contextual prompts
   const firstUseShownRef = useRef<Record<string, boolean>>({});
@@ -192,16 +193,19 @@ export default function Home() {
     saveSuggestion, removeSaved, clearHistory
   } = useSuggestions();
 
-  // Auto-launch the full tour on first visit (once, after UI is ready)
+  // Auto-launch once for an authenticated user who has not completed the full tour.
   useEffect(() => {
-    const done = getTutorialDone();
-    if (done['full']) return;
+    if (!user || tutorialAutoLaunchUserRef.current === user.id) return;
+    tutorialAutoLaunchUserRef.current = user.id;
+    if (isTutorialDone('full')) return;
+
     const timer = setTimeout(() => {
-      startTutorial('full');
+      // Re-check at fire time in case the user completed a manually launched
+      // tour while the delayed auto-launch was pending.
+      if (!isTutorialDone('full')) startTutorial('full');
     }, 800);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once on mount
+  }, [isTutorialDone, startTutorial, user]);
 
   // Register tutorial side effects — must come after cancelPending is in scope
   useEffect(() => {
@@ -516,6 +520,22 @@ export default function Home() {
     }
     setWorkspaceView(nextView);
   }, [activeChapterId, cancelPending, content, saveNow, title, workspaceView]);
+
+  useEffect(() => {
+    registerSideEffect('openStoryBoard', () => {
+      void handleWorkspaceViewChange('board');
+    });
+    registerSideEffect('openResearchLibrary', () => {
+      void handleWorkspaceViewChange('research');
+    });
+    registerSideEffect('openResearchContext', () => {
+      void handleWorkspaceViewChange('editor');
+      window.setTimeout(() => {
+        const trigger = document.querySelector<HTMLElement>('[data-testid="fab-research"]');
+        if (trigger && trigger.getAttribute('aria-expanded') !== 'true') trigger.click();
+      }, 0);
+    });
+  }, [handleWorkspaceViewChange, registerSideEffect]);
 
   const handleOpenChapterFromBoard = useCallback(async (chapterId: number) => {
     await handleSwitchChapter(chapterId);

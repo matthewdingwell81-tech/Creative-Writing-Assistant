@@ -100,7 +100,9 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const isDone = useCallback((key: string) => {
-    return !!doneRef.current[key];
+    const latestDone = getTutorialDone();
+    doneRef.current = latestDone;
+    return !!latestDone[key];
   }, []);
 
   const currentStep = activeTour && steps.length > 0 ? (steps[stepIndex] ?? null) : null;

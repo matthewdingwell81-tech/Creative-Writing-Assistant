@@ -70,6 +70,17 @@ async function dismissTutorialIfPresent(page: Page) {
   }
 }
 
+async function launchTourFromHelp(page: Page, key: string, mobile = false) {
+  if (mobile) {
+    await page.getByTestId('btn-mobile-overflow').click();
+    await page.getByTestId(`tour-mobile-${key}`).click();
+  } else {
+    await page.getByTestId('btn-help-menu').click();
+    await page.getByTestId(`tour-${key}`).click();
+  }
+  await expect(page.getByTestId('tutorial-card')).toBeVisible({ timeout: 5_000 });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -255,6 +266,61 @@ test.describe('Tutorial system', () => {
     await expect(page.getByTestId('tutorial-card')).toContainText('Focus Mode');
 
     await page.getByTestId('tutorial-skip').click();
+  });
+
+  test('Story Board and Research tours open their desktop workspace targets', async ({ page }) => {
+    await bootWithTutorialDismissed(page);
+
+    await launchTourFromHelp(page, 'storyBoard');
+    await expect(page.getByTestId('tutorial-card')).toContainText('Story Board');
+    await expect(page.getByTestId('board')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('tutorial-skip').click();
+
+    await launchTourFromHelp(page, 'research');
+    await expect(page.getByTestId('tutorial-card')).toContainText('Research Library');
+    await expect(page.getByTestId('research-library')).toBeVisible({ timeout: 5_000 });
+
+    await page.getByTestId('tutorial-next').click();
+    await expect(page.getByTestId('tutorial-card')).toContainText('Find Your References');
+    await expect(page.getByTestId('input-search-research')).toBeVisible();
+
+    await page.getByTestId('tutorial-next').click();
+    await expect(page.getByTestId('tutorial-card')).toContainText('Research Context');
+    await expect(page.getByTestId('tab-related')).toBeVisible({ timeout: 5_000 });
+
+    await page.getByTestId('tutorial-next').click();
+    await expect(page.getByTestId('tutorial-card')).toContainText('Quick Add a Note');
+    await expect(page.getByTestId('btn-quick-add-research')).toBeVisible();
+    await page.getByTestId('tutorial-skip').click();
+  });
+
+  test('completed full tour does not auto-launch after signing out and back in', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    // This is the persisted state written when the user clicks Done; the
+    // existing completion test covers that write through the tutorial UI.
+    await page.evaluate(() => {
+      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
+    });
+
+    // The delayed first-visit launch must re-check completion before firing.
+    await page.waitForTimeout(1_200);
+    await expect(page.getByTestId('tutorial-card')).not.toBeVisible();
+
+    // Drop this browser context's auth cookie without revoking the shared
+    // storage-state session that later E2E tests still need.
+    await page.context().clearCookies();
+    await page.goto('/auth');
+    await expect(page.getByTestId('tab-login')).toBeVisible({ timeout: 5_000 });
+
+    await page.getByTestId('input-username').fill('e2e_mobile_test');
+    await page.getByTestId('input-password').fill('e2e_mobile_pass_123!');
+    await page.getByTestId('button-submit-auth').click();
+    await expect(page.getByTestId('btn-user-menu')).toBeVisible({ timeout: 8_000 });
+
+    await page.waitForTimeout(1_200);
+    await expect(page.getByTestId('tutorial-card')).not.toBeVisible();
   });
 
   test('auto-skip works for steps without a visible target', async ({ page }) => {
@@ -510,6 +576,32 @@ test.describe('Tour pauses on each step on mobile', () => {
     // Clean up
     await page.getByTestId('tutorial-skip').click();
     await expect(card).not.toBeVisible({ timeout: 3_000 });
+  });
+
+  test('Story Board and Research tours reach their targets on mobile', async ({ page }) => {
+    await bootWithTutorialDismissed(page);
+
+    await launchTourFromHelp(page, 'storyBoard', true);
+    await expect(page.getByTestId('tutorial-card')).toContainText('Story Board');
+    await expect(page.getByTestId('board')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('tutorial-skip').click();
+
+    await launchTourFromHelp(page, 'research', true);
+    await expect(page.getByTestId('tutorial-card')).toContainText('Research Library');
+    await expect(page.getByTestId('research-library')).toBeVisible({ timeout: 5_000 });
+
+    await page.getByTestId('tutorial-next').click();
+    await expect(page.getByTestId('tutorial-card')).toContainText('Find Your References');
+    await expect(page.getByTestId('input-search-research')).toBeVisible();
+
+    await page.getByTestId('tutorial-next').click();
+    await expect(page.getByTestId('tutorial-card')).toContainText('Research Context');
+    await expect(page.getByTestId('tab-related')).toBeVisible({ timeout: 5_000 });
+
+    await page.getByTestId('tutorial-next').click();
+    await expect(page.getByTestId('tutorial-card')).toContainText('Quick Add a Note');
+    await expect(page.getByTestId('btn-quick-add-research')).toBeVisible();
+    await page.getByTestId('tutorial-skip').click();
   });
 });
 
