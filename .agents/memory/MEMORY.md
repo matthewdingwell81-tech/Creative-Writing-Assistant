@@ -1,3 +1,4 @@
 - [drizzle-zod zod compat](drizzle-zod-zod-compat.md) — drizzle-zod@0.8.3 breaks with zod@3.25.x; use manual z.object() schemas in lib/db instead
 - [Replit bcrypt](replit-bcrypt.md) — use bcryptjs (pure JS) not bcrypt in api-server; no native build step needed
 - [Session types tsconfig](session-types-tsconfig.md) — add "express-session" to tsconfig types array so session.d.ts augmentation is picked up
+- [Account-scoped browser state](account-scoped-browser-state.md) — migrate legacy browser-wide state once, then isolate persisted user state by authenticated account ID

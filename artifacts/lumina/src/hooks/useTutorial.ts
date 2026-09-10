@@ -4,9 +4,11 @@ import {
   type TutorialStep,
   FULL_TOUR,
   FEATURE_TOURS,
+  initializeTutorialState,
   getTutorialDone,
   setTutorialDone,
 } from '@/lib/tutorial';
+import { useAuth } from '@/hooks/useAuth';
 
 interface TutorialContextValue {
   activeTour: TourKey | null;
@@ -30,6 +32,8 @@ interface TutorialContextValue {
 const TutorialContext = createContext<TutorialContextValue | null>(null);
 
 export function TutorialProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const accountId = user?.id ?? null;
   const [activeTour, setActiveTour] = useState<TourKey | null>(null);
   const [steps, setSteps] = useState<TutorialStep[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
@@ -42,8 +46,18 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { stepsRef.current = steps; }, [steps]);
   useEffect(() => { stepIndexRef.current = stepIndex; }, [stepIndex]);
 
-  const doneRef = useRef<Record<string, boolean>>(getTutorialDone());
+  const doneRef = useRef<Record<string, boolean>>({});
+  const accountIdRef = useRef<string | null>(accountId);
   const sideEffectsRef = useRef<Record<string, () => void>>({});
+
+  useEffect(() => {
+    accountIdRef.current = accountId;
+    if (accountId) initializeTutorialState(accountId);
+    doneRef.current = accountId ? getTutorialDone(accountId) : {};
+    setActiveTour(null);
+    setSteps([]);
+    setStepIndex(0);
+  }, [accountId]);
 
   const registerSideEffect = useCallback((key: string, handler: () => void) => {
     sideEffectsRef.current[key] = handler;
@@ -55,8 +69,9 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
 
   const closeTour = useCallback((markDone: boolean) => {
     const tour = activeTourRef.current;
-    if (markDone && tour) {
-      setTutorialDone(tour);
+    const currentAccountId = accountIdRef.current;
+    if (markDone && tour && currentAccountId) {
+      setTutorialDone(currentAccountId, tour);
       doneRef.current[tour] = true;
     }
     setActiveTour(null);
@@ -100,7 +115,9 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const isDone = useCallback((key: string) => {
-    const latestDone = getTutorialDone();
+    const currentAccountId = accountIdRef.current;
+    if (!currentAccountId) return false;
+    const latestDone = getTutorialDone(currentAccountId);
     doneRef.current = latestDone;
     return !!latestDone[key];
   }, []);

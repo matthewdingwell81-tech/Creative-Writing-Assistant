@@ -17,12 +17,30 @@ import { test, expect, type Page } from '@playwright/test';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Reset tutorial localStorage keys. */
+async function tutorialStorageKey(page: Page, baseKey: string) {
+  const response = await page.request.get('/api/auth/me');
+  expect(response.ok()).toBe(true);
+  const user: { id: string } = await response.json();
+  return `${baseKey}:${encodeURIComponent(user.id)}`;
+}
+
+async function setTutorialDoneState(page: Page, state: Record<string, boolean>) {
+  const key = await tutorialStorageKey(page, 'lumina_tutorial_done');
+  await page.evaluate(([storageKey, value]) => {
+    localStorage.setItem(storageKey, JSON.stringify(value));
+  }, [key, state] as const);
+}
+
+/** Reset tutorial localStorage keys for the authenticated account and legacy migration. */
 async function clearTutorialState(page: Page) {
-  await page.evaluate(() => {
+  const doneKey = await tutorialStorageKey(page, 'lumina_tutorial_done');
+  const firstUseKey = await tutorialStorageKey(page, 'lumina_first_use');
+  await page.evaluate(([scopedDoneKey, scopedFirstUseKey]) => {
     localStorage.removeItem('lumina_tutorial_done');
     localStorage.removeItem('lumina_first_use');
-  });
+    localStorage.removeItem(scopedDoneKey);
+    localStorage.removeItem(scopedFirstUseKey);
+  }, [doneKey, firstUseKey]);
 }
 
 /**
@@ -109,9 +127,7 @@ test.describe('Tutorial system', () => {
     await bootWithTutorialDismissed(page);
 
     // Mark full tour done so the reload in boot doesn't auto-launch it
-    await page.evaluate(() => {
-      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
-    });
+    await setTutorialDoneState(page, { full: true });
 
     // Launch full tour from Help menu
     await page.getByTestId('btn-help-menu').click();
@@ -182,13 +198,10 @@ test.describe('Tutorial system', () => {
     await bootWithTutorialDismissed(page);
 
     // Mark everything done so no auto-launches interfere
-    await page.evaluate(() => {
-      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
-    });
+    await setTutorialDoneState(page, { full: true });
     // Clear first-use flags so the focusMode toast fires on next toggle
-    await page.evaluate(() => {
-      localStorage.removeItem('lumina_first_use');
-    });
+    const firstUseKey = await tutorialStorageKey(page, 'lumina_first_use');
+    await page.evaluate((key) => localStorage.removeItem(key), firstUseKey);
 
     // Click the Focus Mode button to trigger the first-use toast
     await page.getByTestId('btn-toggle-focus-mode').first().click();
@@ -209,9 +222,7 @@ test.describe('Tutorial system', () => {
     await bootWithTutorialDismissed(page);
 
     // Mark full tour done to prevent auto-launch interference
-    await page.evaluate(() => {
-      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
-    });
+    await setTutorialDoneState(page, { full: true });
 
     // Launch the Focus Mode tour — it has only one visible step (shortest tour)
     await page.getByTestId('btn-help-menu').click();
@@ -238,14 +249,15 @@ test.describe('Tutorial system', () => {
     await expect(page.getByTestId('tutorial-card')).not.toBeVisible({ timeout: 5_000 });
 
     // localStorage must have the focusMode tour flagged as done
-    const isDone = await page.evaluate(() => {
+    const doneKey = await tutorialStorageKey(page, 'lumina_tutorial_done');
+    const isDone = await page.evaluate((key) => {
       try {
-        const stored = JSON.parse(localStorage.getItem('lumina_tutorial_done') || '{}');
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
         return stored['focusMode'] === true;
       } catch {
         return false;
       }
-    });
+    }, doneKey);
     expect(isDone).toBe(true);
   });
 
@@ -254,9 +266,7 @@ test.describe('Tutorial system', () => {
     await bootWithTutorialDismissed(page);
 
     // Mark full tour as done so a reload doesn't auto-launch it again
-    await page.evaluate(() => {
-      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
-    });
+    await setTutorialDoneState(page, { full: true });
 
     // Open Help menu (the ? icon in the header) and pick Focus Mode tour
     await page.getByTestId('btn-help-menu').click();
@@ -300,9 +310,7 @@ test.describe('Tutorial system', () => {
 
     // This is the persisted state written when the user clicks Done; the
     // existing completion test covers that write through the tutorial UI.
-    await page.evaluate(() => {
-      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
-    });
+    await setTutorialDoneState(page, { full: true });
 
     // The delayed first-visit launch must re-check completion before firing.
     await page.waitForTimeout(1_200);
@@ -323,14 +331,88 @@ test.describe('Tutorial system', () => {
     await expect(page.getByTestId('tutorial-card')).not.toBeVisible();
   });
 
+  test('tutorial progress stays separate when switching accounts in one browser', async ({ browser, baseURL }) => {
+    expect(baseURL).toBeTruthy();
+    const context = await browser.newContext({ baseURL });
+    const page = await context.newPage();
+    const accountSuffix = Date.now();
+    const firstUsername = `tutorial_first_${accountSuffix}`;
+    const secondUsername = `tutorial_second_${accountSuffix}`;
+    const accountPassword = 'tutorial_switch_pass_123!';
+    const initialRegister = await page.request.post('/api/auth/register', {
+      data: { username: firstUsername, password: accountPassword },
+    });
+    expect(initialRegister.ok()).toBe(true);
+
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+    await clearTutorialState(page);
+
+    // A current user keeps browser-wide progress from before account scoping.
+    await page.evaluate(() => {
+      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
+      localStorage.setItem('lumina_first_use', JSON.stringify({ focusMode: true }));
+    });
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1_200);
+    await expect(page.getByTestId('tutorial-card')).not.toBeVisible();
+
+    const firstAccountKey = await tutorialStorageKey(page, 'lumina_tutorial_done');
+    const firstAccountFirstUseKey = await tutorialStorageKey(page, 'lumina_first_use');
+    const migrated = await page.evaluate(([doneKey, firstUseKey]) => ({
+      legacyDone: localStorage.getItem('lumina_tutorial_done'),
+      legacyFirstUse: localStorage.getItem('lumina_first_use'),
+      scopedDone: JSON.parse(localStorage.getItem(doneKey) || '{}'),
+      scopedFirstUse: JSON.parse(localStorage.getItem(firstUseKey) || '{}'),
+    }), [firstAccountKey, firstAccountFirstUseKey]);
+    expect(migrated.legacyDone).toBeNull();
+    expect(migrated.legacyFirstUse).toBeNull();
+    expect(migrated.scopedDone.full).toBe(true);
+    expect(migrated.scopedFirstUse.focusMode).toBe(true);
+
+    const registerResponse = await page.request.post('/api/auth/register', {
+      data: { username: secondUsername, password: accountPassword },
+    });
+    expect(registerResponse.ok()).toBe(true);
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByTestId('tutorial-card')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('tutorial-skip').click();
+
+    const secondAccountKey = await tutorialStorageKey(page, 'lumina_tutorial_done');
+    const secondAccountFirstUseKey = await tutorialStorageKey(page, 'lumina_first_use');
+    expect(secondAccountKey).not.toBe(firstAccountKey);
+    const accountStates = await page.evaluate(([firstDoneKey, firstUseKey, secondDoneKey, secondFirstUseKey]) => ({
+      firstDone: JSON.parse(localStorage.getItem(firstDoneKey) || '{}'),
+      firstUse: JSON.parse(localStorage.getItem(firstUseKey) || '{}'),
+      secondDone: JSON.parse(localStorage.getItem(secondDoneKey) || '{}'),
+      secondFirstUse: JSON.parse(localStorage.getItem(secondFirstUseKey) || '{}'),
+    }), [firstAccountKey, firstAccountFirstUseKey, secondAccountKey, secondAccountFirstUseKey]);
+    expect(accountStates.firstDone.full).toBe(true);
+    expect(accountStates.firstUse.focusMode).toBe(true);
+    expect(accountStates.secondDone.full).not.toBe(true);
+    expect(accountStates.secondFirstUse.focusMode).not.toBe(true);
+
+    const loginResponse = await page.request.post('/api/auth/login', {
+      data: { username: firstUsername, password: accountPassword },
+    });
+    expect(loginResponse.ok()).toBe(true);
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1_200);
+    await expect(page.getByTestId('tutorial-card')).not.toBeVisible();
+    await context.close();
+  });
+
   test('auto-skip works for steps without a visible target', async ({ page }) => {
     // Start clean, dismiss auto-launch, ensure document exists
     await bootWithTutorialDismissed(page);
 
     // Mark full tour done so it won't auto-launch on the next reload
-    await page.evaluate(() => {
-      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
-    });
+    await setTutorialDoneState(page, { full: true });
 
     // Launch Chapters tour via Help menu
     await page.getByTestId('btn-help-menu').click();
@@ -369,9 +451,7 @@ test.describe('Tutorial system', () => {
     await bootWithTutorialDismissed(page);
 
     // Mark full tour done to prevent auto-launch interference
-    await page.evaluate(() => {
-      localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
-    });
+    await setTutorialDoneState(page, { full: true });
 
     // Type some content into the editor so there is text to select
     const editorArea = page.getByTestId('editor-area');
@@ -456,10 +536,7 @@ test.describe('Tutorial system', () => {
     }
 
     // ── 2. Clear tutorial flags and reload so both server and client are clean
-    await page.evaluate(() => {
-      localStorage.removeItem('lumina_tutorial_done');
-      localStorage.removeItem('lumina_first_use');
-    });
+    await clearTutorialState(page);
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
 
@@ -515,13 +592,14 @@ test.describe('Tutorial system', () => {
     await expect(page.getByTestId('tutorial-card')).not.toBeVisible({ timeout: 3_000 });
 
     // localStorage must record the full tour as completed
-    const storedDone = await page.evaluate(() => {
+    const doneKey = await tutorialStorageKey(page, 'lumina_tutorial_done');
+    const storedDone = await page.evaluate((key) => {
       try {
-        return JSON.parse(localStorage.getItem('lumina_tutorial_done') || '{}')['full'] === true;
+        return JSON.parse(localStorage.getItem(key) || '{}')['full'] === true;
       } catch {
         return false;
       }
-    });
+    }, doneKey);
     expect(storedDone, 'lumina_tutorial_done[full] not set after completing tour').toBe(true);
   });
 });

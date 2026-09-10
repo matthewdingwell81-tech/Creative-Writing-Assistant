@@ -288,39 +288,61 @@ export const TOUR_LABELS: Record<TourKey, string> = {
 const STORAGE_KEY = 'lumina_tutorial_done';
 const FIRST_USE_KEY = 'lumina_first_use';
 
-export function getTutorialDone(): Record<string, boolean> {
+function accountStorageKey(baseKey: string, accountId: string): string {
+  return `${baseKey}:${encodeURIComponent(accountId)}`;
+}
+
+export function initializeTutorialState(accountId: string): void {
+  for (const baseKey of [STORAGE_KEY, FIRST_USE_KEY]) {
+    const scopedKey = accountStorageKey(baseKey, accountId);
+    const scopedValue = localStorage.getItem(scopedKey);
+    const legacyValue = localStorage.getItem(baseKey);
+
+    if (scopedValue === null && legacyValue !== null) {
+      localStorage.setItem(scopedKey, legacyValue);
+    }
+    if (legacyValue !== null) {
+      localStorage.removeItem(baseKey);
+    }
+  }
+}
+
+function getAccountState(baseKey: string, accountId: string): Record<string, boolean> {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    initializeTutorialState(accountId);
+    return JSON.parse(localStorage.getItem(accountStorageKey(baseKey, accountId)) || '{}');
   } catch {
     return {};
   }
 }
 
-export function setTutorialDone(key: string): void {
-  const done = getTutorialDone();
+export function getTutorialDone(accountId: string): Record<string, boolean> {
+  return getAccountState(STORAGE_KEY, accountId);
+}
+
+export function setTutorialDone(accountId: string, key: string): void {
+  const done = getTutorialDone(accountId);
   done[key] = true;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(done));
+  localStorage.setItem(accountStorageKey(STORAGE_KEY, accountId), JSON.stringify(done));
 }
 
-export function getFirstUse(): Record<string, boolean> {
-  try {
-    return JSON.parse(localStorage.getItem(FIRST_USE_KEY) || '{}');
-  } catch {
-    return {};
-  }
+export function getFirstUse(accountId: string): Record<string, boolean> {
+  return getAccountState(FIRST_USE_KEY, accountId);
 }
 
-export function setFirstUseSeen(key: string): void {
-  const seen = getFirstUse();
+export function setFirstUseSeen(accountId: string, key: string): void {
+  const seen = getFirstUse(accountId);
   seen[key] = true;
-  localStorage.setItem(FIRST_USE_KEY, JSON.stringify(seen));
+  localStorage.setItem(accountStorageKey(FIRST_USE_KEY, accountId), JSON.stringify(seen));
 }
 
 /**
  * Clears all stored tutorial progress so that the full tour auto-launches
  * again on next load and all contextual first-use prompts re-fire.
  */
-export function resetTourProgress(): void {
+export function resetTourProgress(accountId: string): void {
+  localStorage.removeItem(accountStorageKey(STORAGE_KEY, accountId));
+  localStorage.removeItem(accountStorageKey(FIRST_USE_KEY, accountId));
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(FIRST_USE_KEY);
 }

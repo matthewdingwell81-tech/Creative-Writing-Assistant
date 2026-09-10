@@ -171,10 +171,11 @@ export default function Home() {
   const firstUseShownRef = useRef<Record<string, boolean>>({});
 
   const showFirstUsePrompt = useCallback((featureKey: TourKey, label: string) => {
-    const seen = getFirstUse();
+    if (!user) return;
+    const seen = getFirstUse(user.id);
     if (seen[featureKey] || firstUseShownRef.current[featureKey]) return;
     firstUseShownRef.current[featureKey] = true;
-    setFirstUseSeen(featureKey);
+    setFirstUseSeen(user.id, featureKey);
     // Capture startTutorial in a local var to avoid stale closure issues inside setTimeout
     const launchTour = () => startTutorial(featureKey);
     setTimeout(() => {
@@ -184,7 +185,11 @@ export default function Home() {
         action: <ToastAction altText="Take tour" onClick={launchTour}>Take tour →</ToastAction>,
       });
     }, 600);
-  }, [toast, startTutorial]);
+  }, [toast, startTutorial, user]);
+
+  useEffect(() => {
+    firstUseShownRef.current = {};
+  }, [user?.id]);
 
   const {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
@@ -875,7 +880,7 @@ export default function Home() {
                 ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => { resetTourProgress(); toast({ title: 'Tour progress reset', description: 'Contextual prompts and the full tour will appear again on your next visit.' }); }}
+                  onClick={() => { if (user) resetTourProgress(user.id); toast({ title: 'Tour progress reset', description: 'Contextual prompts and the full tour will appear again on your next visit.' }); }}
                   data-testid="btn-reset-tour-progress"
                   className="text-muted-foreground focus:text-foreground"
                 >
@@ -1107,7 +1112,7 @@ export default function Home() {
                 ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => { resetTourProgress(); toast({ title: 'Tour progress reset', description: 'Contextual prompts and the full tour will appear again on your next visit.' }); }}
+                  onClick={() => { if (user) resetTourProgress(user.id); toast({ title: 'Tour progress reset', description: 'Contextual prompts and the full tour will appear again on your next visit.' }); }}
                   data-testid="btn-reset-tour-progress-mobile"
                   className="text-muted-foreground focus:text-foreground"
                 >
