@@ -1,4 +1,4 @@
-export type TourKey = 'full' | 'focusMode' | 'scratchpad' | 'assistant' | 'chapters' | 'googleDocs' | 'export';
+export type TourKey = 'full' | 'focusMode' | 'scratchpad' | 'assistant' | 'chapters' | 'googleDocs' | 'export' | 'storyBoard' | 'research';
 
 export type Placement = 'top' | 'bottom' | 'left' | 'right' | 'center';
 
@@ -203,6 +203,62 @@ export const FULL_TOUR: TutorialStep[] = [
     placement: 'bottom',
     missingTargetHint: 'Open a document to see the Google Docs import button in the toolbar.',
   },
+  // 13. Story Board and Research Library
+  {
+    id: 'story-board',
+    featureKey: 'storyBoard',
+    target: '[data-testid="board"]',
+    title: 'Story Board',
+    body: 'Story Board gives you a visual overview of your chapters. Review your manuscript at a glance, then drag cards to reorder the story.',
+    placement: 'top',
+    sideEffect: 'openStoryBoard',
+    skipIfTargetMissing: true,
+    missingTargetHint: 'Open or create a document first to use Story Board.',
+  },
+  {
+    id: 'research-library',
+    featureKey: 'research',
+    target: '[data-testid="research-library"]',
+    title: 'Research Library',
+    body: 'Collect notes, links, and images for your project in one place. Use tags, favorites, and scope filters to keep your references organized.',
+    placement: 'top',
+    sideEffect: 'openResearchLibrary',
+    skipIfTargetMissing: true,
+    missingTargetHint: 'Open or create a document first to use the Research Library.',
+  },
+  {
+    id: 'research-filters',
+    featureKey: 'research',
+    target: '[data-testid="input-search-research"]',
+    title: 'Find Your References',
+    body: 'Search your library and combine type, status, scope, chapter, and tag filters to find the research you need quickly.',
+    placement: 'bottom',
+    sideEffect: 'openResearchLibrary',
+    skipIfTargetMissing: true,
+    missingTargetHint: 'Open the Research Library to use its search and filters.',
+  },
+  {
+    id: 'research-context',
+    featureKey: 'research',
+    target: '[data-testid="fab-research"]',
+    title: 'Research Context',
+    body: 'Open Research Context from the editor to see research related to the current chapter, items already attached to it, or everything in your library.',
+    placement: 'left',
+    sideEffect: 'openResearchContext',
+    skipIfTargetMissing: true,
+    missingTargetHint: 'Open a document in the editor to see Research Context.',
+  },
+  {
+    id: 'research-quick-add',
+    featureKey: 'research',
+    target: '[data-testid="btn-quick-add-research"]',
+    title: 'Quick Add a Note',
+    body: 'Add a text note without leaving your chapter. You can attach it to the current chapter or keep it available across the whole document.',
+    placement: 'top',
+    sideEffect: 'openResearchContext',
+    skipIfTargetMissing: true,
+    missingTargetHint: 'Open Research Context from the editor to use Quick Add Note.',
+  },
 ];
 
 export const FEATURE_TOURS: Record<TourKey, TutorialStep[]> = {
@@ -213,6 +269,8 @@ export const FEATURE_TOURS: Record<TourKey, TutorialStep[]> = {
   chapters: FULL_TOUR.filter(s => s.featureKey === 'chapters'),
   googleDocs: FULL_TOUR.filter(s => s.featureKey === 'googleDocs'),
   export: FULL_TOUR.filter(s => s.featureKey === 'export'),
+  storyBoard: FULL_TOUR.filter(s => s.featureKey === 'storyBoard'),
+  research: FULL_TOUR.filter(s => s.featureKey === 'research'),
 };
 
 export const TOUR_LABELS: Record<TourKey, string> = {
@@ -223,6 +281,8 @@ export const TOUR_LABELS: Record<TourKey, string> = {
   chapters: 'Chapters',
   googleDocs: 'Google Docs',
   export: 'Export',
+  storyBoard: 'Story Board',
+  research: 'Research Library',
 };
 
 const STORAGE_KEY = 'lumina_tutorial_done';
