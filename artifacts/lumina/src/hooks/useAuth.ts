@@ -1,74 +1,61 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
+import { useState, useEffect } from "react";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  User
+} from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 export interface AuthUser {
   id: string;
-  username: string;
+  email: string | null;
 }
 
 export function useAuth() {
-  const queryClient = useQueryClient();
-  const [, setLocation] = useLocation();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const { data: user, isLoading } = useQuery<AuthUser | null>({
-    queryKey: ["/api/auth/me"],
-    queryFn: async () => {
-      try {
-        const res = await fetch("/api/auth/me", { credentials: "include" });
-        if (res.status === 401) return null;
-        if (!res.ok) return null;
-        return res.json();
-      } catch {
-        return null;
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser({
+          id: firebaseUser.uid,
+          email: firebaseUser.email
+        });
+      } else {
+        setUser(null);
       }
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
+      setIsLoading(false);
+    });
 
-  const loginMutation = useMutation({
-    mutationFn: async (data: { username: string; password: string; rememberMe?: boolean }) => {
-      const res = await apiRequest("POST", "/api/auth/login", data);
-      return res.json() as Promise<AuthUser>;
-    },
-    onSuccess: (user) => {
-      queryClient.setQueryData(["/api/auth/me"], user);
-      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
-    },
-  });
+    return () => unsubscribe();
+  }, []);
 
-  const registerMutation = useMutation({
-    mutationFn: async (data: { username: string; password: string }) => {
-      const res = await apiRequest("POST", "/api/auth/register", data);
-      return res.json() as Promise<AuthUser>;
-    },
-    onSuccess: (user) => {
-      queryClient.setQueryData(["/api/auth/me"], user);
-      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
-    },
-  });
+  const login = async (data: { username: string; password: string; rememberMe?: boolean }) => {
+    // For email/password login, username field is actually the email
+    await signInWithEmailAndPassword(auth, data.username, data.password);
+  };
 
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/auth/logout", {});
-    },
-    onSuccess: () => {
-      queryClient.setQueryData(["/api/auth/me"], null);
-      setLocation("/auth", { replace: true });
-      queryClient.clear();
-    },
-  });
+  const register = async (data: { username: string; password: string }) => {
+    // For email/password registration, username field is actually the email
+    await createUserWithEmailAndPassword(auth, data.username, data.password);
+  };
+
+  const logout = async () => {
+    await signOut(auth);
+  };
 
   return {
-    user: user ?? null,
+    user,
     isLoading,
-    login: loginMutation.mutateAsync,
-    register: registerMutation.mutateAsync,
-    logout: logoutMutation.mutateAsync,
-    loginError: loginMutation.error,
-    registerError: registerMutation.error,
-    isLoggingIn: loginMutation.isPending,
-    isRegistering: registerMutation.isPending,
+    login,
+    register,
+    logout,
+    loginError: null,
+    registerError: null,
+    isLoggingIn: false,
+    isRegistering: false
   };
 }
