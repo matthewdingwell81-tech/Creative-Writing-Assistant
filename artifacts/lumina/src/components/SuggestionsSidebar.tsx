@@ -390,7 +390,7 @@ export default function SuggestionsSidebar({
 
   return (
     <>
-    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+    <div className="flex flex-col h-full min-h-0">
       <div className="p-4 border-b border-border/50 bg-card/50">
         <div className="flex items-center justify-between">
           <h2 className="font-medium flex items-center gap-2 text-foreground">

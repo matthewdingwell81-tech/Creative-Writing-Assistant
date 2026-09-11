@@ -285,10 +285,13 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
       const rect = target.getBoundingClientRect();
       const containerEl = editorRef.current?.closest('.relative');
       const containerRect = containerEl?.getBoundingClientRect();
+      const preferredX = rect.left - (containerRect?.left || 0);
+      const popoverWidth = Math.min(320, Math.max(160, window.innerWidth - 32));
+      const maxX = Math.max(0, (containerRect?.width || window.innerWidth) - popoverWidth);
 
       setPopover({
         visible: true,
-        x: rect.left - (containerRect?.left || 0),
+        x: Math.max(0, Math.min(preferredX, maxX)),
         y: rect.bottom - (containerRect?.top || 0) + 4,
         original,
         alternatives: alts ? alts.split('|||') : [],
@@ -352,7 +355,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="w-full text-4xl font-serif font-medium text-foreground mb-8 bg-transparent border-none outline-none placeholder:text-muted-foreground/40"
+        className="w-full min-w-0 text-2xl sm:text-4xl font-serif font-medium text-foreground mb-6 sm:mb-8 bg-transparent border-none outline-none placeholder:text-muted-foreground/40"
         placeholder="Untitled"
         data-testid="input-title"
         data-tutorial="editor-title"
@@ -360,7 +363,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
 
       <div
         ref={editorRef}
-        className="prose prose-lg prose-neutral max-w-none font-serif text-foreground/85 leading-relaxed focus:outline-none min-h-[60vh] pb-32"
+        className="prose prose-base sm:prose-lg prose-neutral max-w-none break-words font-serif text-foreground/85 leading-relaxed focus:outline-none min-h-[50vh] sm:min-h-[60vh] pb-32"
         contentEditable
         suppressContentEditableWarning
         onInput={handleInput}
@@ -375,7 +378,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({
       {popover.visible && popover.alternatives.length > 0 && (
         <div
           data-spell-popover="true"
-          className="absolute z-50 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[160px] animate-in fade-in-0 zoom-in-95 duration-100"
+          className="absolute z-50 w-[min(20rem,calc(100vw-2rem))] bg-popover border border-border rounded-lg shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
           style={{ left: popover.x, top: popover.y }}
           data-testid="spell-correction-popover"
         >

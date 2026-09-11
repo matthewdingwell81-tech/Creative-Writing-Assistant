@@ -82,7 +82,7 @@ export function ResearchLibrary({ documentId, chapters }: ResearchLibraryProps) 
             <button
               key={t}
               onClick={() => setTypeFilter(t)}
-              className={`w-full text-left px-2 py-1.5 text-sm rounded-md transition-colors ${typeFilter === t ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+              className={`w-full min-h-11 text-left px-2 py-1.5 text-sm rounded-md transition-colors ${typeFilter === t ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
               data-testid={`filter-type-${t}`}
             >
               {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -94,23 +94,23 @@ export function ResearchLibrary({ documentId, chapters }: ResearchLibraryProps) 
       <div className="space-y-2">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</h4>
         <div className="space-y-1">
-          <button onClick={() => setFavoriteFilter('all')} className={`w-full text-left px-2 py-1.5 text-sm rounded-md transition-colors ${favoriteFilter === 'all' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`} data-testid="filter-fav-all">All Items</button>
-          <button onClick={() => setFavoriteFilter('favorites')} className={`w-full text-left px-2 py-1.5 text-sm rounded-md transition-colors ${favoriteFilter === 'favorites' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`} data-testid="filter-fav-favorites">Favorites Only</button>
+          <button onClick={() => setFavoriteFilter('all')} className={`w-full min-h-11 text-left px-2 py-1.5 text-sm rounded-md transition-colors ${favoriteFilter === 'all' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`} data-testid="filter-fav-all">All Items</button>
+          <button onClick={() => setFavoriteFilter('favorites')} className={`w-full min-h-11 text-left px-2 py-1.5 text-sm rounded-md transition-colors ${favoriteFilter === 'favorites' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`} data-testid="filter-fav-favorites">Favorites Only</button>
         </div>
       </div>
 
       <div className="space-y-2">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Scope</h4>
         <div className="space-y-1">
-          <button onClick={() => { setScopeFilter('all'); setChapterFilter('all'); }} className={`w-full text-left px-2 py-1.5 text-sm rounded-md transition-colors ${scopeFilter === 'all' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`} data-testid="filter-scope-all">All Scopes</button>
-          <button onClick={() => { setScopeFilter('global'); setChapterFilter('all'); }} className={`w-full text-left px-2 py-1.5 text-sm rounded-md transition-colors ${scopeFilter === 'global' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`} data-testid="filter-scope-global">Global Notes</button>
-          <button onClick={() => { setScopeFilter('chapter'); }} className={`w-full text-left px-2 py-1.5 text-sm rounded-md transition-colors ${scopeFilter === 'chapter' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`} data-testid="filter-scope-chapter">Chapter Specific</button>
+          <button onClick={() => { setScopeFilter('all'); setChapterFilter('all'); }} className={`w-full min-h-11 text-left px-2 py-1.5 text-sm rounded-md transition-colors ${scopeFilter === 'all' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`} data-testid="filter-scope-all">All Scopes</button>
+          <button onClick={() => { setScopeFilter('global'); setChapterFilter('all'); }} className={`w-full min-h-11 text-left px-2 py-1.5 text-sm rounded-md transition-colors ${scopeFilter === 'global' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`} data-testid="filter-scope-global">Global Notes</button>
+          <button onClick={() => { setScopeFilter('chapter'); }} className={`w-full min-h-11 text-left px-2 py-1.5 text-sm rounded-md transition-colors ${scopeFilter === 'chapter' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`} data-testid="filter-scope-chapter">Chapter Specific</button>
           
           {scopeFilter === 'chapter' && chapters.length > 0 && (
             <div className="pl-4 mt-1 border-l-2 border-border/50 ml-2 space-y-1">
-              <button onClick={() => setChapterFilter('all')} className={`w-full text-left px-2 py-1 text-sm rounded-md transition-colors ${chapterFilter === 'all' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`} data-testid="filter-chapter-all">Any Chapter</button>
+              <button onClick={() => setChapterFilter('all')} className={`w-full min-h-11 text-left px-2 py-1 text-sm rounded-md transition-colors ${chapterFilter === 'all' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`} data-testid="filter-chapter-all">Any Chapter</button>
               {chapters.map(ch => (
-                <button key={ch.id} onClick={() => setChapterFilter(ch.id)} className={`w-full text-left px-2 py-1 text-sm rounded-md transition-colors truncate ${chapterFilter === ch.id ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`} data-testid={`filter-chapter-${ch.id}`}>
+                <button key={ch.id} onClick={() => setChapterFilter(ch.id)} className={`w-full min-h-11 text-left px-2 py-1 text-sm rounded-md transition-colors truncate ${chapterFilter === ch.id ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`} data-testid={`filter-chapter-${ch.id}`}>
                   {ch.title || 'Untitled'}
                 </button>
               ))}
@@ -123,24 +123,28 @@ export function ResearchLibrary({ documentId, chapters }: ResearchLibraryProps) 
         <div className="space-y-2">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tags</h4>
           <div className="flex flex-wrap gap-1.5">
-            <Badge 
+            <Button
+              type="button"
+              size="sm"
               variant={tagFilter === 'all' ? 'default' : 'secondary'}
-              className={`cursor-pointer ${tagFilter === 'all' ? '' : 'hover:bg-muted'}`}
+              className="h-7 rounded-full px-3 text-xs"
               onClick={() => setTagFilter('all')}
               data-testid="filter-tag-all"
             >
               All
-            </Badge>
+            </Button>
             {allTags.map(tag => (
-              <Badge 
-                key={tag} 
+              <Button
+                type="button"
+                size="sm"
+                key={tag}
                 variant={tagFilter === tag ? 'default' : 'secondary'}
-                className={`cursor-pointer ${tagFilter === tag ? '' : 'hover:bg-muted'}`}
+                className="h-7 rounded-full px-3 text-xs"
                 onClick={() => setTagFilter(tag)}
                 data-testid={`filter-tag-${tag}`}
               >
                 {tag}
-              </Badge>
+              </Button>
             ))}
           </div>
         </div>
@@ -168,9 +172,9 @@ export function ResearchLibrary({ documentId, chapters }: ResearchLibraryProps) 
   }
 
   return (
-    <div className="flex h-full bg-background" data-testid="research-library">
+    <div className="flex h-full min-h-0 min-w-0 bg-background overflow-hidden" data-testid="research-library">
       {/* Sidebar Filters */}
-      <aside className="w-64 border-r border-border/50 bg-card/30 flex flex-col hidden md:flex shrink-0">
+      <aside className="w-64 border-r border-border/50 bg-card/30 flex-col hidden min-[1440px]:flex shrink-0">
         <div className="p-4 border-b border-border/50">
           <Button onClick={() => { setEditItem(null); setFormOpen(true); }} className="w-full" data-testid="btn-add-research">
             <Plus className="w-4 h-4 mr-2" />
@@ -183,9 +187,9 @@ export function ResearchLibrary({ documentId, chapters }: ResearchLibraryProps) 
       </aside>
 
       {/* Main Area */}
-      <main className="flex-1 flex flex-col min-w-0">
-        <div className="p-4 md:p-6 border-b border-border/50 flex gap-2 md:gap-4 items-center shrink-0">
-          <div className="relative flex-1 max-w-md">
+      <main className="flex-1 min-h-0 flex flex-col min-w-0">
+        <div className="p-3 sm:p-4 min-[1440px]:p-6 border-b border-border/50 flex flex-wrap gap-2 min-[1440px]:gap-4 items-center shrink-0">
+          <div className="relative flex-1 min-w-0 basis-full sm:basis-auto max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
               value={search} 
@@ -198,26 +202,27 @@ export function ResearchLibrary({ documentId, chapters }: ResearchLibraryProps) 
           
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="outline" size="sm" className="md:hidden shrink-0 px-2" data-testid="btn-mobile-filters">
+              <Button variant="outline" size="sm" className="min-[1440px]:hidden shrink-0 px-3" data-testid="btn-mobile-filters">
                 <SlidersHorizontal className="w-4 h-4" />
+                <span className="sr-only">Open research filters</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-72">
+            <SheetContent side="left" className="w-full max-w-xs max-h-dvh overflow-hidden flex flex-col">
               <SheetHeader className="mb-4">
                 <SheetTitle>Filters</SheetTitle>
               </SheetHeader>
-              <div className="overflow-y-auto pb-8">
+              <div className="flex-1 min-h-0 overflow-y-auto pb-8">
                 {renderFilters()}
               </div>
             </SheetContent>
           </Sheet>
 
-          <Button onClick={() => { setEditItem(null); setFormOpen(true); }} size="sm" className="md:hidden shrink-0" data-testid="btn-add-research-mobile">
+          <Button onClick={() => { setEditItem(null); setFormOpen(true); }} size="sm" className="min-[1440px]:hidden shrink-0" data-testid="btn-add-research-mobile">
             <Plus className="w-4 h-4 mr-1" /> Add
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-[radial-gradient(hsl(var(--border))_1px,transparent_1px)] [background-size:32px_32px]">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 min-[1440px]:p-6 bg-[radial-gradient(hsl(var(--border))_1px,transparent_1px)] [background-size:32px_32px]">
           {filteredItems.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
               <div className="w-16 h-16 rounded-2xl bg-card border shadow-sm flex items-center justify-center mb-6">
@@ -257,7 +262,7 @@ export function ResearchLibrary({ documentId, chapters }: ResearchLibraryProps) 
                         
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 [@media(pointer:coarse)]:opacity-100" data-testid={`menu-${item.id}`}>
+                            <Button variant="ghost" size="icon" aria-label={`Open actions for ${item.title}`} className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 [@media(pointer:coarse)]:opacity-100" data-testid={`menu-${item.id}`}>
                               <MoreVertical className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>

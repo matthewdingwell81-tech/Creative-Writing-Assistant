@@ -1,6 +1,9 @@
 import * as React from "react"
 
-const MOBILE_BREAKPOINT = 768
+// The full desktop header and two fixed sidebars need more room than tablet
+// and small-laptop viewports provide, especially with 44px touch targets.
+// Keep the compact, drawer-based layout until a wide desktop viewport.
+const MOBILE_BREAKPOINT = 1440
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)

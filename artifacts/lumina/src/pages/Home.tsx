@@ -665,7 +665,7 @@ export default function Home() {
   const wordCount = content.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length;
 
   const saveStatusChip = (
-    <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap" data-testid="save-status">
+    <span className="inline-block max-w-full truncate bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap" data-testid="save-status">
       {saving ? 'Saving...' : lastSaved ? 'Saved' : 'Ready'}
     </span>
   );
@@ -754,8 +754,8 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col font-sans overflow-x-hidden">
-      <header className="h-14 border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between px-3 sm:px-6 gap-2">
+    <div className="h-dvh min-h-0 bg-background flex flex-col font-sans overflow-hidden">
+      <header className="h-14 shrink-0 border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between px-2 sm:px-6 gap-1 sm:gap-2">
         {/* Left: doc-list toggle + logo */}
         <div className="flex items-center gap-2 shrink-0">
           <Button
@@ -763,13 +763,14 @@ export default function Home() {
             size="icon"
             className="text-muted-foreground hover:text-foreground"
             onClick={() => setShowDocList(!showDocList)}
+            aria-label={showDocList ? 'Close document list' : 'Open document list'}
             data-testid="toggle-doc-list"
           >
             {showDocList ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
           </Button>
-          <div className="flex items-center gap-2 text-primary">
+          <div className="flex items-center gap-2 text-primary min-w-0">
             <Sparkles className="w-5 h-5" />
-            <span className="font-semibold tracking-tight text-lg">Lumina</span>
+            <span className="hidden min-[360px]:inline font-semibold tracking-tight text-lg">Lumina</span>
           </div>
         </div>
 
@@ -834,7 +835,7 @@ export default function Home() {
 
         {/* Mobile save status chip (always visible) */}
         {isMobile && (
-          <div className="flex-1 flex justify-center">
+          <div className="flex-1 min-w-0 flex justify-center overflow-hidden">
             {saveStatusChip}
           </div>
         )}
@@ -958,7 +959,7 @@ export default function Home() {
           <div className="flex items-center gap-1 shrink-0">
             <DropdownMenu key={workspaceView}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="btn-mobile-overflow">
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" aria-label="Open workspace menu" data-testid="btn-mobile-overflow">
                   <MoreHorizontal className="w-5 h-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -1124,7 +1125,7 @@ export default function Home() {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="btn-user-menu" title={user?.username}>
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" aria-label="Open user menu" data-testid="btn-user-menu" title={user?.username}>
                   <User className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -1194,11 +1195,11 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
-      <main className="flex-1 flex overflow-hidden relative">
+      <main className="flex-1 min-h-0 min-w-0 flex overflow-hidden relative">
         {/* Document list: sheet on mobile, aside on desktop */}
         {isMobile ? (
           <Sheet open={showDocList} onOpenChange={setShowDocList}>
-            <SheetContent side="left" className="w-full max-w-sm p-0 flex flex-col">
+            <SheetContent side="left" className="w-full max-w-sm max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden">
               <SheetHeader className="px-4 py-3 border-b border-border/50 shrink-0">
                 <SheetTitle className="text-sm">Documents</SheetTitle>
               </SheetHeader>
@@ -1215,14 +1216,14 @@ export default function Home() {
           </Sheet>
         ) : (
           showDocList && (
-            <aside className="w-[260px] border-r border-border/50 bg-card/30 overflow-y-auto">
+            <aside className="w-[260px] shrink-0 border-r border-border/50 bg-card/30 overflow-y-auto">
               <DocumentList documents={documents} activeId={activeDocId} onSelect={handleSelectDoc} onNew={handleNewDocument} isCreating={createMutation.isPending} />
             </aside>
           )
         )}
 
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto relative">
+        <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden relative">
             {activeDocId && workspaceView === 'board' && (chaptersLoading || documentSwitching) ? (
               <div className="h-full min-h-72 flex items-center justify-center text-sm text-muted-foreground" data-testid="board-loading">
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1243,7 +1244,7 @@ export default function Home() {
             ) : activeDocId && workspaceView === 'research' ? (
               <ResearchLibrary documentId={activeDocId} chapters={docChapters} />
             ) : (
-              <div className="max-w-3xl mx-auto px-4 sm:px-8 py-12">
+              <div className="w-full max-w-3xl mx-auto px-4 sm:px-8 py-6 sm:py-12">
                 {activeDocId ? (
                   <Editor
                     ref={editorHandle}
@@ -1273,7 +1274,7 @@ export default function Home() {
             {activeDocId && workspaceView === 'editor' && (
               <>
                 <div
-                  className="fixed bottom-6 text-xs text-muted-foreground/60 font-medium tracking-wide pointer-events-none"
+                  className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] text-xs text-muted-foreground/60 font-medium tracking-wide pointer-events-none"
                   style={{ left: '50%', transform: 'translateX(-50%)' }}
                   data-testid="word-count"
                 >
@@ -1294,14 +1295,14 @@ export default function Home() {
                   showFirstUsePrompt('assistant', 'Creative Assistant');
                   setShowSuggestionsSheet(true);
                 }}
-                className="fixed bottom-16 right-4 z-30 bg-primary text-primary-foreground rounded-full w-12 h-12 flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors"
+                className="fixed bottom-[calc(env(safe-area-inset-bottom)+4rem)] right-4 z-30 bg-primary text-primary-foreground rounded-full w-12 h-12 flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors"
                 data-testid="btn-open-suggestions-sheet"
                 aria-label="Open Creative Assistant"
               >
                 <Sparkles className="w-5 h-5" />
               </button>
               <Sheet open={showSuggestionsSheet} onOpenChange={setShowSuggestionsSheet}>
-                <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+                <SheetContent side="right" className="w-full sm:max-w-md max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden">
                   <SuggestionsSidebar
                     suggestions={suggestions}
                     savedSuggestions={savedSuggestions}
@@ -1331,7 +1332,7 @@ export default function Home() {
               </Sheet>
             </>
           ) : (
-            <aside className="w-[380px] border-l border-border/50 bg-card/30 backdrop-blur flex flex-col overflow-hidden">
+            <aside className="w-[min(380px,32vw)] min-w-[320px] shrink-0 border-l border-border/50 bg-card/30 backdrop-blur flex flex-col overflow-hidden">
               <SuggestionsSidebar
                 suggestions={suggestions}
                 savedSuggestions={savedSuggestions}
@@ -1379,7 +1380,7 @@ export default function Home() {
         {activeDocId && (
           isMobile ? (
             <Sheet open={showScratchpad} onOpenChange={setShowScratchpad}>
-              <SheetContent side="left" className="w-full max-w-sm p-0 flex flex-col" data-testid="scratchpad-drawer">
+              <SheetContent side="left" className="w-full max-w-sm max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden" data-testid="scratchpad-drawer">
                 <SheetHeader className="px-4 py-3 border-b border-border/50 shrink-0">
                   <SheetTitle className="text-sm flex items-center gap-2">
                     <Lightbulb className="w-4 h-4 text-primary" />

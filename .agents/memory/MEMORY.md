@@ -2,3 +2,4 @@
 - [Replit bcrypt](replit-bcrypt.md) — use bcryptjs (pure JS) not bcrypt in api-server; no native build step needed
 - [Session types tsconfig](session-types-tsconfig.md) — add "express-session" to tsconfig types array so session.d.ts augmentation is picked up
 - [Account-scoped browser state](account-scoped-browser-state.md) — migrate legacy browser-wide state once, then isolate persisted user state by authenticated account ID
+- [Responsive touch breakpoints](responsive-touch-breakpoints.md) — validate desktop headers with coarse-pointer target sizes, not mouse-only dimensions

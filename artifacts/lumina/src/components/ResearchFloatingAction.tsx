@@ -133,23 +133,24 @@ export function ResearchFloatingAction({ documentId, chapterId, chapters }: Rese
         <SheetTrigger asChild>
           <Button 
             size="icon" 
-            className="fixed bottom-6 right-6 md:right-8 lg:right-10 h-12 w-12 rounded-full shadow-lg hover:shadow-xl transition-all z-40 bg-card text-foreground border hover:bg-muted md:bottom-6 bottom-[120px]"
+            className="fixed bottom-[calc(env(safe-area-inset-bottom)+7.5rem)] right-4 md:right-8 h-12 w-12 rounded-full shadow-lg hover:shadow-xl transition-all z-40 bg-card text-foreground border hover:bg-muted min-[1440px]:bottom-6 min-[1440px]:right-10"
             data-testid="fab-research"
             title="Research Library"
+            aria-label="Open Research Context"
           >
             <BookOpen className="w-5 h-5 text-primary" />
           </Button>
         </SheetTrigger>
-        <SheetContent className="w-full sm:max-w-sm p-0 flex flex-col border-l">
+        <SheetContent className="w-full sm:max-w-sm max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden border-l">
           <SheetHeader className="p-4 border-b shrink-0 text-left bg-card/50">
             <SheetTitle className="flex items-center gap-2 font-serif text-lg">
               <BookOpen className="w-5 h-5 text-primary" />
               Research Context
             </SheetTitle>
             <div className="flex bg-muted/50 p-1 rounded-md mt-4">
-              <button onClick={() => setTab('related')} data-testid="tab-related" className={`flex-1 px-2 py-1 text-xs font-medium rounded-sm transition-colors ${tab === 'related' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Related</button>
-              <button onClick={() => setTab('attached')} data-testid="tab-attached" className={`flex-1 px-2 py-1 text-xs font-medium rounded-sm transition-colors ${tab === 'attached' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Attached</button>
-              <button onClick={() => setTab('all')} data-testid="tab-all" className={`flex-1 px-2 py-1 text-xs font-medium rounded-sm transition-colors ${tab === 'all' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Library</button>
+              <button onClick={() => setTab('related')} data-testid="tab-related" className={`flex-1 min-h-11 px-2 py-1 text-xs font-medium rounded-sm transition-colors ${tab === 'related' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Related</button>
+              <button onClick={() => setTab('attached')} data-testid="tab-attached" className={`flex-1 min-h-11 px-2 py-1 text-xs font-medium rounded-sm transition-colors ${tab === 'attached' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Attached</button>
+              <button onClick={() => setTab('all')} data-testid="tab-all" className={`flex-1 min-h-11 px-2 py-1 text-xs font-medium rounded-sm transition-colors ${tab === 'all' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Library</button>
             </div>
           </SheetHeader>
           
@@ -157,7 +158,7 @@ export function ResearchFloatingAction({ documentId, chapterId, chapters }: Rese
             {renderList()}
           </div>
           
-          <div className="p-4 border-t bg-card/50 shrink-0">
+          <div className="p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] border-t bg-card/50 shrink-0">
             <Button className="w-full shadow-sm" onClick={() => setFormOpen(true)} data-testid="btn-quick-add-research">
               <Plus className="w-4 h-4 mr-2" /> Quick Add Note
             </Button>

@@ -74,6 +74,7 @@ export default function IdeasPanel({ documentId, onAskAssistant, assistantLoadin
               variant="ghost"
               className="self-end text-primary hover:bg-primary/10 shrink-0 [@media(hover:none)]:min-h-[44px] [@media(hover:none)]:min-w-[44px]"
               disabled={!newIdea.trim() || createMutation.isPending}
+              aria-label="Add idea"
               data-testid="btn-add-idea"
             >
               <Plus className="w-4 h-4" />
@@ -112,6 +113,7 @@ export default function IdeasPanel({ documentId, onAskAssistant, assistantLoadin
                   </div>
                   <button
                     onClick={() => deleteMutation.mutate(idea.id)}
+                    aria-label="Delete idea"
                     className="shrink-0 flex items-center justify-center min-w-[44px] min-h-[44px] -mr-2 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 text-muted-foreground/50 hover:text-destructive transition-opacity"
                     data-testid={`btn-delete-idea-${idea.id}`}
                   >
