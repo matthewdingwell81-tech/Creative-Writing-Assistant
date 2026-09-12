@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { consumeSessionExpired } from "@/lib/sessionState";
+import { FaGoogle } from "react-icons/fa";
 
 export default function AuthPage() {
   // Consume the flag once at mount — clears it immediately so back-navigation
@@ -15,9 +16,19 @@ export default function AuthPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { login, register, isLoggingIn, isRegistering } = useAuth();
+  const { login, register, loginWithGoogle, isLoggingIn, isRegistering } = useAuth();
 
   const isLoading = isLoggingIn || isRegistering;
+
+  async function handleGoogleSignIn() {
+    setError(null);
+    try {
+      await loginWithGoogle();
+    } catch (err: any) {
+      const msg = err?.message || "Google sign-in failed. Please try again.";
+      setError(msg);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -87,6 +98,25 @@ export default function AuthPage() {
             >
               Create Account
             </button>
+          </div>
+
+          <Button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={isLoading}
+            className="w-full bg-white hover:bg-slate-100 text-slate-800 font-medium py-2.5 flex items-center justify-center gap-2"
+          >
+            <FaGoogle className="w-4 h-4" />
+            Continue with Google
+          </Button>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-600"></div>
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-[#16213e] px-2 text-slate-500">Or continue with email</span>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

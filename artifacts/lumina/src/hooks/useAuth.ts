@@ -4,9 +4,10 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  signInWithPopup,
   User
 } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, googleProvider } from "@/lib/firebase";
 
 export interface AuthUser {
   id: string;
@@ -34,13 +35,15 @@ export function useAuth() {
   }, []);
 
   const login = async (data: { username: string; password: string; rememberMe?: boolean }) => {
-    // For email/password login, username field is actually the email
     await signInWithEmailAndPassword(auth, data.username, data.password);
   };
 
   const register = async (data: { username: string; password: string }) => {
-    // For email/password registration, username field is actually the email
     await createUserWithEmailAndPassword(auth, data.username, data.password);
+  };
+
+  const loginWithGoogle = async () => {
+    await signInWithPopup(auth, googleProvider);
   };
 
   const logout = async () => {
@@ -52,6 +55,7 @@ export function useAuth() {
     isLoading,
     login,
     register,
+    loginWithGoogle,
     logout,
     loginError: null,
     registerError: null,
