@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,22 @@ export default function AuthPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { login, register, loginWithGoogle, isLoggingIn, isRegistering } = useAuth();
+  const {
+    login,
+    register,
+    loginWithGoogle,
+    googleError,
+    isLoggingIn,
+    isRegistering,
+  } = useAuth();
 
   const isLoading = isLoggingIn || isRegistering;
+
+  useEffect(() => {
+    if (googleError) {
+      setError(googleError.message || "Google sign-in failed. Please try again.");
+    }
+  }, [googleError]);
 
   async function handleGoogleSignIn() {
     setError(null);
