@@ -12,7 +12,7 @@ import { auth, googleProvider } from "@/lib/firebase";
 export interface AuthUser {
   id: string;
   email: string | null;
-  username: string | null;
+  username: string;
 }
 
 export function useAuth() {
@@ -37,7 +37,7 @@ export function useAuth() {
         setUser({
           id: firebaseUser.uid,
           email: firebaseUser.email,
-          username: firebaseUser.displayName ?? firebaseUser.email
+          username: firebaseUser.displayName ?? firebaseUser.email ?? "User"
         });
       } else {
         setUser(null);
