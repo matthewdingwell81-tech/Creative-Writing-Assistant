@@ -31,7 +31,8 @@ function SessionExpiredHandler() {
 }
 
 function Router() {
-  const { user, isLoading } = useAuth();
+  const auth = useAuth();
+  const { user, isLoading } = auth;
 
   if (isLoading) {
     return (
@@ -44,7 +45,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/auth">
-        {user ? <Redirect to="/" /> : <AuthPage />}
+        {user ? <Redirect to="/" /> : <AuthPage auth={auth} />}
       </Route>
       <Route path="/">
         {user ? <Home /> : <Redirect to="/auth" />}

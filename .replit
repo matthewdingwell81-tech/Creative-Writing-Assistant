@@ -37,7 +37,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/lumina && pnpm run validate-url && pnpm run build && npx cap sync android"
+args = "cd artifacts/lumina && pnpm run validate-url && PORT=4173 BASE_PATH=/ pnpm run build && cd ../.. && npx cap sync android"
 
 [[workflows.workflow]]
 name = "api-server-test"

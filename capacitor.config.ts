@@ -3,7 +3,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   appId: "com.lumina.app",
   appName: "Lumina",
-  webDir: "artifacts/lumina/dist",
+  webDir: "artifacts/lumina/dist/public",
   server: {
     url: "https://creative-writing-assistant.replit.app"
   },

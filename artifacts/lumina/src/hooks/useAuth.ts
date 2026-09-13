@@ -15,7 +15,53 @@ export interface AuthUser {
   username: string;
 }
 
-export function useAuth() {
+export interface UseAuthResult {
+  user: AuthUser | null;
+  isLoading: boolean;
+  login: (data: { username: string; password: string; rememberMe?: boolean }) => Promise<void>;
+  register: (data: { username: string; password: string }) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  googleError: Error | null;
+  logout: () => Promise<void>;
+  loginError: null;
+  registerError: null;
+  isLoggingIn: boolean;
+  isRegistering: boolean;
+}
+
+function getFirebaseErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object" || !("code" in error)) {
+    return null;
+  }
+
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code.replace(/^auth\//, "") : null;
+}
+
+export function getGoogleSignInErrorMessage(error: unknown): string {
+  switch (getFirebaseErrorCode(error)) {
+    case "popup-closed-by-user":
+    case "cancelled-popup-request":
+    case "redirect-cancelled-by-user":
+      return "Google sign-in was cancelled. You can try again whenever you're ready.";
+    case "network-request-failed":
+      return "Google sign-in could not connect. Check your internet connection and try again.";
+    case "unauthorized-domain":
+      return "Google sign-in is not configured for this app. Please contact support.";
+    case "operation-not-allowed":
+      return "Google sign-in is not enabled for this app. Please contact support.";
+    default:
+      return error instanceof Error && error.message
+        ? error.message
+        : "Google sign-in failed. Please try again.";
+  }
+}
+
+function toGoogleSignInError(error: unknown): Error {
+  return new Error(getGoogleSignInErrorMessage(error));
+}
+
+export function useAuth(): UseAuthResult {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [googleError, setGoogleError] = useState<Error | null>(null);
@@ -28,7 +74,7 @@ export function useAuth() {
     // WebViews, where popup auth is unreliable.
     getRedirectResult(auth).catch((error: unknown) => {
       if (mounted) {
-        setGoogleError(error instanceof Error ? error : new Error("Google sign-in failed."));
+        setGoogleError(toGoogleSignInError(error));
       }
     });
 
@@ -61,7 +107,13 @@ export function useAuth() {
 
   const loginWithGoogle = async () => {
     setGoogleError(null);
-    await signInWithRedirect(auth, googleProvider);
+    try {
+      await signInWithRedirect(auth, googleProvider);
+    } catch (error) {
+      const googleSignInError = toGoogleSignInError(error);
+      setGoogleError(googleSignInError);
+      throw googleSignInError;
+    }
   };
 
   const logout = async () => {

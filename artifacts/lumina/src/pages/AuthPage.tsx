@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import {
+  getGoogleSignInErrorMessage,
+  type UseAuthResult,
+} from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { consumeSessionExpired } from "@/lib/sessionState";
 import { FaGoogle } from "react-icons/fa";
 
-export default function AuthPage() {
+interface AuthPageProps {
+  auth: UseAuthResult;
+}
+
+export default function AuthPage({ auth }: AuthPageProps) {
   // Consume the flag once at mount — clears it immediately so back-navigation
   // or re-renders never show a stale banner.
   const [sessionExpired] = useState(() => consumeSessionExpired());
@@ -23,7 +30,7 @@ export default function AuthPage() {
     googleError,
     isLoggingIn,
     isRegistering,
-  } = useAuth();
+  } = auth;
 
   const isLoading = isLoggingIn || isRegistering;
 
@@ -38,8 +45,7 @@ export default function AuthPage() {
     try {
       await loginWithGoogle();
     } catch (err: any) {
-      const msg = err?.message || "Google sign-in failed. Please try again.";
-      setError(msg);
+      setError(getGoogleSignInErrorMessage(err));
     }
   }
 
