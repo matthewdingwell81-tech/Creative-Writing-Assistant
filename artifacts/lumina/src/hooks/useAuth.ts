@@ -1,9 +1,13 @@
-import { useState, useEffect } from "react";
 import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import {
   signOut,
-  onAuthStateChanged,
   signInWithRedirect,
   getRedirectResult
 } from "firebase/auth";
@@ -28,6 +32,8 @@ export interface UseAuthResult {
   isLoggingIn: boolean;
   isRegistering: boolean;
 }
+
+const AuthContext = createContext<UseAuthResult | null>(null);
 
 function getFirebaseErrorCode(error: unknown): string | null {
   if (!error || typeof error !== "object" || !("code" in error)) {
@@ -61,48 +67,133 @@ function toGoogleSignInError(error: unknown): Error {
   return new Error(getGoogleSignInErrorMessage(error));
 }
 
-export function useAuth(): UseAuthResult {
+async function parseApiError(response: Response, fallback: string): Promise<Error> {
+  try {
+    const body = await response.json();
+    return new Error(typeof body?.error === "string" ? body.error : fallback);
+  } catch {
+    return new Error(fallback);
+  }
+}
+
+function toAuthUser(value: {
+  id: string;
+  username: string;
+  email?: string | null;
+}): AuthUser {
+  return {
+    id: value.id,
+    username: value.username,
+    email: value.email ?? null,
+  };
+}
+
+async function fetchServerSession(): Promise<AuthUser | null> {
+  const response = await fetch("/api/auth/me", { credentials: "include" });
+  if (response.status === 401) return null;
+  if (!response.ok) {
+    throw await parseApiError(response, "Could not check your session.");
+  }
+  return toAuthUser(await response.json());
+}
+
+async function exchangeFirebaseSession(
+  firebaseUser: import("firebase/auth").User,
+): Promise<AuthUser> {
+  const idToken = await firebaseUser.getIdToken();
+  const response = await fetch("/api/auth/firebase-session", {
+    method: "POST",
+    credentials: "include",
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!response.ok) {
+    throw await parseApiError(response, "Google sign-in could not start a Lumina session.");
+  }
+  return toAuthUser(await response.json());
+}
+
+function useAuthState(): UseAuthResult {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [googleError, setGoogleError] = useState<Error | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
 
   useEffect(() => {
     let mounted = true;
 
-    // Redirect auth completes after the browser returns to the app. Reading
-    // the result on startup is required for mobile browsers and Capacitor
-    // WebViews, where popup auth is unreliable.
-    getRedirectResult(auth).catch((error: unknown) => {
-      if (mounted) {
-        setGoogleError(toGoogleSignInError(error));
-      }
-    });
+    async function initializeSession() {
+      try {
+        const redirectResult = await getRedirectResult(auth);
+        const existingSession = await fetchServerSession();
 
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        setUser({
-          id: firebaseUser.uid,
-          email: firebaseUser.email,
-          username: firebaseUser.displayName ?? firebaseUser.email ?? "User"
-        });
-      } else {
+        if (!mounted) return;
+        if (existingSession) {
+          setUser(existingSession);
+        } else if (redirectResult?.user) {
+          setUser(await exchangeFirebaseSession(redirectResult.user));
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        if (mounted) {
+          setUser(null);
+          setGoogleError(toGoogleSignInError(error));
+        }
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+
+    function handleSessionExpired() {
+      if (mounted) {
         setUser(null);
       }
-      setIsLoading(false);
-    });
+    }
+
+    void initializeSession();
+    window.addEventListener("lumina:session-expired", handleSessionExpired);
 
     return () => {
       mounted = false;
-      unsubscribe();
+      window.removeEventListener("lumina:session-expired", handleSessionExpired);
     };
   }, []);
 
   const login = async (data: { username: string; password: string; rememberMe?: boolean }) => {
-    await signInWithEmailAndPassword(auth, data.username, data.password);
+    setIsLoggingIn(true);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        throw await parseApiError(response, "Sign in failed.");
+      }
+      setUser(toAuthUser(await response.json()));
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   const register = async (data: { username: string; password: string }) => {
-    await createUserWithEmailAndPassword(auth, data.username, data.password);
+    setIsRegistering(true);
+    try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        throw await parseApiError(response, "Account creation failed.");
+      }
+      setUser(toAuthUser(await response.json()));
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
   const loginWithGoogle = async () => {
@@ -117,7 +208,15 @@ export function useAuth(): UseAuthResult {
   };
 
   const logout = async () => {
+    const response = await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      throw await parseApiError(response, "Sign out failed.");
+    }
     await signOut(auth);
+    setUser(null);
   };
 
   return {
@@ -130,7 +229,20 @@ export function useAuth(): UseAuthResult {
     logout,
     loginError: null,
     registerError: null,
-    isLoggingIn: false,
-    isRegistering: false
+    isLoggingIn,
+    isRegistering
   };
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const authState = useAuthState();
+  return createElement(AuthContext.Provider, { value: authState }, children);
+}
+
+export function useAuth(): UseAuthResult {
+  const authState = useContext(AuthContext);
+  if (!authState) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+  return authState;
 }

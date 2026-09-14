@@ -7,7 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import AuthPage from "@/pages/AuthPage";
-import { useAuth } from "@/hooks/useAuth";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { setSessionExpired } from "@/lib/sessionState";
 import { TutorialProvider } from "@/hooks/useTutorial";
 import TutorialOverlay from "@/components/TutorialOverlay";
@@ -59,14 +59,16 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <TutorialProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <SessionExpiredHandler />
-            <Toaster />
-            <Router />
-            <TutorialOverlay />
-          </WouterRouter>
-        </TutorialProvider>
+        <AuthProvider>
+          <TutorialProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <SessionExpiredHandler />
+              <Toaster />
+              <Router />
+              <TutorialOverlay />
+            </WouterRouter>
+          </TutorialProvider>
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

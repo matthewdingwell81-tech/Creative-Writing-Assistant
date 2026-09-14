@@ -3,3 +3,4 @@
 - [Session types tsconfig](session-types-tsconfig.md) — add "express-session" to tsconfig types array so session.d.ts augmentation is picked up
 - [Account-scoped browser state](account-scoped-browser-state.md) — migrate legacy browser-wide state once, then isolate persisted user state by authenticated account ID
 - [Responsive touch breakpoints](responsive-touch-breakpoints.md) — validate desktop headers with coarse-pointer target sizes, not mouse-only dimensions
+- [Firebase and API sessions](firebase-api-sessions.md) — Firebase Google redirect must exchange its ID token for the server session used by Lumina APIs

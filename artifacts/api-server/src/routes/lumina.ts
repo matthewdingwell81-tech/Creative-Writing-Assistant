@@ -10,7 +10,9 @@ import {
 import { z } from "zod";
 import OpenAI from "openai";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage";
+import { verifyFirebaseIdToken } from "../lib/firebaseAuth";
 import {
   getUncachableGoogleDocsClient,
   googleDocsToHtml,
@@ -284,6 +286,47 @@ router.post("/auth/login", async (req: Request, res: Response) => {
   }
 
   res.json({ id: user.id, username: user.username });
+});
+
+router.post("/auth/firebase-session", async (req: Request, res: Response) => {
+  const authorization = req.header("authorization");
+  if (!authorization?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Firebase ID token required" });
+    return;
+  }
+
+  try {
+    const firebaseUser = await verifyFirebaseIdToken(
+      authorization.slice("Bearer ".length),
+    );
+
+    // A verified Firebase email links Google sign-in to an existing Lumina
+    // account when one exists, preserving that user's documents.
+    let user = await storage.getUserByUsername(firebaseUser.email);
+    if (!user) {
+      const unusablePassword = await bcrypt.hash(randomUUID(), 10);
+      try {
+        user = await storage.createUser({
+          username: firebaseUser.email,
+          password: unusablePassword,
+        });
+      } catch {
+        // Concurrent sign-ins may both attempt to provision the same email.
+        user = await storage.getUserByUsername(firebaseUser.email);
+        if (!user) throw new Error("Could not provision Firebase user");
+      }
+    }
+
+    req.session.userId = user.id;
+    res.json({
+      id: user.id,
+      username: firebaseUser.displayName || user.username,
+      email: firebaseUser.email,
+    });
+  } catch (error) {
+    req.log.warn({ err: error }, "Firebase session exchange rejected");
+    res.status(401).json({ error: "Invalid or expired Google sign-in" });
+  }
 });
 
 router.post("/auth/logout", (req: Request, res: Response) => {
