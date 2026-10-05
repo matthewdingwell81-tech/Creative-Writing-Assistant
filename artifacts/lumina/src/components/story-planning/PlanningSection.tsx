@@ -93,7 +93,7 @@ export function PlanningSection({ documentId, kind, records, loading, loadError,
           const formHere = editing?.kind === k;
           return (
             <div key={k} className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
+              <div data-testid={`planning-heading-${k}`} className="flex items-center justify-between gap-3">
                 <h2 className="font-serif text-xl">{COPY[k].title}</h2>
                 <Button data-testid={k === kind ? 'planning-add' : `planning-add-${k}`} onClick={() => open(k, null)} disabled={!!editing || busy || (k === 'relationship' && characters.length < 2)}>
                   <Plus className="w-4 h-4 mr-2" />{COPY[k].add}

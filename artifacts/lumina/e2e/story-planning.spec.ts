@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
+import { FEATURE_TOURS, FULL_TOUR } from '../src/lib/tutorial';
 
 async function openBoard(page: Page, mobile: boolean) {
   if (mobile) {
@@ -25,6 +26,68 @@ async function add(page: Page, kind: string, title: string) {
   return form;
 }
 const record = (page: Page, title: string) => page.locator('article[data-testid^="planning-record-"]').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+
+test('Story Board tour explains every planning view and opens each target', async ({ page, isMobile }, testInfo) => {
+  const signup = await page.request.post('/api/auth/register', {
+    data: { username: `planning_tour_${randomUUID().slice(0, 12)}`, password: randomUUID() },
+  });
+  expect(signup.status()).toBe(201);
+  const user = await signup.json();
+  await page.addInitScript(id => {
+    localStorage.setItem(`lumina_tutorial_done:${encodeURIComponent(id)}`, JSON.stringify({ full: true }));
+  }, user.id);
+  const response = await page.request.post('/api/documents', {
+    data: { title: 'Story Board tutorial test', content: '', documentType: 'fiction' },
+  });
+  expect(response.status()).toBe(201);
+  const doc = await response.json();
+  try {
+    await page.goto('/');
+    await expect(page.getByTestId('editor-area')).toBeVisible();
+    if (isMobile) {
+      await page.getByTestId('btn-mobile-overflow').click();
+      await page.getByTestId('tour-mobile-storyBoard').click();
+    } else {
+      await page.getByTestId('btn-help-menu').click();
+      await page.getByTestId('tour-storyBoard').click();
+    }
+    const steps = FEATURE_TOURS.storyBoard;
+    expect(steps).toHaveLength(8);
+    expect(FULL_TOUR.filter(s => s.featureKey === 'storyBoard')).toEqual(steps);
+    for (const [index, step] of steps.entries()) {
+      const card = page.getByTestId('tutorial-card');
+      await expect(card).toContainText(step.title);
+      await expect(card).toContainText(`Step ${index + 1} of ${steps.length}`);
+      await expect(page.getByTestId(`planning-tab-${step.storyBoardSection}`)).toHaveAttribute('aria-selected', 'true');
+      await expect(page.locator(step.target)).toBeVisible();
+      await expect.poll(async () => {
+        const r = await page.locator(step.target).boundingBox();
+        return !!r && r.y < page.viewportSize()!.height && r.y + r.height > 0;
+      }).toBeTruthy();
+      if (index === 4) {
+        // Prev must reopen Characters rather than highlighting a hidden panel.
+        await page.getByTestId('tutorial-prev').click();
+        await expect(card).toContainText('Connect Your Characters');
+        await expect(page.getByTestId('planning-tab-character')).toHaveAttribute('aria-selected', 'true');
+        await page.getByTestId('tutorial-next').click();
+        await expect(card).toContainText('Build Your Story Timeline');
+        await expect(page.getByTestId('planning-tab-timeline')).toHaveAttribute('aria-selected', 'true');
+      }
+      if (index === steps.length - 1) {
+        await page.screenshot({ path: testInfo.outputPath('story-board-tour.png') });
+        await page.getByTestId('tutorial-done').click();
+      } else await page.getByTestId('tutorial-next').click();
+    }
+    await expect(page.getByTestId('tutorial-card')).toHaveCount(0);
+    const completed = await page.evaluate(id => JSON.parse(localStorage.getItem(`lumina_tutorial_done:${encodeURIComponent(id)}`) || '{}'), user.id);
+    expect(completed.storyBoard).toBe(true);
+    // Tours explain existing controls; they must not create or change a plan.
+    expect(await (await page.request.get(`/api/documents/${doc.id}/planning`)).json()).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  } finally {
+    await page.request.delete(`/api/documents/${doc.id}`);
+  }
+});
 
 test('plan a story, persist and isolate records, recover errors, and keep chapter behavior', async ({ page, isMobile }) => {
   test.setTimeout(120_000);

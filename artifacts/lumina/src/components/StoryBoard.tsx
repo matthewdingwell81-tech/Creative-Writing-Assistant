@@ -6,6 +6,7 @@ import { Palette, GripVertical, Plus, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Chapter } from '@/types/schema';
 import { StoryPlanning, PLANNING_TABS, type BoardSection } from '@/components/story-planning/StoryPlanning';
+import { useTutorial } from '@/hooks/useTutorial';
 
 const CARD_COLORS = {
   lavender: 'bg-[#f4f0fa] dark:bg-[#2d2440] border-[#e6dcf2] dark:border-[#433561]',
@@ -211,6 +212,21 @@ export function StoryBoard({
   onColorChange
 }: StoryBoardProps) {
   const [section, setSection] = useState<BoardSection>('chapters');
+  const { currentStep } = useTutorial();
+  useEffect(() => {
+    if (!currentStep?.storyBoardSection) return;
+    setSection(currentStep.storyBoardSection);
+    // Hidden planning panels stay mounted. Select the panel before bringing its
+    // target into view so the overlay can find it on phones and long story plans.
+    const frame = requestAnimationFrame(() => {
+      document.querySelector(currentStep.target)?.scrollIntoView({
+        block: currentStep.id === 'story-board' ? 'start' : 'center',
+        inline: 'nearest',
+        behavior: 'instant',
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [currentStep]);
   const [localChapters, setLocalChapters] = useState<Chapter[]>(chapters);
   const [dragState, setDragState] = useState<{
     id: number;
