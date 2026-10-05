@@ -8,7 +8,8 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node test/build-asset-check.test.mjs"
+    "test": "node test/build-asset-check.test.mjs",
+    "test:planning": "node --test test/planning-api.test.mjs"
   },
   "dependencies": {
     "@google-cloud/storage": "^8.0.1",

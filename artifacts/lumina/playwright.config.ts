@@ -26,6 +26,16 @@ export default defineConfig({
   },
 
   projects: [
+    {
+      name: 'story-planning-desktop',
+      testMatch: '**/story-planning.spec.ts',
+      use: { browserName: 'chromium', viewport: { width: 1600, height: 1000 } },
+    },
+    {
+      name: 'story-planning-mobile',
+      testMatch: '**/story-planning.spec.ts',
+      use: { browserName: 'chromium', viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true },
+    },
     // Global setup project – logs in and saves session state
     {
       name: 'setup',

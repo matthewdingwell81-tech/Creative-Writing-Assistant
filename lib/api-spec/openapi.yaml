@@ -11,6 +11,69 @@ tags:
   - name: health
     description: Health operations
 paths:
+  /documents/{documentId}/planning:
+    parameters:
+      - $ref: "#/components/parameters/PlanningDocumentId"
+    get:
+      operationId: listStoryPlanning
+      summary: List story planning records owned by the signed-in user
+      responses:
+        "200":
+          $ref: "#/components/responses/PlanningList"
+    post:
+      operationId: createStoryPlanning
+      summary: Create a story planning record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningInput"
+      responses:
+        "201":
+          $ref: "#/components/responses/PlanningRecord"
+  /documents/{documentId}/planning/order:
+    parameters:
+      - $ref: "#/components/parameters/PlanningDocumentId"
+    patch:
+      operationId: orderStoryPlanning
+      summary: Order all planning records of a kind; returns the complete story plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningOrderInput"
+      responses:
+        "200":
+          $ref: "#/components/responses/PlanningList"
+  /documents/{documentId}/planning/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PlanningDocumentId"
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    patch:
+      operationId: updateStoryPlanning
+      summary: Edit a planning record without changing its kind or document
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningUpdate"
+      responses:
+        "200":
+          $ref: "#/components/responses/PlanningRecord"
+    delete:
+      operationId: deleteStoryPlanning
+      summary: Delete a planning record; character deletion also removes relationships and unlinks events
+      responses:
+        "204":
+          description: Deleted
   /healthz:
     get:
       operationId: healthCheck
@@ -25,7 +88,108 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 components:
+  parameters:
+    PlanningDocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  responses:
+    PlanningRecord:
+      description: Saved planning record
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PlanningRecord"
+    PlanningList:
+      description: Complete story plan ordered by position then ID
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/PlanningRecord"
   schemas:
+    PlanningKind:
+      type: string
+      enum: [character, relationship, timeline, worldbuilding, note]
+    PlanningFields:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/PlanningKind"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        content:
+          type: string
+          maxLength: 20000
+        role:
+          type: string
+          maxLength: 200
+        motivations:
+          type: string
+          maxLength: 20000
+        traits:
+          type: string
+          maxLength: 20000
+        arc:
+          type: string
+          maxLength: 20000
+        category:
+          type: string
+          maxLength: 100
+        timeLabel:
+          type: string
+          maxLength: 200
+        chapterId:
+          type: [integer, "null"]
+          minimum: 1
+        characterId:
+          type: [integer, "null"]
+          minimum: 1
+        relatedCharacterId:
+          type: [integer, "null"]
+          minimum: 1
+    PlanningInput:
+      allOf:
+        - $ref: "#/components/schemas/PlanningFields"
+      required: [kind, title]
+    PlanningUpdate:
+      allOf:
+        - $ref: "#/components/schemas/PlanningFields"
+    PlanningOrderInput:
+      type: object
+      required: [kind, ids]
+      properties:
+        kind:
+          $ref: "#/components/schemas/PlanningKind"
+        ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+    PlanningRecord:
+      allOf:
+        - $ref: "#/components/schemas/PlanningFields"
+        - type: object
+          required: [id, documentId, position, createdAt, updatedAt, kind, title, content, role, motivations, traits, arc, category, timeLabel, chapterId, characterId, relatedCharacterId]
+          properties:
+            id:
+              type: integer
+            documentId:
+              type: integer
+            position:
+              type: integer
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
     HealthStatus:
       type: object
       properties:

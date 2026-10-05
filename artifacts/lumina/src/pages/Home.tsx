@@ -1231,6 +1231,8 @@ export default function Home() {
               </div>
             ) : activeDocId && workspaceView === 'board' ? (
               <StoryBoard
+                key={activeDocId}
+                documentId={activeDocId}
                 chapters={docChapters}
                 activeChapterId={activeChapterId}
                 reorderSaving={chapterReorderSaving}

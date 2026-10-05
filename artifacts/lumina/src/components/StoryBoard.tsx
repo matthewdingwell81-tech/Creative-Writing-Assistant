@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Palette, GripVertical, Plus, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Chapter } from '@/types/schema';
+import { StoryPlanning, PLANNING_TABS, type BoardSection } from '@/components/story-planning/StoryPlanning';
 
 const CARD_COLORS = {
   lavender: 'bg-[#f4f0fa] dark:bg-[#2d2440] border-[#e6dcf2] dark:border-[#433561]',
@@ -16,6 +17,7 @@ const CARD_COLORS = {
 };
 
 interface StoryBoardProps {
+  documentId: number;
   chapters: Chapter[];
   activeChapterId: number | null;
   reorderSaving: boolean;
@@ -197,6 +199,7 @@ function ChapterCard({
 }
 
 export function StoryBoard({
+  documentId,
   chapters,
   activeChapterId,
   reorderSaving,
@@ -207,6 +210,7 @@ export function StoryBoard({
   onReorder,
   onColorChange
 }: StoryBoardProps) {
+  const [section, setSection] = useState<BoardSection>('chapters');
   const [localChapters, setLocalChapters] = useState<Chapter[]>(chapters);
   const [dragState, setDragState] = useState<{
     id: number;
@@ -350,6 +354,28 @@ export function StoryBoard({
           </div>
         </header>
 
+        <div role="tablist" aria-label="Story board sections" className="flex gap-1 overflow-x-auto mb-6 border-b border-border">
+          {PLANNING_TABS.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              type="button"
+              aria-selected={section === t.id}
+              data-testid={t.id === 'chapters' ? 'planning-tab-chapters' : `planning-tab-${t.id}`}
+              onClick={() => setSection(t.id)}
+              className={cn(
+                'px-4 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-t-md',
+                section === t.id ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <StoryPlanning documentId={documentId} chapters={chapters} section={section} onOpenChapter={onOpenChapter} />
+
+        <div hidden={section !== 'chapters'}>
         {localChapters.length === 0 ? (
           <div className="col-span-full py-24 flex flex-col items-center justify-center text-center bg-card/50 rounded-2xl border border-dashed border-border/60">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
@@ -386,6 +412,7 @@ export function StoryBoard({
             ))}
           </div>
         )}
+        </div>
 
         {dragState && draggedChapter && (
           <div 

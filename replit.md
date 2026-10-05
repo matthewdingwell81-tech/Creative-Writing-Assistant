@@ -9,6 +9,8 @@ Lumina is an AI-powered writing companion that helps authors draft, organize, an
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- `pnpm --filter @workspace/db run migrate:planning` — apply the additive Story Board planning migration (also used by post-merge setup)
+- `pnpm --filter @workspace/api-server run test:planning` — test story-planning persistence and access boundaries against the running preview API
 - Required env: `DATABASE_URL` — Postgres connection string
 
 ## Stack
