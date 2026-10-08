@@ -232,7 +232,7 @@ export default function SuggestionsSidebar({
   const [pendingReplacement, setPendingReplacement] = useState<{ messageIndex: number; text: string } | null>(null);
   const [watchingRewardAd, setWatchingRewardAd] = useState(false);
   const [rewardAdMessage, setRewardAdMessage] = useState('');
-  const { isPremium, bonusAIQueries, addBonusAIQueries } = useAdRewards(userId);
+  const { isPremium, bonusAIQueries, addBonusAIQueries, consumeBonusAIQuery } = useAdRewards(userId);
   const canEarnAdReward = Boolean(userId && !isPremium);
   const isNativeAdPlatform = Capacitor.isNativePlatform();
 
@@ -307,6 +307,9 @@ export default function SuggestionsSidebar({
     if (coachAbortRef.current) coachAbortRef.current.abort();
     const controller = new AbortController();
     coachAbortRef.current = controller;
+    const useBonusCredit = !isPremium && bonusAIQueries > 0;
+    let responseReceived = false;
+    let responseCompleted = false;
 
     const userMessage: CoachMessage = { role: 'user', content: text };
     const nextMessages = [...coachMessages, userMessage];
@@ -319,6 +322,7 @@ export default function SuggestionsSidebar({
         nextMessages, documentContent, documentType,
         (chunk) => {
           if (controller.signal.aborted) return;
+          if (chunk.trim()) responseReceived = true;
           setCoachMessages(prev => {
             if (prev.length === 0) return prev;
             const updated = [...prev];
@@ -326,7 +330,20 @@ export default function SuggestionsSidebar({
             return updated;
           });
         },
-        () => { if (!controller.signal.aborted) setCoachLoading(false); },
+        () => {
+          if (controller.signal.aborted) return;
+          if (!responseCompleted && responseReceived) {
+            responseCompleted = true;
+            if (useBonusCredit) {
+              try {
+                consumeBonusAIQuery();
+              } catch {
+                setRewardAdMessage('Your reply completed, but device storage could not update the bonus balance.');
+              }
+            }
+          }
+          setCoachLoading(false);
+        },
         controller.signal
       );
     } catch (err: any) {
@@ -347,19 +364,23 @@ export default function SuggestionsSidebar({
 
     setWatchingRewardAd(true);
     setRewardAdMessage('');
+    let videoCompleted = false;
     try {
       const earnedReward = await showRewardedAdForAccount(userId);
       if (!earnedReward) {
-        setRewardAdMessage('The video was not completed, so no bonus queries were added.');
+        setRewardAdMessage('The ad was unavailable or the video was not completed. No bonus queries were added.');
         return;
       }
 
+      videoCompleted = true;
       const newBalance = addBonusAIQueries(2);
       setRewardAdMessage(
         `Two bonus AI queries added. You now have ${newBalance} available.`,
       );
     } catch {
-      setRewardAdMessage('The ad could not be completed. No bonus queries were added.');
+      setRewardAdMessage(videoCompleted
+        ? 'Your video completed, but device storage could not save the reward. Check storage access before trying again.'
+        : 'The ad could not be completed. No bonus queries were added.');
     } finally {
       setWatchingRewardAd(false);
     }
@@ -715,19 +736,19 @@ export default function SuggestionsSidebar({
                 className="shrink-0 border-b border-border/50 bg-primary/5 px-3 py-2.5 space-y-2"
                 data-testid="ad-rewards-panel"
               >
-                <div className="flex items-center justify-between gap-2">
+                <div className="space-y-2">
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-foreground" data-testid="bonus-ai-query-balance">
                       {bonusAIQueries} bonus AI {bonusAIQueries === 1 ? 'query' : 'queries'} available
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      Watch a full video to earn 2 more.
+                      One credit is used after a successful Coach reply.
                     </p>
                   </div>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="shrink-0 gap-1.5 text-[11px] [@media(pointer:coarse)]:min-h-[44px]"
+                    className="w-full gap-1.5 text-[11px] [@media(pointer:coarse)]:min-h-[44px]"
                     onClick={() => void handleWatchRewardAd()}
                     disabled={watchingRewardAd || !isNativeAdPlatform}
                     data-testid="btn-watch-ad-for-ai-queries"

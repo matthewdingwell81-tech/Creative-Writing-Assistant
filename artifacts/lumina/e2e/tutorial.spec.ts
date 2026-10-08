@@ -105,7 +105,7 @@ async function launchTourFromHelp(page: Page, key: string, mobile = false) {
 
 test.describe('Tutorial system', () => {
   // Desktop viewport so all header controls are visible
-  test.use({ viewport: { width: 1280, height: 720 }, isMobile: false });
+  test.use({ viewport: { width: 1600, height: 1000 }, isMobile: false });
 
   test('full tour auto-launches on first visit and shows step 1', async ({ page }) => {
     await page.goto('/');

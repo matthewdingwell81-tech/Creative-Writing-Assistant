@@ -1,4 +1,4 @@
-import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
+import { Capacitor } from "@capacitor/core";
 import {
   AdMob,
   AdmobConsentStatus,
@@ -8,6 +8,7 @@ import {
   RewardAdPluginEvents,
 } from "@capacitor-community/admob";
 import { isPremiumAccount } from "@/hooks/useAdRewards";
+import { playRewardedVideo } from "./rewardedVideo";
 
 export const TEST_BANNER_AD_ID = "ca-app-pub-3940256099942544/6300978111";
 export const TEST_REWARDED_AD_ID = "ca-app-pub-3940256099942544/5224354917";
@@ -21,6 +22,10 @@ let rewardInProgress = false;
 
 function publishBannerHeight(height: number) {
   if (typeof window === "undefined") return;
+  document.documentElement.style.setProperty(
+    "--lumina-admob-banner-height",
+    `${height}px`,
+  );
   window.dispatchEvent(
     new CustomEvent(BANNER_HEIGHT_EVENT, { detail: { height } }),
   );
@@ -96,6 +101,11 @@ export async function showBannerForAccount(
     position: BannerAdPosition.BOTTOM_CENTER,
     margin: 0,
   });
+  if (!canShow() || isPremiumAccount(accountId)) {
+    bannerVisible = true;
+    await removeAdMobBanner();
+    return;
+  }
   bannerVisible = true;
   publishBannerHeight(50);
 }
@@ -121,34 +131,26 @@ export async function showRewardedAdForAccount(accountId: string): Promise<boole
     !accountId ||
     !Capacitor.isNativePlatform() ||
     isPremiumAccount(accountId) ||
-    rewardInProgress ||
-    !(await initializeAdMob())
+    rewardInProgress
   ) {
     return false;
   }
 
   rewardInProgress = true;
-  let earnedReward = false;
-  let rewardListener: PluginListenerHandle | undefined;
 
   try {
-    rewardListener = await AdMob.addListener(
-      RewardAdPluginEvents.Rewarded,
-      (reward) => {
-        if (Number.isFinite(reward.amount) && reward.amount > 0) {
-          earnedReward = true;
-        }
+    if (!(await initializeAdMob()) || isPremiumAccount(accountId)) return false;
+    return await playRewardedVideo({
+      onRewarded: (listener) => AdMob.addListener(RewardAdPluginEvents.Rewarded, listener),
+      onDismissed: (listener) => AdMob.addListener(RewardAdPluginEvents.Dismissed, listener),
+      onFailedToShow: (listener) => AdMob.addListener(RewardAdPluginEvents.FailedToShow, listener),
+      prepare: async () => {
+        await AdMob.prepareRewardVideoAd({ adId: TEST_REWARDED_AD_ID });
+        if (isPremiumAccount(accountId)) throw new Error("Premium accounts do not show ads.");
       },
-    );
-    await AdMob.prepareRewardVideoAd({ adId: TEST_REWARDED_AD_ID });
-    const reward = await AdMob.showRewardVideoAd();
-
-    return (
-      earnedReward ||
-      (Number.isFinite(reward?.amount) && Number(reward.amount) > 0)
-    );
+      show: () => AdMob.showRewardVideoAd({ adId: TEST_REWARDED_AD_ID }),
+    });
   } finally {
-    await rewardListener?.remove().catch(() => {});
     rewardInProgress = false;
   }
 }

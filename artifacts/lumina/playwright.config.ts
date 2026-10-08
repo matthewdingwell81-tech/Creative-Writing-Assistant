@@ -27,6 +27,10 @@ export default defineConfig({
 
   projects: [
     {
+      name: 'admob-reward-lifecycle',
+      testMatch: '**/admob-reward-lifecycle.spec.ts',
+    },
+    {
       name: 'story-planning-desktop',
       testMatch: '**/story-planning.spec.ts',
       use: { browserName: 'chromium', viewport: { width: 1600, height: 1000 } },
@@ -61,7 +65,7 @@ export default defineConfig({
       name: 'tutorial',
       use: {
         browserName: 'chromium',
-        viewport: { width: 1280, height: 720 },
+        viewport: { width: 1600, height: 1000 },
         storageState: 'e2e/.auth/mobile.json',
       },
       dependencies: ['setup'],
@@ -71,7 +75,7 @@ export default defineConfig({
       name: 'coach-insert-desktop',
       use: {
         browserName: 'chromium',
-        viewport: { width: 1280, height: 720 },
+        viewport: { width: 1600, height: 1000 },
         storageState: 'e2e/.auth/mobile.json',
       },
       dependencies: ['setup'],
@@ -93,7 +97,7 @@ export default defineConfig({
       name: 'admob-desktop',
       use: {
         browserName: 'chromium',
-        viewport: { width: 1280, height: 720 },
+        viewport: { width: 1600, height: 1000 },
         storageState: 'e2e/.auth/mobile.json',
       },
       dependencies: ['setup'],
@@ -115,7 +119,7 @@ export default defineConfig({
       name: 'chapter-rename-desktop',
       use: {
         browserName: 'chromium',
-        viewport: { width: 1280, height: 720 },
+        viewport: { width: 1600, height: 1000 },
         storageState: 'e2e/.auth/mobile.json',
       },
       dependencies: ['setup'],
@@ -137,7 +141,7 @@ export default defineConfig({
       name: 'suggestion-navigation-desktop',
       use: {
         browserName: 'chromium',
-        viewport: { width: 1280, height: 720 },
+        viewport: { width: 1600, height: 1000 },
         storageState: 'e2e/.auth/mobile.json',
       },
       dependencies: ['tutorial'],
@@ -159,7 +163,7 @@ export default defineConfig({
       name: 'story-board-desktop',
       use: {
         browserName: 'chromium',
-        viewport: { width: 1280, height: 800 },
+        viewport: { width: 1600, height: 1000 },
         storageState: 'e2e/.auth/mobile.json',
       },
       dependencies: ['tutorial'],
@@ -181,7 +185,7 @@ export default defineConfig({
       name: 'research-library-desktop',
       use: {
         browserName: 'chromium',
-        viewport: { width: 1280, height: 800 },
+        viewport: { width: 1600, height: 1000 },
         storageState: 'e2e/.auth/mobile.json',
       },
       dependencies: ['setup'],

@@ -133,7 +133,7 @@ export function ResearchFloatingAction({ documentId, chapterId, chapters }: Rese
         <SheetTrigger asChild>
           <Button 
             size="icon" 
-            className="fixed bottom-[calc(env(safe-area-inset-bottom)+7.5rem)] right-4 md:right-8 h-12 w-12 rounded-full shadow-lg hover:shadow-xl transition-all z-40 bg-card text-foreground border hover:bg-muted min-[1440px]:bottom-6 min-[1440px]:right-10"
+            className="fixed bottom-[calc(env(safe-area-inset-bottom)+7.5rem+var(--lumina-admob-banner-height,0px))] right-4 md:right-8 h-12 w-12 rounded-full shadow-lg hover:shadow-xl transition-all z-40 bg-card text-foreground border hover:bg-muted min-[1440px]:bottom-[calc(1.5rem+var(--lumina-admob-banner-height,0px))] min-[1440px]:right-10"
             data-testid="fab-research"
             title="Research Library"
             aria-label="Open Research Context"

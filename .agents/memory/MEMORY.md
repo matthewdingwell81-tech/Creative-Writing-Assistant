@@ -5,3 +5,4 @@
 - [Responsive touch breakpoints](responsive-touch-breakpoints.md) — validate desktop headers with coarse-pointer target sizes, not mouse-only dimensions
 - [Firebase and API sessions](firebase-api-sessions.md) — Firebase Google redirect must exchange its ID token for the server session used by Lumina APIs
 - [Additive database migrations](additive-database-migrations.md) — noninteractive Drizzle reconciliation can conflict with externally managed session tables; use reviewed additive migrations.
+- [Native AdMob integration](native-admob-integration.md) — root tooling must discover plugins; Android reward dismissal needs its own completion handling; local entitlements are test-only.

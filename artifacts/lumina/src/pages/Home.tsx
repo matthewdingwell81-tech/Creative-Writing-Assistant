@@ -1226,7 +1226,7 @@ export default function Home() {
         {/* Document list: sheet on mobile, aside on desktop */}
         {isMobile ? (
           <Sheet open={showDocList} onOpenChange={setShowDocList}>
-            <SheetContent side="left" className="w-full max-w-sm max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden">
+            <SheetContent side="left" className="w-full max-w-sm max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden" style={{ height: `calc(100dvh - ${admobBannerHeight}px)` }}>
               <SheetHeader className="px-4 py-3 border-b border-border/50 shrink-0">
                 <SheetTitle className="text-sm">Documents</SheetTitle>
               </SheetHeader>
@@ -1303,7 +1303,7 @@ export default function Home() {
             {activeDocId && workspaceView === 'editor' && (
               <>
                 <div
-                  className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] text-xs text-muted-foreground/60 font-medium tracking-wide pointer-events-none"
+                  className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.5rem+var(--lumina-admob-banner-height,0px))] text-xs text-muted-foreground/60 font-medium tracking-wide pointer-events-none"
                   style={{ left: '50%', transform: 'translateX(-50%)' }}
                   data-testid="word-count"
                 >
@@ -1324,14 +1324,14 @@ export default function Home() {
                   showFirstUsePrompt('assistant', 'Creative Assistant');
                   setShowSuggestionsSheet(true);
                 }}
-                className="fixed bottom-[calc(env(safe-area-inset-bottom)+4rem)] right-4 z-30 bg-primary text-primary-foreground rounded-full w-12 h-12 flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors"
+                className="fixed bottom-[calc(env(safe-area-inset-bottom)+4rem+var(--lumina-admob-banner-height,0px))] right-4 z-30 bg-primary text-primary-foreground rounded-full w-12 h-12 flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors"
                 data-testid="btn-open-suggestions-sheet"
                 aria-label="Open Creative Assistant"
               >
                 <Sparkles className="w-5 h-5" />
               </button>
               <Sheet open={showSuggestionsSheet} onOpenChange={setShowSuggestionsSheet}>
-                <SheetContent side="right" className="w-full sm:max-w-md max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden">
+                <SheetContent side="right" className="w-full sm:max-w-md max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden" style={{ height: `calc(100dvh - ${admobBannerHeight}px)` }}>
                   <SuggestionsSidebar
                     suggestions={suggestions}
                     savedSuggestions={savedSuggestions}
@@ -1411,7 +1411,7 @@ export default function Home() {
         {activeDocId && (
           isMobile ? (
             <Sheet open={showScratchpad} onOpenChange={setShowScratchpad}>
-              <SheetContent side="left" className="w-full max-w-sm max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden" data-testid="scratchpad-drawer">
+              <SheetContent side="left" className="w-full max-w-sm max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden" style={{ height: `calc(100dvh - ${admobBannerHeight}px)` }} data-testid="scratchpad-drawer">
                 <SheetHeader className="px-4 py-3 border-b border-border/50 shrink-0">
                   <SheetTitle className="text-sm flex items-center gap-2">
                     <Lightbulb className="w-4 h-4 text-primary" />

@@ -37,6 +37,7 @@ function getBonusQueryBalance(accountId: string | null | undefined): number {
 }
 
 export function setPremiumAccountStatus(accountId: string, isPremium: boolean) {
+  if (!accountId) throw new Error("A signed-in account is required.");
   window.localStorage.setItem(
     premiumStorageKey(accountId),
     isPremium ? "true" : "false",
@@ -114,6 +115,9 @@ export function useAdRewards(accountId: string | null) {
       }
 
       const nextBalance = getBonusQueryBalance(accountId) + amount;
+      if (!Number.isSafeInteger(nextBalance)) {
+        throw new Error("The bonus query balance is too large.");
+      }
       window.localStorage.setItem(
         bonusQueriesStorageKey(accountId),
         String(nextBalance),
@@ -133,5 +137,19 @@ export function useAdRewards(accountId: string | null) {
     [accountId],
   );
 
-  return { isPremium, bonusAIQueries, addBonusAIQueries };
+  const consumeBonusAIQuery = useCallback(() => {
+    if (!accountId || isPremiumAccount(accountId)) return false;
+    const currentBalance = getBonusQueryBalance(accountId);
+    if (currentBalance < 1) return false;
+
+    const nextBalance = currentBalance - 1;
+    window.localStorage.setItem(bonusQueriesStorageKey(accountId), String(nextBalance));
+    setSnapshot({ accountId, isPremium: false, bonusAIQueries: nextBalance });
+    window.dispatchEvent(
+      new CustomEvent(AD_REWARDS_CHANGED_EVENT, { detail: { accountId } }),
+    );
+    return true;
+  }, [accountId]);
+
+  return { isPremium, bonusAIQueries, addBonusAIQueries, consumeBonusAIQuery };
 }
