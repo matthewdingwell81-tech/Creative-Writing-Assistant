@@ -52,7 +52,7 @@ function Router() {
         {user ? <Upgrade /> : <Redirect to="/auth" />}
       </Route>
       <Route path="/">
-        {user ? <Home /> : <Redirect to="/auth" />}
+        {user ? <Home key={user.id} /> : <Redirect to="/auth" />}
       </Route>
       <Route component={NotFound} />
     </Switch>

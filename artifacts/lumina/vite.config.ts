@@ -63,6 +63,11 @@ export default defineConfig({
     strictPort: true,
     host: "0.0.0.0",
     allowedHosts: true,
+    watch: {
+      // Report/trace HTML is test output, not app source. Watching it causes
+      // full-page reloads in other browser tests while a suite is still running.
+      ignored: /[/\\](?:playwright-report|test-results|\.auth)(?:[/\\]|$)/,
+    },
     fs: {
       strict: true,
     },

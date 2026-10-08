@@ -27,6 +27,10 @@ export default defineConfig({
 
   projects: [
     {
+      name: 'coach-history-storage',
+      testMatch: '**/coach-history-storage.spec.ts',
+    },
+    {
       name: 'user-tier-service',
       testMatch: '**/user-tier-service.spec.ts',
     },

@@ -65,6 +65,29 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
   expect(requests).toBe(before);
   await page.reload();
   await expect(page.getByTestId('upgrade-page')).toBeVisible();
+  await page.getByTestId('link-back-to-writing').click();
+  await page.waitForLoadState('networkidle');
+  if ((page.viewportSize()?.width ?? 1600) < 1440) {
+    await page.getByTestId('btn-open-suggestions-sheet').click();
+  }
+  await page.getByTestId('tab-coach').click();
+  await expect(page.getByTestId('coach-message-list')).toContainText('Use final bonus');
+  await expect(page.getByTestId('coach-message-list')).toContainText('Successful reply.');
+  await expect(page.getByTestId('coach-message-list')).not.toContainText('Do not count');
+  await expect(page.getByTestId('bonus-ai-query-balance')).toContainText('0 bonus');
+  expect(requests).toBe(before);
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  if ((page.viewportSize()?.width ?? 1600) < 1440) {
+    await page.getByTestId('btn-open-suggestions-sheet').click();
+  }
+  await page.getByTestId('tab-coach').click();
+  await expect(page.getByTestId('coach-message-list')).toContainText('Use final bonus');
+  expect(requests).toBe(before);
+  await page.getByTestId('btn-coach-reset').click();
+  await expect(page.getByTestId('coach-message-list')).toHaveCount(0);
+  await openCoach();
+  await expect(page.getByTestId('coach-message-list')).toHaveCount(0);
 
   await page.evaluate((id: string) => {
     localStorage.setItem(`lumina_ai_daily_queries:${encodeURIComponent(id)}`, JSON.stringify({ date: '2000-01-01', used: 5 }));

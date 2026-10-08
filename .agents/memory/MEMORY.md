@@ -7,3 +7,5 @@
 - [Additive database migrations](additive-database-migrations.md) — noninteractive Drizzle reconciliation can conflict with externally managed session tables; use reviewed additive migrations.
 - [Native AdMob integration](native-admob-integration.md) — root tooling must discover plugins; Android reward dismissal needs its own completion handling; local entitlements are test-only.
 - [Freemium rollout policy](freemium-policy.md) — existing accounts get a fresh seven-day rollout trial; live billing and server enforcement are deferred.
+- [Coach persistence boundary](coach-persistence-boundary.md) — completed replies and interrupted drafts are separate; restoring a conversation must never resend or consume another query.
+- [Shared E2E execution](shared-e2e-execution.md) — avoid overlapping full-suite invocations against the shared writing account; setup races can appear as unrelated product failures.

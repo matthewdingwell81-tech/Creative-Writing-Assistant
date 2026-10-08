@@ -15,6 +15,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { streamIdeas, streamCoach } from '@/lib/api';
+import { useCoachHistory } from '@/hooks/useCoachHistory';
+import { COACH_RETENTION_LABEL, type CoachMessage } from '@/services/coachHistory';
 import type { Suggestion, SuggestionAnalysisMode, ChangeHistoryEntry } from '@/hooks/useSuggestions';
 import { useAdRewards } from '@/hooks/useAdRewards';
 import AdRewardButton from '@/components/AdRewardButton';
@@ -29,11 +31,6 @@ import {
   isCurrentTierUser,
   useAiQuery,
 } from '@/services/userTierService';
-
-interface CoachMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
 
 interface SuggestionsSidebarProps {
   suggestions: Suggestion[];
@@ -60,6 +57,7 @@ interface SuggestionsSidebarProps {
   onScrollToSuggestion?: (original: string) => void;
   onInsertText?: (text: string, replaceSelection?: boolean) => Promise<boolean | 'needs-confirmation'>;
   userId: string | null;
+  documentId: number;
   onUpgrade: () => Promise<void>;
 }
 
@@ -223,7 +221,7 @@ export default function SuggestionsSidebar({
   onDismiss, onSave, onRemoveSaved, onClearHistory, documentContent, documentType, selectedText,
   externalIdeaPrompt, onExternalIdeaHandled, onScrollToSuggestion, onInsertText,
   hasSuggestionUpdate, pendingSuggestionCount, onShowLatestSuggestions,
-  analysisMode, onAnalysisModeChange, onAnalyzeWriting, userId, onUpgrade
+  analysisMode, onAnalysisModeChange, onAnalyzeWriting, userId, documentId, onUpgrade
 }: SuggestionsSidebarProps) {
   const [ideaPrompt, setIdeaPrompt] = useState('');
   const [ideaResponse, setIdeaResponse] = useState('');
@@ -233,8 +231,8 @@ export default function SuggestionsSidebar({
   const externalPromptHandled = useRef<number | null>(null);
   const suggestionsScrollRef = useRef<HTMLDivElement>(null);
 
-  const [coachMessages, setCoachMessages] = useState<CoachMessage[]>([]);
-  const [coachInput, setCoachInput] = useState('');
+  const coachHistory = useCoachHistory(userId, documentId);
+  const { messages: coachMessages, setMessages: setCoachMessages, draft: coachInput, setDraft: setCoachInput } = coachHistory;
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachInsertStates, setCoachInsertStates] = useState<Record<number, 'inserting' | 'inserted'>>({});
   const coachInsertInFlightRef = useRef<Set<number>>(new Set());
@@ -253,12 +251,8 @@ export default function SuggestionsSidebar({
   const hasAvailableAIQueries = totalQueriesRemaining > 0;
 
   useEffect(() => {
-    setCoachMessages([]);
-    setCoachInput('');
-    setCoachLoading(false);
-    setTierMessage('');
     return () => { coachAbortRef.current?.abort(); };
-  }, [userId]);
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -358,17 +352,21 @@ export default function SuggestionsSidebar({
 
   const handleCoachSend = async (messageText?: string) => {
     const text = (messageText ?? coachInput).trim();
-    if (!text || coachLoading) return;
+    if (!text || coachLoading || !userId || coachAbortRef.current) return;
     if (getAIQueriesRemaining() <= 0) return;
 
-    if (coachAbortRef.current) coachAbortRef.current.abort();
     const controller = new AbortController();
     coachAbortRef.current = controller;
     let responseReceived = false;
     let responseCompleted = false;
+    let reply = '';
 
     const userMessage: CoachMessage = { role: 'user', content: text };
-    const nextMessages = [...coachMessages, userMessage];
+    const previousMessages = coachHistory.completedMessages.current.messages;
+    const nextMessages = [...previousMessages, userMessage];
+    // Retain the prompt as a draft until the server explicitly completes.
+    // Returning to this document never automatically resends it.
+    coachHistory.updateDraft(text);
     setCoachMessages([...nextMessages, { role: 'assistant', content: '' }]);
     setCoachInput('');
     setCoachLoading(true);
@@ -377,8 +375,9 @@ export default function SuggestionsSidebar({
       await streamCoach(
         nextMessages, documentContent, documentType,
         (chunk) => {
-          if (controller.signal.aborted || !isCurrentTierUser(userId)) return;
+          if (controller.signal.aborted || responseCompleted || !isCurrentTierUser(userId)) return;
           if (chunk.trim()) responseReceived = true;
+          reply += chunk;
           setCoachMessages(prev => {
             if (prev.length === 0) return prev;
             const updated = [...prev];
@@ -390,6 +389,7 @@ export default function SuggestionsSidebar({
           if (controller.signal.aborted || !isCurrentTierUser(userId)) return;
           if (!responseCompleted && responseReceived) {
             responseCompleted = true;
+            coachHistory.complete([...nextMessages, { role: 'assistant', content: reply }]);
             if (!useAiQuery()) {
               setTierMessage('Your reply completed, but this device could not update the AI query balance.');
             } else {
@@ -401,15 +401,18 @@ export default function SuggestionsSidebar({
         controller.signal
       );
     } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      setCoachMessages(prev => {
-        if (prev.length === 0) return prev;
-        const updated = [...prev];
-        updated[updated.length - 1] = { role: 'assistant', content: 'Something went wrong. Please try again.' };
-        return updated;
-      });
+      if (controller.signal.aborted || err?.name === 'AbortError' || responseCompleted) return;
+      setTierMessage('Something went wrong. Your prompt was kept as a draft; please try again.');
     } finally {
-      if (!controller.signal.aborted) setCoachLoading(false);
+      if (!controller.signal.aborted) {
+        if (!responseCompleted) {
+          setCoachMessages(previousMessages);
+          setCoachInput(text);
+          setTierMessage('The reply did not complete. Your prompt was kept as a draft; no query was used.');
+        }
+        setCoachLoading(false);
+        if (coachAbortRef.current === controller) coachAbortRef.current = null;
+      }
     }
   };
 
@@ -417,7 +420,10 @@ export default function SuggestionsSidebar({
     if (coachAbortRef.current) { coachAbortRef.current.abort(); coachAbortRef.current = null; }
     coachInsertInFlightRef.current.clear();
     setCoachInsertStates({});
-    setCoachMessages([]); setCoachInput(''); setCoachLoading(false);
+    coachHistory.reset();
+    setPendingReplacement(null);
+    setTierMessage('');
+    setCoachLoading(false);
   };
 
   const handleCoachInsert = async (messageIndex: number, text: string, replaceSelection = false) => {
@@ -758,6 +764,10 @@ export default function SuggestionsSidebar({
           </TabsContent>
 
           <TabsContent value="coach" className="m-0 flex flex-col h-full">
+            <p className="shrink-0 px-3 py-2 text-[10px] text-muted-foreground" data-testid="coach-retention-policy">{COACH_RETENTION_LABEL}</p>
+            {coachHistory.storageError && (
+              <p className="shrink-0 px-3 py-2 text-xs text-destructive" role="alert">{coachHistory.storageError}</p>
+            )}
             <div
               className="shrink-0 border-b border-border/50 px-3 py-2 text-xs text-muted-foreground"
               data-testid="ai-query-balance"
@@ -847,7 +857,7 @@ export default function SuggestionsSidebar({
               )}
 
               <div className="shrink-0 border-t border-border/50 p-3 space-y-2">
-                {coachMessages.length > 0 && (
+                {(coachMessages.length > 0 || coachInput || coachHistory.storageError) && (
                   <button onClick={handleCoachReset} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:px-2" data-testid="btn-coach-reset">
                     <RotateCcw className="w-3 h-3" />
                     Start over
@@ -859,7 +869,7 @@ export default function SuggestionsSidebar({
                     className="flex-1 bg-background border border-border/60 rounded-md p-2 text-xs min-h-[60px] max-h-[120px] focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
                     placeholder="Share an idea, ask a question, or describe a scene..."
                     value={coachInput}
-                    onChange={(e) => setCoachInput(e.target.value)}
+                    onChange={(e) => coachHistory.updateDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleCoachSend(); } }}
                     disabled={coachLoading || !hasAvailableAIQueries}
                     data-testid="textarea-coach-input"

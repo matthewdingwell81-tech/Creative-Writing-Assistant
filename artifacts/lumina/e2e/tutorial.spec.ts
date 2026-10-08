@@ -12,6 +12,7 @@
  *  - Missing-target auto-skip: a tour can be navigated through without hanging
  */
 import { test, expect, type Page } from '@playwright/test';
+import { registerTestAccount } from './helpers/test-account';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -51,6 +52,8 @@ async function clearTutorialState(page: Page) {
  *   - `lumina_tutorial_done` does NOT have `full: true` (caller can set it)
  */
 async function bootWithTutorialDismissed(page: Page) {
+  // Workspace tours must not depend on a parallel test's temporary document.
+  await registerTestAccount(page, 'workspace_tour');
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
 
@@ -71,6 +74,7 @@ async function bootWithTutorialDismissed(page: Page) {
     await createFirstBtn.click();
     await expect(page.getByTestId('save-status')).toBeVisible({ timeout: 8_000 });
   }
+  await expect(page.getByTestId('editor-area')).toBeVisible();
 }
 
 /** Dismiss tutorial overlay silently if still present (used in mobile-layout helper). */
@@ -513,27 +517,23 @@ test.describe('Tutorial system', () => {
   // -------------------------------------------------------------------------
   // Full-tour end-to-end completion on a fresh account (no document open)
   //
-  // Uses the shared e2e session but deletes all server-side documents via the
-  // authenticated API before starting, so the DOM is in exactly the state of
-  // a brand-new account: no editor, no chapters, no assistant tabs.
+  // Uses a dedicated fresh account so the empty-state setup cannot delete
+  // documents being exercised by parallel tests on the shared E2E account.
   // -------------------------------------------------------------------------
 
   test('full tour completes end-to-end on a fresh account without freezing', async ({ page }) => {
     test.setTimeout(60_000);
 
+    await registerTestAccount(page, 'tour_fresh');
+
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    // ── 1. Delete every server-side document for this account ────────────
-    // This is the only reliable way to reach the "no document" state, because
-    // earlier tests in the suite create documents for the shared e2e account.
+    // ── 1. Verify this account starts empty without destructive cleanup ──
     const docsRes = await page.request.get('/api/documents');
     expect(docsRes.ok(), `GET /api/documents failed: ${docsRes.status()}`).toBe(true);
     const docs: { id: number }[] = await docsRes.json();
-    for (const doc of docs) {
-      const del = await page.request.delete(`/api/documents/${doc.id}`);
-      expect(del.ok(), `DELETE /api/documents/${doc.id} failed: ${del.status()}`).toBe(true);
-    }
+    expect(docs).toEqual([]);
 
     // ── 2. Clear tutorial flags and reload so both server and client are clean
     await clearTutorialState(page);
@@ -545,7 +545,7 @@ test.describe('Tutorial system', () => {
     // documents exist server-side and the UI reflects the empty state.
     await expect(
       page.getByTestId('btn-create-first'),
-      'Expected empty-state CTA after deleting all documents',
+      'Expected empty-state CTA for the fresh account',
     ).toBeVisible({ timeout: 5_000 });
 
     // ── 4. Full tour auto-launches on first visit ─────────────────────────

@@ -1,12 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { registerTestAccount } from './helpers/test-account';
 
 test('Coach ad rewards persist per account and stay hidden for premium users', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   const suffix = `${testInfo.project.name}-${Date.now()}`;
   const title = `Ad rewards test ${suffix}`;
-  const userResponse = await page.request.get('/api/auth/me');
-  expect(userResponse.ok()).toBe(true);
-  const user = await userResponse.json();
+  const user = await registerTestAccount(page, 'ad_rewards');
   await page.route('**/api/auth/me', route => route.fulfill({
     json: { ...user, createdAt: new Date(Date.now() - 8 * 86400000).toISOString() },
   }));
@@ -23,16 +22,8 @@ test('Coach ad rewards persist per account and stay hidden for premium users', a
   expect(createChapterResponse.ok()).toBe(true);
 
   const openDocumentAndCoach = async () => {
-    await page.getByTestId('toggle-doc-list').click();
-    await expect(page.getByTestId(`doc-item-${document.id}`)).toBeVisible();
-    const chapterLoad = page.waitForResponse(response =>
-      response.url().endsWith(`/api/documents/${document.id}/chapters`) &&
-      response.request().method() === 'GET' &&
-      (response.ok() || response.status() === 304)
-    );
-    await page.getByTestId(`doc-item-${document.id}`).click();
-    await chapterLoad;
     await expect(page.getByTestId('input-title')).toHaveValue(title);
+    await expect(page.getByTestId('editor-area')).toBeVisible();
 
     if (await page.getByTestId('btn-open-suggestions-sheet').isVisible()) {
       await page.getByTestId('btn-open-suggestions-sheet').click();
@@ -93,7 +84,9 @@ test('Coach ad rewards persist per account and stay hidden for premium users', a
     await page.route('**/api/coach', route => route.fulfill({ status: 500, body: 'Failed' }));
     await page.getByTestId('textarea-coach-input').fill('This request will fail');
     await page.getByTestId('btn-coach-send').click();
-    await expect(page.getByTestId('coach-message-list')).toContainText('Something went wrong.');
+    await expect(page.getByTestId('ai-query-status-message')).toContainText('did not complete');
+    await expect(page.getByTestId('textarea-coach-input')).toHaveValue('This request will fail');
+    await expect(page.getByTestId('coach-message-list')).not.toContainText('This request will fail');
     await expect(page.getByTestId('bonus-ai-query-balance')).toHaveText('2 bonus AI queries available');
 
     await page.reload();

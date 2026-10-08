@@ -266,8 +266,15 @@ export default function Home() {
 
   const handleUpgrade = useCallback(async () => {
     if (activeChapterId && !(await saveNow(content, title))) return;
+    if (user?.id && activeDocId) {
+      try {
+        sessionStorage.setItem(`lumina_plans_document:${encodeURIComponent(user.id)}`, String(activeDocId));
+      } catch {
+        toast({ title: 'Document return position could not be saved', description: 'Your Coach history remains with its document. Select that document when you return.' });
+      }
+    }
     setLocation('/upgrade');
-  }, [activeChapterId, content, title, saveNow, setLocation]);
+  }, [activeChapterId, activeDocId, content, title, saveNow, setLocation, user?.id, toast]);
 
   const { data: documents = [] } = useQuery<Document[]>({
     queryKey: ['/api/documents'],
@@ -337,14 +344,18 @@ export default function Home() {
 
   useEffect(() => {
     if (!activeDocId && documents.length > 0) {
-      const doc = documents[0];
+      let returnDocId: number | null = null;
+      try {
+        if (user?.id) returnDocId = Number(sessionStorage.getItem(`lumina_plans_document:${encodeURIComponent(user.id)}`));
+      } catch { /* Document selection still works when session storage is unavailable. */ }
+      const doc = documents.find((candidate) => candidate.id === returnDocId) ?? documents[0];
       setActiveDocId(doc.id);
       setTitle(doc.title);
       setDocumentType(doc.documentType);
       setSelectedText('');
       loadChaptersForDoc(doc.id, doc.content);
     }
-  }, [documents, activeDocId]);
+  }, [documents, activeDocId, user?.id]);
 
   const handleSelectDoc = useCallback(async (id: number) => {
     if (documentSwitching) return;
@@ -1355,6 +1366,8 @@ export default function Home() {
                 <SheetContent side="right" aria-describedby={undefined} className="w-full sm:max-w-md max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden" style={{ height: `calc(100dvh - ${admobBannerHeight}px)` }}>
                   <SheetHeader className="sr-only"><SheetTitle asChild><span>Creative Assistant</span></SheetTitle></SheetHeader>
                   <SuggestionsSidebar
+                    key={`${user?.id}:${activeDocId}`}
+                    documentId={activeDocId}
                     suggestions={suggestions}
                     savedSuggestions={savedSuggestions}
                     savedCount={savedCount}
@@ -1387,6 +1400,8 @@ export default function Home() {
           ) : (
             <aside className="w-[min(380px,32vw)] min-w-[320px] shrink-0 border-l border-border/50 bg-card/30 backdrop-blur flex flex-col overflow-hidden">
               <SuggestionsSidebar
+                key={`${user?.id}:${activeDocId}`}
+                documentId={activeDocId}
                 suggestions={suggestions}
                 savedSuggestions={savedSuggestions}
                 savedCount={savedCount}

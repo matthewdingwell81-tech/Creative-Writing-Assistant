@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { registerTestAccount } from './helpers/test-account';
 
 test('Coach Insert preserves current text and persists the response', async ({ page }, testInfo) => {
+  await registerTestAccount(page, 'coach_insert');
   const suffix = `${testInfo.project.name}-${Date.now()}`;
   const title = `Coach insert test ${suffix}`;
   const typedText = `Recent unsaved typing ${suffix}`;
@@ -40,15 +42,7 @@ test('Coach Insert preserves current text and persists the response', async ({ p
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId('toggle-doc-list').click();
-    await expect(page.getByTestId(`doc-item-${document.id}`)).toBeVisible();
-    const initialChapterLoad = page.waitForResponse(response =>
-      response.url().endsWith(`/api/documents/${document.id}/chapters`) &&
-      response.request().method() === 'GET' &&
-      response.ok()
-    );
-    await page.getByTestId(`doc-item-${document.id}`).click();
-    await initialChapterLoad;
+    // This isolated account has exactly one document; Home selects it directly.
     await expect(page.getByTestId('input-title')).toHaveValue(title);
 
     const editor = page.getByTestId('editor-area');
@@ -65,15 +59,18 @@ test('Coach Insert preserves current text and persists the response', async ({ p
     await expect(insertButton).toBeVisible();
 
     let saveRequestCount = 0;
+    const isCoachSave = (request: import('@playwright/test').Request) =>
+      request.url().endsWith(`/api/chapters/${chapter.id}`)
+      && request.method() === 'PATCH'
+      && String(request.postDataJSON()?.content).includes(`Saved coach response ${suffix}`);
     page.on('request', request => {
-      if (request.url().endsWith(`/api/chapters/${chapter.id}`) && request.method() === 'PATCH') {
+      // Ignore a queued autosave of the writer's text before Insert was clicked.
+      if (isCoachSave(request)) {
         saveRequestCount += 1;
       }
     });
     const persisted = page.waitForResponse(response =>
-      response.url().endsWith(`/api/chapters/${chapter.id}`) &&
-      response.request().method() === 'PATCH' &&
-      response.ok()
+      isCoachSave(response.request()) && response.ok()
     );
     await insertButton.evaluate((button: HTMLButtonElement) => {
       button.click();
@@ -90,14 +87,7 @@ test('Coach Insert preserves current text and persists the response', async ({ p
 
     await page.reload();
     await page.waitForLoadState('networkidle');
-    await page.getByTestId('toggle-doc-list').click();
-    const reloadChapterLoad = page.waitForResponse(response =>
-      response.url().endsWith(`/api/documents/${document.id}/chapters`) &&
-      response.request().method() === 'GET' &&
-      response.ok()
-    );
-    await page.getByTestId(`doc-item-${document.id}`).click();
-    await reloadChapterLoad;
+    await expect(page.getByTestId('input-title')).toHaveValue(title);
 
     await expect(page.getByTestId('editor-area')).toContainText(typedText);
     await expect(page.getByTestId('editor-area')).toContainText(coachText);
