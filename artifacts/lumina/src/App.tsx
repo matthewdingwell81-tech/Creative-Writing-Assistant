@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import AuthPage from "@/pages/AuthPage";
+import Upgrade from "@/pages/Upgrade";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { setSessionExpired } from "@/lib/sessionState";
 import { TutorialProvider } from "@/hooks/useTutorial";
@@ -46,6 +47,9 @@ function Router() {
     <Switch>
       <Route path="/auth">
         {user ? <Redirect to="/" /> : <AuthPage auth={auth} />}
+      </Route>
+      <Route path="/upgrade">
+        {user ? <Upgrade /> : <Redirect to="/auth" />}
       </Route>
       <Route path="/">
         {user ? <Home /> : <Redirect to="/auth" />}

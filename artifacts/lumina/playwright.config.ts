@@ -27,6 +27,22 @@ export default defineConfig({
 
   projects: [
     {
+      name: 'user-tier-service',
+      testMatch: '**/user-tier-service.spec.ts',
+    },
+    {
+      name: 'freemium-desktop',
+      testMatch: '**/freemium*.spec.ts',
+      use: { browserName: 'chromium', viewport: { width: 1600, height: 1000 }, storageState: 'e2e/.auth/mobile.json' },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'freemium-mobile',
+      testMatch: '**/freemium*.spec.ts',
+      use: { browserName: 'chromium', viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, storageState: 'e2e/.auth/mobile.json' },
+      dependencies: ['setup'],
+    },
+    {
       name: 'admob-reward-lifecycle',
       testMatch: '**/admob-reward-lifecycle.spec.ts',
     },

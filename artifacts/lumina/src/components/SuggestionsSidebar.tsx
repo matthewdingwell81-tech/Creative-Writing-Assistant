@@ -27,7 +27,9 @@ import {
   getFreeTrialDaysRemaining,
   getNextTierRefreshDelay,
   isFreeTrialActive,
+  isCurrentTierUser,
   useAiQuery,
+  addBonusQueries,
 } from '@/services/userTierService';
 
 interface CoachMessage {
@@ -60,6 +62,7 @@ interface SuggestionsSidebarProps {
   onScrollToSuggestion?: (original: string) => void;
   onInsertText?: (text: string, replaceSelection?: boolean) => Promise<boolean | 'needs-confirmation'>;
   userId: string | null;
+  onUpgrade: () => Promise<void>;
 }
 
 const severityConfig = {
@@ -222,7 +225,7 @@ export default function SuggestionsSidebar({
   onDismiss, onSave, onRemoveSaved, onClearHistory, documentContent, documentType, selectedText,
   externalIdeaPrompt, onExternalIdeaHandled, onScrollToSuggestion, onInsertText,
   hasSuggestionUpdate, pendingSuggestionCount, onShowLatestSuggestions,
-  analysisMode, onAnalysisModeChange, onAnalyzeWriting, userId
+  analysisMode, onAnalysisModeChange, onAnalyzeWriting, userId, onUpgrade
 }: SuggestionsSidebarProps) {
   const [ideaPrompt, setIdeaPrompt] = useState('');
   const [ideaResponse, setIdeaResponse] = useState('');
@@ -252,8 +255,16 @@ export default function SuggestionsSidebar({
   const trialDaysRemaining = getFreeTrialDaysRemaining();
   const dailyQueriesRemaining = getDailyAIQueriesRemaining();
   const totalQueriesRemaining = getAIQueriesRemaining();
-  const unlimitedAI = isPremium || trialActive;
   const hasAvailableAIQueries = totalQueriesRemaining > 0;
+
+  useEffect(() => {
+    setCoachMessages([]);
+    setCoachInput('');
+    setCoachLoading(false);
+    setRewardAdMessage('');
+    setTierMessage('');
+    return () => { coachAbortRef.current?.abort(); };
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -354,7 +365,7 @@ export default function SuggestionsSidebar({
   const handleCoachSend = async (messageText?: string) => {
     const text = (messageText ?? coachInput).trim();
     if (!text || coachLoading) return;
-    if (!hasAvailableAIQueries) return;
+    if (getAIQueriesRemaining() <= 0) return;
 
     if (coachAbortRef.current) coachAbortRef.current.abort();
     const controller = new AbortController();
@@ -372,7 +383,7 @@ export default function SuggestionsSidebar({
       await streamCoach(
         nextMessages, documentContent, documentType,
         (chunk) => {
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted || !isCurrentTierUser(userId)) return;
           if (chunk.trim()) responseReceived = true;
           setCoachMessages(prev => {
             if (prev.length === 0) return prev;
@@ -382,7 +393,7 @@ export default function SuggestionsSidebar({
           });
         },
         () => {
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted || !isCurrentTierUser(userId)) return;
           if (!responseCompleted && responseReceived) {
             responseCompleted = true;
             if (!useAiQuery()) {
@@ -422,7 +433,8 @@ export default function SuggestionsSidebar({
       }
 
       videoCompleted = true;
-      const newBalance = addBonusAIQueries(2);
+      if (!isCurrentTierUser(userId)) return;
+      const newBalance = addBonusQueries(2);
       setRewardAdMessage(
         `Two bonus AI queries added. You now have ${newBalance} available.`,
       );
@@ -780,6 +792,31 @@ export default function SuggestionsSidebar({
           </TabsContent>
 
           <TabsContent value="coach" className="m-0 flex flex-col h-full">
+            <div
+              className="shrink-0 border-b border-border/50 px-3 py-2 text-xs text-muted-foreground"
+              data-testid="ai-query-balance"
+              role="status"
+            >
+              {isPremium
+                ? 'Premium · unlimited AI queries'
+                : trialActive
+                  ? `Free trial · unlimited AI for ${trialDaysRemaining} ${trialDaysRemaining === 1 ? 'day' : 'days'}`
+                  : `${dailyQueriesRemaining} of 5 daily AI queries remaining${bonusAIQueries > 0 ? ` · ${bonusAIQueries} ad bonus ${bonusAIQueries === 1 ? 'query' : 'queries'}` : ''}`}
+            </div>
+            {tierMessage && (
+              <p className="shrink-0 px-3 py-2 text-xs text-amber-700 dark:text-amber-300" role="status" data-testid="ai-query-status-message">
+                {tierMessage}
+              </p>
+            )}
+            {!hasAvailableAIQueries && (
+              <div className="shrink-0 border-b border-border/50 bg-primary/5 px-3 py-3" role="alert" data-testid="ai-query-limit-prompt">
+                <p className="text-sm font-medium text-foreground">You’ve used today’s free AI queries.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Your daily allowance resets at local midnight. Earn bonus queries below, or compare Premium benefits.</p>
+                <Link href="/upgrade" onClick={(event) => { event.preventDefault(); void onUpgrade(); }} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline" data-testid="link-upgrade-from-coach">
+                  Compare plans
+                </Link>
+              </div>
+            )}
             {canEarnAdReward && (
               <div
                 className="shrink-0 border-b border-border/50 bg-primary/5 px-3 py-2.5 space-y-2"
@@ -791,7 +828,7 @@ export default function SuggestionsSidebar({
                       {bonusAIQueries} bonus AI {bonusAIQueries === 1 ? 'query' : 'queries'} available
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      One credit is used after a successful Coach reply.
+                      Bonus credits are used after your five daily queries, and are kept during your unlimited trial.
                     </p>
                   </div>
                   <Button
@@ -822,9 +859,9 @@ export default function SuggestionsSidebar({
                 )}
               </div>
             )}
-            <div className="flex flex-col h-[calc(100vh-14rem)]">
+            <div className="flex flex-col flex-1 min-h-0">
               {coachMessages.length === 0 ? (
-                <div className="flex-1 flex flex-col justify-center p-4 space-y-3">
+                <div className="flex-1 overflow-y-auto flex flex-col p-4 space-y-3">
                   <div className="text-center mb-2">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
                       <Bot className="w-5 h-5 text-primary" />
@@ -839,7 +876,8 @@ export default function SuggestionsSidebar({
                     <button
                       key={i}
                       onClick={() => handleCoachSend(prompt)}
-                      className="w-full text-left text-xs p-2.5 rounded-lg border border-border/60 bg-card hover:border-primary/40 hover:bg-primary/5 transition-all [@media(pointer:coarse)]:min-h-[44px]"
+                      disabled={!hasAvailableAIQueries}
+                      className="w-full text-left text-xs p-2.5 rounded-lg border border-border/60 bg-card hover:border-primary/40 hover:bg-primary/5 transition-all disabled:cursor-not-allowed disabled:opacity-50 [@media(pointer:coarse)]:min-h-[44px]"
                       data-testid={`btn-coach-starter-${i}`}
                     >
                       <span className="text-primary/70 mr-1.5">→</span>
@@ -899,14 +937,14 @@ export default function SuggestionsSidebar({
                     value={coachInput}
                     onChange={(e) => setCoachInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleCoachSend(); } }}
-                    disabled={coachLoading}
+                    disabled={coachLoading || !hasAvailableAIQueries}
                     data-testid="textarea-coach-input"
                   />
                   <Button
                     size="icon"
                     className="h-8 w-8 shrink-0 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
                     onClick={() => handleCoachSend()}
-                    disabled={coachLoading || !coachInput.trim()}
+                    disabled={coachLoading || !coachInput.trim() || !hasAvailableAIQueries}
                     data-testid="btn-coach-send"
                   >
                     {coachLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}

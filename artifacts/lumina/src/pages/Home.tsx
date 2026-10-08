@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Editor, { type EditorHandle } from '@/components/Editor';
 import SuggestionsSidebar from '@/components/SuggestionsSidebar';
@@ -136,6 +137,7 @@ export default function Home() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user, logout } = useAuth();
+  const [, setLocation] = useLocation();
   const isMobile = useIsMobile();
   const { isPremium } = useAdRewards(user?.id ?? null);
   const [admobBannerHeight, setAdmobBannerHeight] = useState(0);
@@ -261,6 +263,11 @@ export default function Home() {
       });
     },
   });
+
+  const handleUpgrade = useCallback(async () => {
+    if (activeChapterId && !(await saveNow(content, title))) return;
+    setLocation('/upgrade');
+  }, [activeChapterId, content, title, saveNow, setLocation]);
 
   const { data: documents = [] } = useQuery<Document[]>({
     queryKey: ['/api/documents'],
@@ -969,6 +976,13 @@ export default function Home() {
                   Signed in as <span className="font-medium text-foreground" data-testid="text-username">{user?.username}</span>
                 </div>
                 <DropdownMenuItem
+                  onClick={() => void handleUpgrade()}
+                  data-testid="btn-upgrade"
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Free & Premium plans
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={() => logout().catch(() => toast({ title: "Sign out failed", description: "Please try again.", variant: "destructive" }))}
                   data-testid="btn-logout"
                   className="text-red-500 focus:text-red-500"
@@ -1161,6 +1175,13 @@ export default function Home() {
                   Signed in as <span className="font-medium text-foreground" data-testid="text-username">{user?.username}</span>
                 </div>
                 <DropdownMenuItem
+                  onClick={() => void handleUpgrade()}
+                  data-testid="btn-mobile-upgrade"
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Free & Premium plans
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={() => logout().catch(() => toast({ title: "Sign out failed", description: "Please try again.", variant: "destructive" }))}
                   data-testid="btn-logout"
                   className="text-red-500 focus:text-red-500"
@@ -1331,7 +1352,8 @@ export default function Home() {
                 <Sparkles className="w-5 h-5" />
               </button>
               <Sheet open={showSuggestionsSheet} onOpenChange={setShowSuggestionsSheet}>
-                <SheetContent side="right" className="w-full sm:max-w-md max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden" style={{ height: `calc(100dvh - ${admobBannerHeight}px)` }}>
+                <SheetContent side="right" aria-describedby={undefined} className="w-full sm:max-w-md max-h-dvh min-h-0 p-0 flex flex-col overflow-hidden" style={{ height: `calc(100dvh - ${admobBannerHeight}px)` }}>
+                  <SheetHeader className="sr-only"><SheetTitle asChild><span>Creative Assistant</span></SheetTitle></SheetHeader>
                   <SuggestionsSidebar
                     suggestions={suggestions}
                     savedSuggestions={savedSuggestions}
@@ -1357,6 +1379,7 @@ export default function Home() {
                     onScrollToSuggestion={(text) => editorHandle.current?.scrollToSuggestion(text)}
                     onInsertText={handleInsertCoachText}
                     userId={user?.id ?? null}
+                    onUpgrade={handleUpgrade}
                   />
                 </SheetContent>
               </Sheet>
@@ -1388,6 +1411,7 @@ export default function Home() {
                 onScrollToSuggestion={(text) => editorHandle.current?.scrollToSuggestion(text)}
                 onInsertText={handleInsertCoachText}
                 userId={user?.id ?? null}
+                onUpgrade={handleUpgrade}
               />
             </aside>
           )

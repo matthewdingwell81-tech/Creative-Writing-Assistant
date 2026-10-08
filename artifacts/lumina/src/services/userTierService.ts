@@ -1,6 +1,5 @@
 import {
   addBonusAIQueriesForAccount,
-  bonusQueriesStorageKey,
   consumeBonusAIQueryForAccount,
   getBonusAIQueriesForAccount,
   isPremiumAccount,
@@ -27,6 +26,10 @@ let currentUser: TierUser | null = null;
 
 export function setCurrentTierUser(user: TierUser | null): void {
   currentUser = user;
+}
+
+export function isCurrentTierUser(accountId: string | null): boolean {
+  return Boolean(accountId && currentUser?.id === accountId);
 }
 
 export function dailyAiQueryStorageKey(accountId: string): string {
@@ -129,9 +132,13 @@ export function useAiQuery(now = new Date()): boolean {
     return true;
   }
 
-  const consumed = consumeBonusAIQueryForAccount(currentUser.id);
-  if (consumed) dispatchTierChange(currentUser.id);
-  return consumed;
+  try {
+    const consumed = consumeBonusAIQueryForAccount(currentUser.id);
+    if (consumed) dispatchTierChange(currentUser.id);
+    return consumed;
+  } catch {
+    return false;
+  }
 }
 
 export function addBonusQueries(amount: number): number {

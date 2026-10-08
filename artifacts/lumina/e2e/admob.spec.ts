@@ -7,6 +7,9 @@ test('Coach ad rewards persist per account and stay hidden for premium users', a
   const userResponse = await page.request.get('/api/auth/me');
   expect(userResponse.ok()).toBe(true);
   const user = await userResponse.json();
+  await page.route('**/api/auth/me', route => route.fulfill({
+    json: { ...user, createdAt: new Date(Date.now() - 8 * 86400000).toISOString() },
+  }));
 
   const createDocumentResponse = await page.request.post('/api/documents', {
     data: { title, content: '', documentType: 'fiction' },
@@ -46,6 +49,9 @@ test('Coach ad rewards persist per account and stay hidden for premium users', a
         '3',
       );
       localStorage.removeItem(`lumina_admob_premium:${encodeURIComponent(accountId)}`);
+      const now = new Date();
+      const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      localStorage.setItem(`lumina_ai_daily_queries:${encodeURIComponent(accountId)}`, JSON.stringify({ date, used: 5 }));
       localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
     }, { accountId: user.id as string, marker: `admob-test-${suffix}` });
 
