@@ -9,8 +9,8 @@ Restoring Coach conversations must be passive: never regenerate retained replies
 
 **How to apply:** Treat explicit, nonempty server completion as the boundary for both a retained reply and query accounting. Keep unfinished prompts as drafts, not completed exchanges, and ignore late responses after reset or a scope change.
 
-Coach persistence for this milestone is device-local, isolated by account and writing document, rather than a cloud conversation archive.
+Importing old device-local Coach history into an account must be an explicit, explained choice, not an automatic overwrite of cloud history.
 
-**Why:** The requested return-navigation and reload behavior does not require a new server-side storage contract or cross-device synchronization. Local retention should not be described to users as an account backup.
+**Why:** A different device can already have newer history or a deliberate reset. Automatic import would resurrect deleted replies or replace newer work. Original timestamps must survive import so migration does not restart retention.
 
-**How to apply:** Preserve scope isolation and show a clear local retention policy. Cross-device history and synchronization between concurrent browser tabs are separate product work.
+**How to apply:** Restore saved account history first, offer an explicit replace-or-discard choice for a local recovery copy, and remove that copy only after confirmed import or explicit discard. Empty version markers may remain after reset/expiry to prevent stale writes; they contain no conversation text.

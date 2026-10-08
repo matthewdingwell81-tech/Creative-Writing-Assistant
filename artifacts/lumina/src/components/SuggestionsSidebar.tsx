@@ -352,7 +352,7 @@ export default function SuggestionsSidebar({
 
   const handleCoachSend = async (messageText?: string) => {
     const text = (messageText ?? coachInput).trim();
-    if (!text || coachLoading || !userId || coachAbortRef.current) return;
+    if (!text || coachLoading || !userId || coachAbortRef.current || !coachHistory.canEdit) return;
     if (getAIQueriesRemaining() <= 0) return;
 
     const controller = new AbortController();
@@ -765,8 +765,22 @@ export default function SuggestionsSidebar({
 
           <TabsContent value="coach" className="m-0 flex flex-col h-full">
             <p className="shrink-0 px-3 py-2 text-[10px] text-muted-foreground" data-testid="coach-retention-policy">{COACH_RETENTION_LABEL}</p>
+            {coachHistory.loading && <p className="px-3 py-2 text-xs" role="status">Syncing Coach history…</p>}
+            {coachHistory.syncing && !coachHistory.loading && <p className="px-3 py-1 text-[10px] text-muted-foreground" role="status" data-testid="coach-sync-status">Saving Coach changes to your account…</p>}
+            {coachHistory.deviceHistory && !coachHistory.loading && (
+              <div className="px-3 py-2 text-xs space-y-2" data-testid="coach-import-choice">
+                <p>Coach history was found on this device. Importing replaces this document’s saved conversation and draft on all devices, without generating replies or using queries. Its original expiry date is kept.</p>
+                <div className="flex gap-3">
+                  <button className="underline" onClick={() => void coachHistory.importDeviceHistory()}>Import device history</button>
+                  <button className="underline" onClick={coachHistory.discardDeviceHistory}>Keep saved history and delete device copy</button>
+                </div>
+              </div>
+            )}
             {coachHistory.storageError && (
-              <p className="shrink-0 px-3 py-2 text-xs text-destructive" role="alert">{coachHistory.storageError}</p>
+              <div className="shrink-0 px-3 py-2 text-xs text-destructive" role="alert">
+                {coachHistory.storageError}
+                <button className="block underline mt-1" disabled={coachLoading || coachHistory.loading} onClick={() => void coachHistory.reload()}>Reload saved history</button>
+              </div>
             )}
             <div
               className="shrink-0 border-b border-border/50 px-3 py-2 text-xs text-muted-foreground"
@@ -810,7 +824,7 @@ export default function SuggestionsSidebar({
                     <button
                       key={i}
                       onClick={() => handleCoachSend(prompt)}
-                      disabled={!hasAvailableAIQueries}
+                      disabled={!hasAvailableAIQueries || !coachHistory.canEdit}
                       className="w-full text-left text-xs p-2.5 rounded-lg border border-border/60 bg-card hover:border-primary/40 hover:bg-primary/5 transition-all disabled:cursor-not-allowed disabled:opacity-50 [@media(pointer:coarse)]:min-h-[44px]"
                       data-testid={`btn-coach-starter-${i}`}
                     >
@@ -858,7 +872,7 @@ export default function SuggestionsSidebar({
 
               <div className="shrink-0 border-t border-border/50 p-3 space-y-2">
                 {(coachMessages.length > 0 || coachInput || coachHistory.storageError) && (
-                  <button onClick={handleCoachReset} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:px-2" data-testid="btn-coach-reset">
+                  <button onClick={handleCoachReset} disabled={coachHistory.loading} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:px-2" data-testid="btn-coach-reset">
                     <RotateCcw className="w-3 h-3" />
                     Start over
                   </button>
@@ -871,14 +885,15 @@ export default function SuggestionsSidebar({
                     value={coachInput}
                     onChange={(e) => coachHistory.updateDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleCoachSend(); } }}
-                    disabled={coachLoading || !hasAvailableAIQueries}
+                    disabled={coachLoading || !hasAvailableAIQueries || !coachHistory.canEdit}
+                    maxLength={20000}
                     data-testid="textarea-coach-input"
                   />
                   <Button
                     size="icon"
                     className="h-8 w-8 shrink-0 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
                     onClick={() => handleCoachSend()}
-                    disabled={coachLoading || !coachInput.trim() || !hasAvailableAIQueries}
+                    disabled={coachLoading || !coachInput.trim() || !hasAvailableAIQueries || !coachHistory.canEdit}
                     aria-label="Send Coach message"
                     data-testid="btn-coach-send"
                   >

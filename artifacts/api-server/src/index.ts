@@ -1,6 +1,8 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
+import { expireCoachHistory } from "./routes/coach-history";
+import coachMigration from "../../../lib/db/migrations/coach-history.sql";
 
 const rawPort = process.env["PORT"];
 
@@ -23,11 +25,18 @@ async function startServer() {
     await pool.query(
       'ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "created_at" timestamptz NOT NULL DEFAULT now()',
     );
+    // Bundle the reviewed additive SQL so published servers can start with a
+    // fresh schema too; do not depend on workspace-only post-merge setup.
+    await pool.query(coachMigration);
+    await expireCoachHistory();
   } catch (err) {
-    logger.error({ err }, "Could not apply the user signup-date migration");
+    logger.error({ err }, "Could not apply startup migrations or Coach retention cleanup");
     process.exit(1);
   }
 
+  setInterval(() => {
+    void expireCoachHistory().catch(err => logger.error({ err }, "Coach retention cleanup failed"));
+  }, 60 * 60 * 1000).unref();
   app.listen(port, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");

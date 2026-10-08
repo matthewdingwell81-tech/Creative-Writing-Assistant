@@ -97,7 +97,7 @@ export default function DocumentList({ documents, activeId, onSelect, onNew, isC
           <AlertDialogHeader>
             <AlertDialogTitle>Delete document?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the document and all its chapters. This action cannot be undone.
+              This will permanently delete the document, all its chapters, and its saved Coach history. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

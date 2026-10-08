@@ -9,7 +9,8 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node test/build-asset-check.test.mjs",
-    "test:planning": "node --test test/planning-api.test.mjs"
+    "test:planning": "node --test test/planning-api.test.mjs",
+    "test:coach": "node --test test/coach-history-api.test.mjs"
   },
   "dependencies": {
     "@google-cloud/storage": "^8.0.1",

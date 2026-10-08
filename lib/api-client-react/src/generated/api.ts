@@ -20,6 +20,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CoachHistoryInput,
+  CoachHistorySnapshot,
   HealthStatus,
   PlanningInput,
   PlanningListResponse,
@@ -39,6 +41,219 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
+
+export const getGetCoachHistoryUrl = (documentId: number,) => {
+
+
+
+
+  return `/api/documents/${documentId}/coach-history`
+}
+
+/**
+ * @summary Passively restore owned Coach history without invoking AI
+ */
+export const getCoachHistory = async (documentId: number, options?: RequestInit): Promise<CoachHistorySnapshot> => {
+
+  return customFetch<CoachHistorySnapshot>(getGetCoachHistoryUrl(documentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCoachHistoryQueryKey = (documentId: number,) => {
+    return [
+    `/api/documents/${documentId}/coach-history`
+    ] as const;
+    }
+
+
+export const getGetCoachHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getCoachHistory>>, TError = ErrorType<unknown>>(documentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCoachHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCoachHistoryQueryKey(documentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCoachHistory>>> = ({ signal }) => getCoachHistory(documentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(documentId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCoachHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCoachHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getCoachHistory>>>
+export type GetCoachHistoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Passively restore owned Coach history without invoking AI
+ */
+
+export function useGetCoachHistory<TData = Awaited<ReturnType<typeof getCoachHistory>>, TError = ErrorType<unknown>>(
+ documentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCoachHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCoachHistoryQueryOptions(documentId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSaveCoachHistoryUrl = (documentId: number,) => {
+
+
+
+
+  return `/api/documents/${documentId}/coach-history`
+}
+
+export const saveCoachHistory = async (documentId: number,
+    coachHistoryInput: CoachHistoryInput, options?: RequestInit): Promise<CoachHistorySnapshot> => {
+
+  return customFetch<CoachHistorySnapshot>(getSaveCoachHistoryUrl(documentId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      coachHistoryInput,)
+  }
+);}
+
+
+
+
+export const getSaveCoachHistoryMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveCoachHistory>>, TError,{documentId: number;data: BodyType<CoachHistoryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveCoachHistory>>, TError,{documentId: number;data: BodyType<CoachHistoryInput>}, TContext> => {
+
+const mutationKey = ['saveCoachHistory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveCoachHistory>>, {documentId: number;data: BodyType<CoachHistoryInput>}> = (props) => {
+          const {documentId,data} = props ?? {};
+
+          return  saveCoachHistory(documentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveCoachHistoryMutationResult = NonNullable<Awaited<ReturnType<typeof saveCoachHistory>>>
+    export type SaveCoachHistoryMutationBody = BodyType<CoachHistoryInput>
+    export type SaveCoachHistoryMutationError = ErrorType<void>
+
+    export const useSaveCoachHistory = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveCoachHistory>>, TError,{documentId: number;data: BodyType<CoachHistoryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveCoachHistory>>,
+        TError,
+        {documentId: number;data: BodyType<CoachHistoryInput>},
+        TContext
+      > => {
+      return useMutation(getSaveCoachHistoryMutationOptions(options));
+    }
+
+export const getDeleteCoachHistoryUrl = (documentId: number,) => {
+
+
+
+
+  return `/api/documents/${documentId}/coach-history`
+}
+
+/**
+ * @summary Start over on all devices, retaining only a version marker
+ */
+export const deleteCoachHistory = async (documentId: number, options?: RequestInit): Promise<CoachHistorySnapshot> => {
+
+  return customFetch<CoachHistorySnapshot>(getDeleteCoachHistoryUrl(documentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteCoachHistoryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCoachHistory>>, TError,{documentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCoachHistory>>, TError,{documentId: number}, TContext> => {
+
+const mutationKey = ['deleteCoachHistory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCoachHistory>>, {documentId: number}> = (props) => {
+          const {documentId} = props ?? {};
+
+          return  deleteCoachHistory(documentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCoachHistoryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCoachHistory>>>
+
+    export type DeleteCoachHistoryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Start over on all devices, retaining only a version marker
+ */
+export const useDeleteCoachHistory = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCoachHistory>>, TError,{documentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCoachHistory>>,
+        TError,
+        {documentId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteCoachHistoryMutationOptions(options));
+    }
 
 export const getListStoryPlanningUrl = (documentId: number,) => {
 

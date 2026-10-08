@@ -9,6 +9,98 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Passively restore owned Coach history without invoking AI
+ */
+
+
+
+export const GetCoachHistoryParams = zod.object({
+  "documentId": zod.coerce.number().min(1)
+})
+
+export const getCoachHistoryResponseMessagesItemContentMax = 20000;
+
+
+
+export const GetCoachHistoryResponse = zod.object({
+  "messages": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().min(1).max(getCoachHistoryResponseMessagesItemContentMax)
+})),
+  "draft": zod.string(),
+  "revision": zod.number(),
+  "updatedAt": zod.number().nullable()
+})
+
+
+
+
+
+export const SaveCoachHistoryParams = zod.object({
+  "documentId": zod.coerce.number().min(1)
+})
+
+export const saveCoachHistoryBodyMessagesItemContentMax = 20000;
+
+export const saveCoachHistoryBodyMessagesMax = 80;
+
+export const saveCoachHistoryBodyDraftMax = 20000;
+
+export const saveCoachHistoryBodyRevisionMin = 0;
+
+
+
+export const SaveCoachHistoryBody = zod.object({
+  "messages": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().min(1).max(saveCoachHistoryBodyMessagesItemContentMax)
+})).max(saveCoachHistoryBodyMessagesMax),
+  "draft": zod.string().max(saveCoachHistoryBodyDraftMax),
+  "revision": zod.number().min(saveCoachHistoryBodyRevisionMin),
+  "importedAt": zod.number().optional().describe('Original device timestamp, supplied only for explicitly approved import')
+})
+
+export const saveCoachHistoryResponseMessagesItemContentMax = 20000;
+
+
+
+export const SaveCoachHistoryResponse = zod.object({
+  "messages": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().min(1).max(saveCoachHistoryResponseMessagesItemContentMax)
+})),
+  "draft": zod.string(),
+  "revision": zod.number(),
+  "updatedAt": zod.number().nullable()
+})
+
+
+/**
+ * @summary Start over on all devices, retaining only a version marker
+ */
+
+
+
+export const DeleteCoachHistoryParams = zod.object({
+  "documentId": zod.coerce.number().min(1)
+})
+
+export const deleteCoachHistoryResponseMessagesItemContentMax = 20000;
+
+
+
+export const DeleteCoachHistoryResponse = zod.object({
+  "messages": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().min(1).max(deleteCoachHistoryResponseMessagesItemContentMax)
+})),
+  "draft": zod.string(),
+  "revision": zod.number(),
+  "updatedAt": zod.number().nullable()
+})
+
+
+/**
  * @summary List story planning records owned by the signed-in user
  */
 

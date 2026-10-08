@@ -5,3 +5,4 @@ export * from "./chapters";
 export * from "./chat";
 export * from "./research";
 export * from "./story-planning";
+export * from "./coach-history";

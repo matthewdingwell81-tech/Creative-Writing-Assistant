@@ -11,6 +11,46 @@ tags:
   - name: health
     description: Health operations
 paths:
+  /documents/{documentId}/coach-history:
+    parameters:
+      - $ref: "#/components/parameters/PlanningDocumentId"
+    get:
+      operationId: getCoachHistory
+      summary: Passively restore owned Coach history without invoking AI
+      responses:
+        "200":
+          description: Saved history or empty history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoachHistorySnapshot"
+    put:
+      operationId: saveCoachHistory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CoachHistoryInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoachHistorySnapshot"
+        "409":
+          description: Another device changed this conversation; reload before writing
+    delete:
+      operationId: deleteCoachHistory
+      summary: Start over on all devices, retaining only a version marker
+      responses:
+        "200":
+          description: Cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoachHistorySnapshot"
   /documents/{documentId}/planning:
     parameters:
       - $ref: "#/components/parameters/PlanningDocumentId"
@@ -112,6 +152,49 @@ components:
             items:
               $ref: "#/components/schemas/PlanningRecord"
   schemas:
+    CoachMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+          minLength: 1
+          maxLength: 20000
+    CoachHistoryInput:
+      type: object
+      required: [messages, draft, revision]
+      properties:
+        messages:
+          type: array
+          maxItems: 80
+          items:
+            $ref: "#/components/schemas/CoachMessage"
+        draft:
+          type: string
+          maxLength: 20000
+        revision:
+          type: integer
+          minimum: 0
+        importedAt:
+          description: Original device timestamp, supplied only for explicitly approved import
+          type: number
+    CoachHistorySnapshot:
+      type: object
+      required: [messages, draft, revision, updatedAt]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoachMessage"
+        draft:
+          type: string
+        revision:
+          type: integer
+        updatedAt:
+          type: ["number", "null"]
     PlanningKind:
       type: string
       enum: [character, relationship, timeline, worldbuilding, note]

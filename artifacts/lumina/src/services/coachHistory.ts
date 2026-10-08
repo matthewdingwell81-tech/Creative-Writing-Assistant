@@ -11,7 +11,7 @@ export interface CoachHistory {
 const PREFIX = 'lumina_coach_history:v1:';
 export const COACH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export const COACH_MAX_EXCHANGES = 40;
-export const COACH_RETENTION_LABEL = 'Saved on this device for 30 days after your last change · up to 40 exchanges per document.';
+export const COACH_RETENTION_LABEL = 'Saved privately to your account for 30 days after your last change · up to 40 exchanges per document. Start over clears saved history on all devices. Deleting a document deletes its Coach history.';
 
 export function coachHistoryKey(accountId: string, documentId: number) {
   return `${PREFIX}${encodeURIComponent(accountId)}:${documentId}`;
@@ -44,17 +44,23 @@ function prune(storage: Storage, now: number) {
 }
 
 export function readCoachHistory(accountId: string, documentId: number, now = Date.now()): CoachHistory {
+  const entry = readDeviceCoachHistory(accountId, documentId, now);
+  return entry ? { messages: entry.messages, draft: entry.draft } : { messages: [], draft: '' };
+}
+
+// Legacy history / unsynced recovery copy. Import is always an explicit choice.
+export function readDeviceCoachHistory(accountId: string, documentId: number, now = Date.now()): (CoachHistory & { updatedAt: number }) | null {
   const storage = window.localStorage;
   prune(storage, now);
   const entry = JSON.parse(storage.getItem(coachHistoryKey(accountId, documentId)) ?? 'null');
-  return isHistory(entry) ? { messages: entry.messages, draft: entry.draft } : { messages: [], draft: '' };
+  return isHistory(entry) ? entry : null;
 }
 
-export function writeCoachHistory(accountId: string, documentId: number, history: CoachHistory, now = Date.now()) {
+export function writeCoachHistory(accountId: string, documentId: number, history: CoachHistory, now = Date.now(), preserveEmpty = false) {
   const storage = window.localStorage;
   prune(storage, now);
   const key = coachHistoryKey(accountId, documentId);
-  if (!history.messages.length && !history.draft) {
+  if (!preserveEmpty && !history.messages.length && !history.draft) {
     storage.removeItem(key);
     return;
   }
@@ -65,4 +71,12 @@ export function writeCoachHistory(accountId: string, documentId: number, history
 
 export function clearCoachHistory(accountId: string, documentId: number) {
   window.localStorage.removeItem(coachHistoryKey(accountId, documentId));
+}
+
+export function clearDeletedDocumentCoachHistory(documentId: number) {
+  const storage = window.localStorage;
+  const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index));
+  for (const key of keys) {
+    if (key?.startsWith(PREFIX) && key.endsWith(`:${documentId}`)) storage.removeItem(key);
+  }
 }

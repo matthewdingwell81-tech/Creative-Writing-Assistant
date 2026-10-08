@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { storage } from "../storage";
+import coachHistoryRouter from "./coach-history";
 import {
   insertDocumentSchema,
   insertIdeaSchema,
@@ -33,6 +34,7 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 const router = Router();
+router.use(coachHistoryRouter);
 const researchObjects = new ObjectStorageService();
 
 // === Research Library ===

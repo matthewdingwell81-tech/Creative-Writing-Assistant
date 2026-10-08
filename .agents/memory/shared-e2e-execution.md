@@ -11,7 +11,7 @@ Do not run two full browser regression suites concurrently against the same work
 
 Empty-workspace tests must use a dedicated account, never delete all documents from a shared account.
 
-**Why:** A tutorial test's broad cleanup deleted a parallel Coach test's saved document, making a successful insert appear broken when reload received “not found.”
+**Why:** A tutorial test's broad cleanup deleted a parallel Coach test's saved document, making a successful insert appear broken when reload received “not found.” Server-backed Coach revisions also turn parallel writes/resets on a shared document into legitimate conflicts, even when each browser has isolated local storage.
 
 **How to apply:** Create isolated test data/accounts for destructive or empty-state setup. Cleanup should remove only records created by that test.
 

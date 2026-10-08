@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './coachHistoryInput';
+export * from './coachHistorySnapshot';
+export * from './coachMessage';
+export * from './coachMessageRole';
 export * from './healthStatus';
 export * from './planningFields';
 export * from './planningInput';

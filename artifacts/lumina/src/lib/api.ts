@@ -1,3 +1,5 @@
+import { clearDeletedDocumentCoachHistory } from '@/services/coachHistory';
+
 export class SessionExpiredError extends Error {
   constructor() {
     super("Session expired");
@@ -55,6 +57,9 @@ export async function deleteDocument(id: number) {
     method: "DELETE",
   });
   if (!res.ok) throw new Error("Failed to delete document");
+  try { clearDeletedDocumentCoachHistory(id); } catch {
+    // The server copy is already deleted; browser storage may be disabled.
+  }
 }
 
 export async function fetchResearch(documentId: number, filters?: { keyword?: string; tag?: string; chapterId?: number; scope?: "global" | "chapter" }) {

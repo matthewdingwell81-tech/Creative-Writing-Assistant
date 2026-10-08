@@ -88,6 +88,9 @@ test('Coach ad rewards persist per account and stay hidden for premium users', a
     await expect(page.getByTestId('textarea-coach-input')).toHaveValue('This request will fail');
     await expect(page.getByTestId('coach-message-list')).not.toContainText('This request will fail');
     await expect(page.getByTestId('bonus-ai-query-balance')).toHaveText('2 bonus AI queries available');
+    // Reload only after the draft is confirmed on the account. Reloading an
+    // unsynced draft intentionally offers the local-recovery import choice.
+    await expect(page.getByTestId('coach-sync-status')).toHaveCount(0);
 
     await page.reload();
     await page.waitForLoadState('networkidle');
@@ -98,6 +101,7 @@ test('Coach ad rewards persist per account and stay hidden for premium users', a
     await page.evaluate((accountId: string) => {
       localStorage.setItem(`lumina_admob_premium:${encodeURIComponent(accountId)}`, 'true');
     }, user.id);
+    await expect(page.getByTestId('coach-sync-status')).toHaveCount(0);
     await page.reload();
     await page.waitForLoadState('networkidle');
     await openDocumentAndCoach();

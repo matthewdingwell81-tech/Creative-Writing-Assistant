@@ -5,6 +5,42 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type CoachMessageRole = typeof CoachMessageRole[keyof typeof CoachMessageRole];
+
+
+export const CoachMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export interface CoachMessage {
+  role: CoachMessageRole;
+  /**
+     * @minLength 1
+     * @maxLength 20000
+     */
+  content: string;
+}
+
+export interface CoachHistoryInput {
+  /** @maxItems 80 */
+  messages: CoachMessage[];
+  /** @maxLength 20000 */
+  draft: string;
+  /** @minimum 0 */
+  revision: number;
+  /** Original device timestamp, supplied only for explicitly approved import */
+  importedAt?: number;
+}
+
+export interface CoachHistorySnapshot {
+  messages: CoachMessage[];
+  draft: string;
+  revision: number;
+  /** @nullable */
+  updatedAt: number | null;
+}
+
 export type PlanningKind = typeof PlanningKind[keyof typeof PlanningKind];
 
 

@@ -5,6 +5,21 @@ test('Coach retains completed replies and drafts without replay across plans, do
   const now = new Date().toISOString();
   const accounts = ['history-account-a', 'history-account-b'];
   let account = accounts[0];
+  const histories = new Map<string, { messages: { role: string; content: string }[]; draft: string; revision: number; updatedAt: number | null }>();
+  await page.route(/\/api\/documents\/9100[12]\/coach-history$/, async route => {
+    const key = `${account}:${route.request().url()}`;
+    const current = histories.get(key) ?? { messages: [], draft: '', revision: 0, updatedAt: null };
+    if (route.request().method() === 'PUT') {
+      const input = route.request().postDataJSON();
+      if (input.revision !== current.revision) {
+        await route.fulfill({ status: 409, json: { error: 'Conflict' } }); return;
+      }
+      histories.set(key, { messages: input.messages, draft: input.draft, revision: current.revision + 1, updatedAt: input.importedAt ?? Date.now() });
+    } else if (route.request().method() === 'DELETE') {
+      histories.set(key, { messages: [], draft: '', revision: current.revision + 1, updatedAt: Date.now() });
+    }
+    await route.fulfill({ json: histories.get(key) ?? current });
+  });
   const documents = [91001, 91002].map(id => ({
     id, title: `History document ${id}`, content: 'Some writing.', documentType: 'fiction',
     createdAt: now, updatedAt: now,

@@ -1,10 +1,21 @@
 import { test, expect } from '@playwright/test';
+import { registerTestAccount } from './helpers/test-account';
 
 test('Coach applies free limits, preserves rewards in trial, and links to protected plans', async ({ page }) => {
   test.setTimeout(90_000);
-  const response = await page.request.get('/api/auth/me');
-  expect(response.ok()).toBe(true);
-  const user = await response.json();
+  // Both viewport projects mutate history. Give each its own account/document
+  // instead of racing resets and writes on the shared writing account.
+  const user = await registerTestAccount(page, 'freemium_coach');
+  const documentResponse = await page.request.post('/api/documents', {
+    data: { title: 'Freemium Coach test', content: '', documentType: 'fiction' },
+  });
+  expect(documentResponse.ok()).toBe(true);
+  const document = await documentResponse.json();
+  const chapterResponse = await page.request.post(`/api/documents/${document.id}/chapters`, {
+    data: { title: 'Chapter 1', content: '', position: 0 },
+  });
+  expect(chapterResponse.ok()).toBe(true);
+  try {
   expect(Number.isFinite(Date.parse(user.createdAt))).toBe(true);
   let signupDate = new Date(Date.now() - 8 * 86400000).toISOString();
   await page.route('**/api/auth/me', route => route.fulfill({ json: { ...user, createdAt: signupDate } }));
@@ -40,6 +51,7 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
     await page.getByTestId('textarea-coach-input').fill(text);
     await page.getByTestId('btn-coach-send').click();
     await expect(page.getByTestId('textarea-coach-input')).toBeEnabled();
+    await expect(page.getByTestId('coach-sync-status')).toHaveCount(0);
   };
   await openCoach();
   await expect(page.getByTestId('ai-query-balance')).toContainText('1/5 daily queries remaining (+2 bonus)');
@@ -58,6 +70,7 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
   await page.getByTestId('btn-coach-send').click();
   await expect(page.getByTestId('ai-query-limit-prompt')).toBeVisible();
   await expect(page.getByTestId('textarea-coach-input')).toBeDisabled();
+  await expect(page.getByTestId('coach-sync-status')).toHaveCount(0);
   const before = requests;
   await page.getByTestId('link-upgrade-from-coach').click();
   await expect(page.getByTestId('upgrade-page')).toBeVisible();
@@ -107,6 +120,9 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
   await expect(page.getByTestId('ad-rewards-panel')).toHaveCount(0);
   await send('Premium reply');
   expect(await page.evaluate((id: string) => localStorage.getItem(`lumina_admob_bonus_queries:${encodeURIComponent(id)}`), user.id)).toBe('2');
+  } finally {
+    await page.request.delete(`/api/documents/${document.id}`);
+  }
 });
 
 test('plans redirect unauthenticated visitors to sign in', async ({ browser }) => {
