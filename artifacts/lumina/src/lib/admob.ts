@@ -9,6 +9,7 @@ import {
 } from "@capacitor-community/admob";
 import { isPremiumAccount } from "@/hooks/useAdRewards";
 import { playRewardedVideo } from "./rewardedVideo";
+import { bannerSession } from "./bannerSession";
 
 export const TEST_BANNER_AD_ID = "ca-app-pub-3940256099942544/6300978111";
 export const TEST_REWARDED_AD_ID = "ca-app-pub-3940256099942544/5224354917";
@@ -17,6 +18,7 @@ export const BANNER_HEIGHT_EVENT = "lumina:admob-banner-height";
 let initialization: Promise<boolean> | null = null;
 let initialized = false;
 let bannerVisible = false;
+let bannerRequested = false;
 let bannerSizeListenerInstalled = false;
 let rewardInProgress = false;
 
@@ -35,12 +37,14 @@ function listenForBannerSize() {
   if (bannerSizeListenerInstalled) return;
   bannerSizeListenerInstalled = true;
   void AdMob.addListener(BannerAdPluginEvents.SizeChanged, ({ height }) => {
+    if (!bannerRequested) return;
     publishBannerHeight(Math.max(0, Math.ceil(height)));
   }).catch(() => {
     bannerSizeListenerInstalled = false;
   });
   void AdMob.addListener(BannerAdPluginEvents.FailedToLoad, () => {
     bannerVisible = false;
+    bannerRequested = false;
     publishBannerHeight(0);
   }).catch(() => {});
 }
@@ -86,6 +90,7 @@ export async function showBannerForAccount(
   if (
     !accountId ||
     !canShow() ||
+    bannerSession.isDismissed(accountId) ||
     !Capacitor.isNativePlatform() ||
     isPremiumAccount(accountId) ||
     !(await initializeAdMob())
@@ -93,15 +98,22 @@ export async function showBannerForAccount(
     return;
   }
 
-  if (bannerVisible || !canShow() || isPremiumAccount(accountId)) return;
+  if (bannerVisible || !canShow() || bannerSession.isDismissed(accountId) || isPremiumAccount(accountId)) return;
 
-  await AdMob.showBanner({
-    adId: TEST_BANNER_AD_ID,
-    adSize: BannerAdSize.ADAPTIVE_BANNER,
-    position: BannerAdPosition.BOTTOM_CENTER,
-    margin: 0,
-  });
-  if (!canShow() || isPremiumAccount(accountId)) {
+  bannerRequested = true;
+  try {
+    await AdMob.showBanner({
+      adId: TEST_BANNER_AD_ID,
+      adSize: BannerAdSize.ADAPTIVE_BANNER,
+      position: BannerAdPosition.BOTTOM_CENTER,
+      margin: 0,
+    });
+  } catch (error) {
+    bannerRequested = false;
+    publishBannerHeight(0);
+    throw error;
+  }
+  if (!bannerRequested || !canShow() || bannerSession.isDismissed(accountId) || isPremiumAccount(accountId)) {
     bannerVisible = true;
     await removeAdMobBanner();
     return;
@@ -111,6 +123,7 @@ export async function showBannerForAccount(
 }
 
 export async function removeAdMobBanner(): Promise<void> {
+  bannerRequested = false;
   if (!Capacitor.isNativePlatform() || !initialized || !bannerVisible) {
     publishBannerHeight(0);
     return;
@@ -124,6 +137,11 @@ export async function removeAdMobBanner(): Promise<void> {
     bannerVisible = false;
     publishBannerHeight(0);
   }
+}
+
+export async function dismissBannerForAccount(accountId: string): Promise<void> {
+  bannerSession.dismiss(accountId);
+  await removeAdMobBanner();
 }
 
 export async function showRewardedAdForAccount(accountId: string): Promise<boolean> {

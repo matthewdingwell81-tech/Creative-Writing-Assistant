@@ -42,9 +42,9 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
     await expect(page.getByTestId('textarea-coach-input')).toBeEnabled();
   };
   await openCoach();
-  await expect(page.getByTestId('ai-query-balance')).toContainText('1 of 5');
+  await expect(page.getByTestId('ai-query-balance')).toContainText('1/5 daily queries remaining (+2 bonus)');
   await send('Use daily query first');
-  await expect(page.getByTestId('ai-query-balance')).toContainText('0 of 5');
+  await expect(page.getByTestId('ai-query-balance')).toContainText('0/5');
   await expect(page.getByTestId('bonus-ai-query-balance')).toContainText('2 bonus');
   for (const kind of ['failed', 'empty', 'incomplete'] as const) {
     outcome = kind;
@@ -71,7 +71,7 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
     localStorage.setItem(`lumina_admob_bonus_queries:${encodeURIComponent(id)}`, '2');
   }, user.id);
   await openCoach();
-  await expect(page.getByTestId('ai-query-balance')).toContainText('5 of 5');
+  await expect(page.getByTestId('ai-query-balance')).toContainText('5/5');
   signupDate = new Date(Date.now() - 86400000).toISOString();
   await openCoach();
   await expect(page.getByTestId('ai-query-balance')).toContainText('Free trial · unlimited');

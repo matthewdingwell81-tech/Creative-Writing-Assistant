@@ -117,7 +117,7 @@ export default defineConfig({
         storageState: 'e2e/.auth/mobile.json',
       },
       dependencies: ['setup'],
-      testMatch: '**/admob.spec.ts',
+      testMatch: ['**/admob.spec.ts', '**/admob-ui.spec.ts'],
     },
     {
       name: 'admob-mobile',
@@ -129,7 +129,7 @@ export default defineConfig({
         storageState: 'e2e/.auth/mobile.json',
       },
       dependencies: ['setup'],
-      testMatch: '**/admob.spec.ts',
+      testMatch: ['**/admob.spec.ts', '**/admob-ui.spec.ts'],
     },
     {
       name: 'chapter-rename-desktop',

@@ -33,7 +33,7 @@ test('resetting a pending Coach request does not use daily or bonus queries', as
   await request;
   await page.getByTestId('btn-coach-reset').click();
   release();
-  await expect(page.getByTestId('ai-query-balance')).toContainText('5 of 5');
+  await expect(page.getByTestId('ai-query-balance')).toContainText('5/5');
   await expect(page.getByTestId('bonus-ai-query-balance')).toContainText('2 bonus');
   expect(await page.evaluate((id: string) => localStorage.getItem(`lumina_ai_daily_queries:${encodeURIComponent(id)}`), user.id)).toBeNull();
 });

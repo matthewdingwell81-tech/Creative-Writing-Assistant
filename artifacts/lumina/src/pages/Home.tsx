@@ -22,7 +22,7 @@ import { useAutoSave } from '@/hooks/useAutoSave';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdRewards } from '@/hooks/useAdRewards';
-import { removeAdMobBanner, showBannerForAccount, subscribeToBannerHeight } from '@/lib/admob';
+import { dismissBannerForAccount, removeAdMobBanner, showBannerForAccount, subscribeToBannerHeight } from '@/lib/admob';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { Document, Chapter } from '@/types/schema';
 import { useTutorial } from '@/hooks/useTutorial';
@@ -1470,6 +1470,24 @@ export default function Home() {
           )
         )}
       </main>
+
+      {user && !isPremium && admobBannerHeight > 0 && (
+        <div className="shrink-0 flex min-h-11 items-center justify-between border-t border-border/50 bg-muted/30 pl-4 pr-1 text-[10px] text-muted-foreground" data-testid="banner-ad-controls">
+          <span>Advertisement · supports free writing</span>
+          <button
+            type="button"
+            className="flex h-11 w-11 items-center justify-center rounded-md hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label="Dismiss advertisement until next app open"
+            data-testid="btn-dismiss-banner-ad"
+            onClick={() => {
+              setAdmobBannerHeight(0);
+              void dismissBannerForAccount(user.id);
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       <GoogleDocsDialog
         open={gdocsOpen}

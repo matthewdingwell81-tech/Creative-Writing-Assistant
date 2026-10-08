@@ -1,5 +1,15 @@
 import { test, expect } from '@playwright/test';
 import { playRewardedVideo, type RewardedVideoClient } from '../src/lib/rewardedVideo';
+import { BannerSession } from '../src/lib/bannerSession';
+
+test('banner dismissal is account-scoped and expires on a fresh app launch', () => {
+  const currentLaunch = new BannerSession();
+  expect(currentLaunch.isDismissed('account-a')).toBe(false);
+  currentLaunch.dismiss('account-a');
+  expect(currentLaunch.isDismissed('account-a')).toBe(true);
+  expect(currentLaunch.isDismissed('account-b')).toBe(false);
+  expect(new BannerSession().isDismissed('account-a')).toBe(false);
+});
 
 function mockVideo(outcome: 'completed' | 'skipped' | 'failed-show' | 'failed-load' | 'zero-reward') {
   let rewarded: ((reward: { amount: number }) => void) | undefined;

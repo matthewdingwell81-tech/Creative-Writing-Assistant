@@ -1,5 +1,21 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+
+@keyframes reward-confetti-fall {
+  from { opacity: 1; transform: translate(0, -10px) rotate(0deg); }
+  to { opacity: 0; transform: translate(var(--drift), 115px) rotate(300deg); }
+}
+
+.reward-confetti {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 6px;
+  height: 10px;
+  border-radius: 2px;
+  animation: reward-confetti-fall 1.3s ease-out both;
+}
+
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));

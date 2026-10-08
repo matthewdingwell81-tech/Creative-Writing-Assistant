@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Capacitor } from '@capacitor/core';
 import { Link } from 'wouter';
 import {
   Sparkles, BookOpen, AlertCircle, TrendingUp, CheckCircle2,
@@ -18,7 +17,7 @@ import {
 import { streamIdeas, streamCoach } from '@/lib/api';
 import type { Suggestion, SuggestionAnalysisMode, ChangeHistoryEntry } from '@/hooks/useSuggestions';
 import { useAdRewards } from '@/hooks/useAdRewards';
-import { showRewardedAdForAccount } from '@/lib/admob';
+import AdRewardButton from '@/components/AdRewardButton';
 import {
   AI_QUERY_STATE_CHANGED_EVENT,
   dailyAiQueryStorageKey,
@@ -29,7 +28,6 @@ import {
   isFreeTrialActive,
   isCurrentTierUser,
   useAiQuery,
-  addBonusQueries,
 } from '@/services/userTierService';
 
 interface CoachMessage {
@@ -244,13 +242,10 @@ export default function SuggestionsSidebar({
   const coachInputRef = useRef<HTMLTextAreaElement>(null);
   const coachAbortRef = useRef<AbortController | null>(null);
   const [pendingReplacement, setPendingReplacement] = useState<{ messageIndex: number; text: string } | null>(null);
-  const [watchingRewardAd, setWatchingRewardAd] = useState(false);
-  const [rewardAdMessage, setRewardAdMessage] = useState('');
   const [tierMessage, setTierMessage] = useState('');
   const [, setTierRevision] = useState(0);
   const { isPremium, bonusAIQueries } = useAdRewards(userId);
   const canEarnAdReward = Boolean(userId && !isPremium);
-  const isNativeAdPlatform = Capacitor.isNativePlatform();
   const trialActive = !isPremium && isFreeTrialActive();
   const trialDaysRemaining = getFreeTrialDaysRemaining();
   const dailyQueriesRemaining = getDailyAIQueriesRemaining();
@@ -261,7 +256,6 @@ export default function SuggestionsSidebar({
     setCoachMessages([]);
     setCoachInput('');
     setCoachLoading(false);
-    setRewardAdMessage('');
     setTierMessage('');
     return () => { coachAbortRef.current?.abort(); };
   }, [userId]);
@@ -416,34 +410,6 @@ export default function SuggestionsSidebar({
       });
     } finally {
       if (!controller.signal.aborted) setCoachLoading(false);
-    }
-  };
-
-  const handleWatchRewardAd = async () => {
-    if (!userId || !canEarnAdReward || watchingRewardAd || !isNativeAdPlatform) return;
-
-    setWatchingRewardAd(true);
-    setRewardAdMessage('');
-    let videoCompleted = false;
-    try {
-      const earnedReward = await showRewardedAdForAccount(userId);
-      if (!earnedReward) {
-        setRewardAdMessage('The ad was unavailable or the video was not completed. No bonus queries were added.');
-        return;
-      }
-
-      videoCompleted = true;
-      if (!isCurrentTierUser(userId)) return;
-      const newBalance = addBonusQueries(2);
-      setRewardAdMessage(
-        `Two bonus AI queries added. You now have ${newBalance} available.`,
-      );
-    } catch {
-      setRewardAdMessage(videoCompleted
-        ? 'Your video completed, but device storage could not save the reward. Check storage access before trying again.'
-        : 'The ad could not be completed. No bonus queries were added.');
-    } finally {
-      setWatchingRewardAd(false);
     }
   };
 
@@ -801,7 +767,7 @@ export default function SuggestionsSidebar({
                 ? 'Premium · unlimited AI queries'
                 : trialActive
                   ? `Free trial · unlimited AI for ${trialDaysRemaining} ${trialDaysRemaining === 1 ? 'day' : 'days'}`
-                  : `${dailyQueriesRemaining} of 5 daily AI queries remaining${bonusAIQueries > 0 ? ` · ${bonusAIQueries} ad bonus ${bonusAIQueries === 1 ? 'query' : 'queries'}` : ''}`}
+                  : `${dailyQueriesRemaining}/5 daily queries remaining (+${bonusAIQueries} bonus)`}
             </div>
             {tierMessage && (
               <p className="shrink-0 px-3 py-2 text-xs text-amber-700 dark:text-amber-300" role="status" data-testid="ai-query-status-message">
@@ -815,48 +781,6 @@ export default function SuggestionsSidebar({
                 <Link href="/upgrade" onClick={(event) => { event.preventDefault(); void onUpgrade(); }} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline" data-testid="link-upgrade-from-coach">
                   Compare plans
                 </Link>
-              </div>
-            )}
-            {canEarnAdReward && (
-              <div
-                className="shrink-0 border-b border-border/50 bg-primary/5 px-3 py-2.5 space-y-2"
-                data-testid="ad-rewards-panel"
-              >
-                <div className="space-y-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-foreground" data-testid="bonus-ai-query-balance">
-                      {bonusAIQueries} bonus AI {bonusAIQueries === 1 ? 'query' : 'queries'} available
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      Bonus credits are used after your five daily queries, and are kept during your unlimited trial.
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full gap-1.5 text-[11px] [@media(pointer:coarse)]:min-h-[44px]"
-                    onClick={() => void handleWatchRewardAd()}
-                    disabled={watchingRewardAd || !isNativeAdPlatform}
-                    data-testid="btn-watch-ad-for-ai-queries"
-                  >
-                    {watchingRewardAd ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="w-3.5 h-3.5" />
-                    )}
-                    Watch ad for 2 bonus AI queries
-                  </Button>
-                </div>
-                {rewardAdMessage && (
-                  <p className="text-[10px] text-muted-foreground" role="status" data-testid="ad-reward-message">
-                    {rewardAdMessage}
-                  </p>
-                )}
-                {!isNativeAdPlatform && (
-                  <p className="text-[10px] text-muted-foreground">
-                    Rewarded ads are available in the native Android app.
-                  </p>
-                )}
               </div>
             )}
             <div className="flex flex-col flex-1 min-h-0">
@@ -922,7 +846,7 @@ export default function SuggestionsSidebar({
                 </div>
               )}
 
-              <div className="border-t border-border/50 p-3 space-y-2">
+              <div className="shrink-0 border-t border-border/50 p-3 space-y-2">
                 {coachMessages.length > 0 && (
                   <button onClick={handleCoachReset} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:px-2" data-testid="btn-coach-reset">
                     <RotateCcw className="w-3 h-3" />
@@ -945,12 +869,14 @@ export default function SuggestionsSidebar({
                     className="h-8 w-8 shrink-0 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
                     onClick={() => handleCoachSend()}
                     disabled={coachLoading || !coachInput.trim() || !hasAvailableAIQueries}
+                    aria-label="Send Coach message"
                     data-testid="btn-coach-send"
                   >
                     {coachLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                   </Button>
                 </div>
                 <p className="text-[10px] text-muted-foreground/60">Enter to send · Shift+Enter for new line</p>
+                {canEarnAdReward && userId && <AdRewardButton key={userId} userId={userId} disabled={coachLoading} />}
               </div>
             </div>
           </TabsContent>
