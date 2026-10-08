@@ -90,6 +90,28 @@ export default defineConfig({
       testMatch: '**/coach-insert.spec.ts',
     },
     {
+      name: 'admob-desktop',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 1280, height: 720 },
+        storageState: 'e2e/.auth/mobile.json',
+      },
+      dependencies: ['setup'],
+      testMatch: '**/admob.spec.ts',
+    },
+    {
+      name: 'admob-mobile',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 375, height: 812 },
+        hasTouch: true,
+        isMobile: true,
+        storageState: 'e2e/.auth/mobile.json',
+      },
+      dependencies: ['setup'],
+      testMatch: '**/admob.spec.ts',
+    },
+    {
       name: 'chapter-rename-desktop',
       use: {
         browserName: 'chromium',

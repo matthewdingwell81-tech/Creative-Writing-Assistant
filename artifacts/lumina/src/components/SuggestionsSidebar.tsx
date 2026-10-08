@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
 import {
   Sparkles, BookOpen, AlertCircle, TrendingUp, CheckCircle2,
   ChevronRight, MessageSquareDashed, Check, Loader2, TextSelect,
@@ -15,6 +16,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { streamIdeas, streamCoach } from '@/lib/api';
 import type { Suggestion, SuggestionAnalysisMode, ChangeHistoryEntry } from '@/hooks/useSuggestions';
+import { useAdRewards } from '@/hooks/useAdRewards';
+import { showRewardedAdForAccount } from '@/lib/admob';
 
 interface CoachMessage {
   role: 'user' | 'assistant';
@@ -45,6 +48,7 @@ interface SuggestionsSidebarProps {
   onExternalIdeaHandled?: () => void;
   onScrollToSuggestion?: (original: string) => void;
   onInsertText?: (text: string, replaceSelection?: boolean) => Promise<boolean | 'needs-confirmation'>;
+  userId: string | null;
 }
 
 const severityConfig = {
@@ -207,7 +211,7 @@ export default function SuggestionsSidebar({
   onDismiss, onSave, onRemoveSaved, onClearHistory, documentContent, documentType, selectedText,
   externalIdeaPrompt, onExternalIdeaHandled, onScrollToSuggestion, onInsertText,
   hasSuggestionUpdate, pendingSuggestionCount, onShowLatestSuggestions,
-  analysisMode, onAnalysisModeChange, onAnalyzeWriting
+  analysisMode, onAnalysisModeChange, onAnalyzeWriting, userId
 }: SuggestionsSidebarProps) {
   const [ideaPrompt, setIdeaPrompt] = useState('');
   const [ideaResponse, setIdeaResponse] = useState('');
@@ -226,6 +230,11 @@ export default function SuggestionsSidebar({
   const coachInputRef = useRef<HTMLTextAreaElement>(null);
   const coachAbortRef = useRef<AbortController | null>(null);
   const [pendingReplacement, setPendingReplacement] = useState<{ messageIndex: number; text: string } | null>(null);
+  const [watchingRewardAd, setWatchingRewardAd] = useState(false);
+  const [rewardAdMessage, setRewardAdMessage] = useState('');
+  const { isPremium, bonusAIQueries, addBonusAIQueries } = useAdRewards(userId);
+  const canEarnAdReward = Boolean(userId && !isPremium);
+  const isNativeAdPlatform = Capacitor.isNativePlatform();
 
   useEffect(() => {
     if (externalIdeaPrompt && externalIdeaPrompt.id !== externalPromptHandled.current) {
@@ -330,6 +339,29 @@ export default function SuggestionsSidebar({
       });
     } finally {
       if (!controller.signal.aborted) setCoachLoading(false);
+    }
+  };
+
+  const handleWatchRewardAd = async () => {
+    if (!userId || !canEarnAdReward || watchingRewardAd || !isNativeAdPlatform) return;
+
+    setWatchingRewardAd(true);
+    setRewardAdMessage('');
+    try {
+      const earnedReward = await showRewardedAdForAccount(userId);
+      if (!earnedReward) {
+        setRewardAdMessage('The video was not completed, so no bonus queries were added.');
+        return;
+      }
+
+      const newBalance = addBonusAIQueries(2);
+      setRewardAdMessage(
+        `Two bonus AI queries added. You now have ${newBalance} available.`,
+      );
+    } catch {
+      setRewardAdMessage('The ad could not be completed. No bonus queries were added.');
+    } finally {
+      setWatchingRewardAd(false);
     }
   };
 
@@ -678,6 +710,48 @@ export default function SuggestionsSidebar({
           </TabsContent>
 
           <TabsContent value="coach" className="m-0 flex flex-col h-full">
+            {canEarnAdReward && (
+              <div
+                className="shrink-0 border-b border-border/50 bg-primary/5 px-3 py-2.5 space-y-2"
+                data-testid="ad-rewards-panel"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-foreground" data-testid="bonus-ai-query-balance">
+                      {bonusAIQueries} bonus AI {bonusAIQueries === 1 ? 'query' : 'queries'} available
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Watch a full video to earn 2 more.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 gap-1.5 text-[11px] [@media(pointer:coarse)]:min-h-[44px]"
+                    onClick={() => void handleWatchRewardAd()}
+                    disabled={watchingRewardAd || !isNativeAdPlatform}
+                    data-testid="btn-watch-ad-for-ai-queries"
+                  >
+                    {watchingRewardAd ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    )}
+                    Watch ad for 2 bonus AI queries
+                  </Button>
+                </div>
+                {rewardAdMessage && (
+                  <p className="text-[10px] text-muted-foreground" role="status" data-testid="ad-reward-message">
+                    {rewardAdMessage}
+                  </p>
+                )}
+                {!isNativeAdPlatform && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Rewarded ads are available in the native Android app.
+                  </p>
+                )}
+              </div>
+            )}
             <div className="flex flex-col h-[calc(100vh-14rem)]">
               {coachMessages.length === 0 ? (
                 <div className="flex-1 flex flex-col justify-center p-4 space-y-3">

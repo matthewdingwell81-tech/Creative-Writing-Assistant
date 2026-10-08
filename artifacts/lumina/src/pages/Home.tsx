@@ -20,6 +20,8 @@ import type { SuggestionAnalysisMode } from '@/hooks/useSuggestions';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useAdRewards } from '@/hooks/useAdRewards';
+import { removeAdMobBanner, showBannerForAccount, subscribeToBannerHeight } from '@/lib/admob';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { Document, Chapter } from '@/types/schema';
 import { useTutorial } from '@/hooks/useTutorial';
@@ -135,6 +137,8 @@ export default function Home() {
   const { toast } = useToast();
   const { user, logout } = useAuth();
   const isMobile = useIsMobile();
+  const { isPremium } = useAdRewards(user?.id ?? null);
+  const [admobBannerHeight, setAdmobBannerHeight] = useState(0);
   const [activeDocId, setActiveDocId] = useState<number | null>(null);
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
@@ -190,6 +194,26 @@ export default function Home() {
   useEffect(() => {
     firstUseShownRef.current = {};
   }, [user?.id]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToBannerHeight(setAdmobBannerHeight);
+    if (!user?.id || isPremium) {
+      setAdmobBannerHeight(0);
+      void removeAdMobBanner();
+      return unsubscribe;
+    }
+
+    let cancelled = false;
+    void showBannerForAccount(user.id, () => !cancelled).catch((error: unknown) => {
+      if (import.meta.env.DEV) console.warn('Could not show the free-user AdMob banner.', error);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      void removeAdMobBanner();
+    };
+  }, [user?.id, isPremium]);
 
   const {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
@@ -754,7 +778,10 @@ export default function Home() {
   };
 
   return (
-    <div className="h-dvh min-h-0 bg-background flex flex-col font-sans overflow-hidden">
+    <div
+      className="h-dvh min-h-0 bg-background flex flex-col font-sans overflow-hidden"
+      style={{ height: `calc(100dvh - ${admobBannerHeight}px)` }}
+    >
       <header className="h-14 shrink-0 border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between px-2 sm:px-6 gap-1 sm:gap-2">
         {/* Left: doc-list toggle + logo */}
         <div className="flex items-center gap-2 shrink-0">
@@ -1329,6 +1356,7 @@ export default function Home() {
                     onExternalIdeaHandled={() => { setIdeaAssistantPrompt(null); setIdeaAssistantLoading(false); }}
                     onScrollToSuggestion={(text) => editorHandle.current?.scrollToSuggestion(text)}
                     onInsertText={handleInsertCoachText}
+                    userId={user?.id ?? null}
                   />
                 </SheetContent>
               </Sheet>
@@ -1359,6 +1387,7 @@ export default function Home() {
                 onExternalIdeaHandled={() => { setIdeaAssistantPrompt(null); setIdeaAssistantLoading(false); }}
                 onScrollToSuggestion={(text) => editorHandle.current?.scrollToSuggestion(text)}
                 onInsertText={handleInsertCoachText}
+                userId={user?.id ?? null}
               />
             </aside>
           )
