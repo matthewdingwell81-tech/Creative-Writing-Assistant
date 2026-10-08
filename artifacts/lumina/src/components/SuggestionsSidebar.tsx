@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
+import { Link } from 'wouter';
 import {
   Sparkles, BookOpen, AlertCircle, TrendingUp, CheckCircle2,
   ChevronRight, MessageSquareDashed, Check, Loader2, TextSelect,
@@ -18,6 +19,16 @@ import { streamIdeas, streamCoach } from '@/lib/api';
 import type { Suggestion, SuggestionAnalysisMode, ChangeHistoryEntry } from '@/hooks/useSuggestions';
 import { useAdRewards } from '@/hooks/useAdRewards';
 import { showRewardedAdForAccount } from '@/lib/admob';
+import {
+  AI_QUERY_STATE_CHANGED_EVENT,
+  dailyAiQueryStorageKey,
+  getAIQueriesRemaining,
+  getDailyAIQueriesRemaining,
+  getFreeTrialDaysRemaining,
+  getNextTierRefreshDelay,
+  isFreeTrialActive,
+  useAiQuery,
+} from '@/services/userTierService';
 
 interface CoachMessage {
   role: 'user' | 'assistant';
@@ -232,9 +243,49 @@ export default function SuggestionsSidebar({
   const [pendingReplacement, setPendingReplacement] = useState<{ messageIndex: number; text: string } | null>(null);
   const [watchingRewardAd, setWatchingRewardAd] = useState(false);
   const [rewardAdMessage, setRewardAdMessage] = useState('');
-  const { isPremium, bonusAIQueries, addBonusAIQueries, consumeBonusAIQuery } = useAdRewards(userId);
+  const [tierMessage, setTierMessage] = useState('');
+  const [, setTierRevision] = useState(0);
+  const { isPremium, bonusAIQueries } = useAdRewards(userId);
   const canEarnAdReward = Boolean(userId && !isPremium);
   const isNativeAdPlatform = Capacitor.isNativePlatform();
+  const trialActive = !isPremium && isFreeTrialActive();
+  const trialDaysRemaining = getFreeTrialDaysRemaining();
+  const dailyQueriesRemaining = getDailyAIQueriesRemaining();
+  const totalQueriesRemaining = getAIQueriesRemaining();
+  const unlimitedAI = isPremium || trialActive;
+  const hasAvailableAIQueries = totalQueriesRemaining > 0;
+
+  useEffect(() => {
+    if (!userId) return;
+    let timer: number;
+    let disposed = false;
+    const refreshAtBoundary = () => {
+      if (disposed) return;
+      setTierRevision((revision) => revision + 1);
+      timer = window.setTimeout(refreshAtBoundary, getNextTierRefreshDelay());
+    };
+    const onTierChanged = (event: Event) => {
+      const changedAccountId = (event as CustomEvent<{ accountId?: string }>).detail?.accountId;
+      if (changedAccountId === userId) {
+        setTierRevision((revision) => revision + 1);
+      }
+    };
+    const onStorageChanged = (event: StorageEvent) => {
+      if (event.key === null || event.key === dailyAiQueryStorageKey(userId)) {
+        setTierRevision((revision) => revision + 1);
+      }
+    };
+
+    timer = window.setTimeout(refreshAtBoundary, getNextTierRefreshDelay());
+    window.addEventListener(AI_QUERY_STATE_CHANGED_EVENT, onTierChanged);
+    window.addEventListener('storage', onStorageChanged);
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+      window.removeEventListener(AI_QUERY_STATE_CHANGED_EVENT, onTierChanged);
+      window.removeEventListener('storage', onStorageChanged);
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (externalIdeaPrompt && externalIdeaPrompt.id !== externalPromptHandled.current) {
@@ -303,11 +354,11 @@ export default function SuggestionsSidebar({
   const handleCoachSend = async (messageText?: string) => {
     const text = (messageText ?? coachInput).trim();
     if (!text || coachLoading) return;
+    if (!hasAvailableAIQueries) return;
 
     if (coachAbortRef.current) coachAbortRef.current.abort();
     const controller = new AbortController();
     coachAbortRef.current = controller;
-    const useBonusCredit = !isPremium && bonusAIQueries > 0;
     let responseReceived = false;
     let responseCompleted = false;
 
@@ -334,12 +385,10 @@ export default function SuggestionsSidebar({
           if (controller.signal.aborted) return;
           if (!responseCompleted && responseReceived) {
             responseCompleted = true;
-            if (useBonusCredit) {
-              try {
-                consumeBonusAIQuery();
-              } catch {
-                setRewardAdMessage('Your reply completed, but device storage could not update the bonus balance.');
-              }
+            if (!useAiQuery()) {
+              setTierMessage('Your reply completed, but this device could not update the AI query balance.');
+            } else {
+              setTierMessage('');
             }
           }
           setCoachLoading(false);

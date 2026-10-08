@@ -253,7 +253,7 @@ router.post("/auth/register", async (req: Request, res: Response) => {
   const user = await storage.createUser({ username, password: hashedPassword });
 
   req.session.userId = user.id;
-  res.status(201).json({ id: user.id, username: user.username });
+  res.status(201).json({ id: user.id, username: user.username, createdAt: user.createdAt });
 });
 
 router.post("/auth/login", async (req: Request, res: Response) => {
@@ -285,7 +285,7 @@ router.post("/auth/login", async (req: Request, res: Response) => {
       30 * 24 * 60 * 60 * 1000;
   }
 
-  res.json({ id: user.id, username: user.username });
+  res.json({ id: user.id, username: user.username, createdAt: user.createdAt });
 });
 
 router.post("/auth/firebase-session", async (req: Request, res: Response) => {
@@ -322,6 +322,7 @@ router.post("/auth/firebase-session", async (req: Request, res: Response) => {
       id: user.id,
       username: firebaseUser.displayName || user.username,
       email: firebaseUser.email,
+      createdAt: user.createdAt,
     });
   } catch (error) {
     req.log.warn({ err: error }, "Firebase session exchange rejected");
@@ -345,7 +346,7 @@ router.get("/auth/me", async (req: Request, res: Response) => {
     res.status(401).json({ error: "Not authenticated" });
     return;
   }
-  res.json({ id: user.id, username: user.username });
+  res.json({ id: user.id, username: user.username, createdAt: user.createdAt });
 });
 
 // === Document CRUD ===

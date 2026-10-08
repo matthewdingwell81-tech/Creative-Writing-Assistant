@@ -12,11 +12,13 @@ import {
   getRedirectResult
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
+import { setCurrentTierUser } from "@/services/userTierService";
 
 export interface AuthUser {
   id: string;
   email: string | null;
   username: string;
+  createdAt: string;
 }
 
 export interface UseAuthResult {
@@ -80,11 +82,16 @@ function toAuthUser(value: {
   id: string;
   username: string;
   email?: string | null;
+  createdAt: string;
 }): AuthUser {
+  if (!Number.isFinite(Date.parse(value.createdAt))) {
+    throw new Error("Your account signup date is missing. Please try signing in again.");
+  }
   return {
     id: value.id,
     username: value.username,
     email: value.email ?? null,
+    createdAt: value.createdAt,
   };
 }
 
@@ -236,6 +243,11 @@ function useAuthState(): UseAuthResult {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const authState = useAuthState();
+  setCurrentTierUser(
+    authState.user
+      ? { id: authState.user.id, createdAt: authState.user.createdAt }
+      : null,
+  );
   return createElement(AuthContext.Provider, { value: authState }, children);
 }
 
