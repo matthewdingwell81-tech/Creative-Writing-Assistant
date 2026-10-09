@@ -20,3 +20,9 @@ Offline Premium is bounded to the paid-through expiry and a maximum 24 hours sin
 **Why:** The user requested offline receipt validation, cancellation/renewal handling, changed-pricing support and safe retries after lost confirmations.
 
 **How to apply:** Never retry an uncertain store charge by immediately opening another checkout. Re-verify or restore first. Cached entitlement revocation cannot be instantaneous while offline; do not claim otherwise.
+
+RevenueCat's webhook authorization header is write-only; its webhook configuration reads omit the secret.
+
+**Why:** The provider accepted the configuration, but comparing its readback to the configured authorization value incorrectly appeared to fail because that field is not returned.
+
+**How to apply:** Reapply the header when rotating the server secret. Verify the destination/app scope through readback and the authorization gate through safe HTTP probes; only a delivered event after publishing proves end-to-end delivery.
