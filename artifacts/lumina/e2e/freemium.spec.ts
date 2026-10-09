@@ -25,7 +25,7 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
     const d = new Date();
     const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     localStorage.setItem(`lumina_ai_daily_queries:${encodeURIComponent(id)}`, JSON.stringify({ date, used: 4 }));
-    localStorage.setItem(`lumina_admob_bonus_queries:${encodeURIComponent(id)}`, '2');
+    localStorage.setItem(`lumina_admob_bonus_queries:${encodeURIComponent(id)}`, '5');
     localStorage.removeItem(`lumina_admob_premium:${encodeURIComponent(id)}`);
     localStorage.setItem('lumina_tutorial_done', JSON.stringify({ full: true }));
   }, user.id);
@@ -54,14 +54,16 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
     await expect(page.getByTestId('coach-sync-status')).toHaveCount(0);
   };
   await openCoach();
-  await expect(page.getByTestId('ai-query-balance')).toContainText('1/5 daily queries remaining (+2 bonus)');
+  await expect(page.getByTestId('ai-query-balance')).toContainText('1/5 daily queries remaining (+5 bonus)');
   await send('Use daily query first');
   await expect(page.getByTestId('ai-query-balance')).toContainText('0/5');
-  await expect(page.getByTestId('bonus-ai-query-balance')).toContainText('2 bonus');
+  await expect(page.getByTestId('bonus-ai-query-balance')).toContainText('5 bonus');
+  let expectedBonus = 5;
   for (const kind of ['failed', 'empty', 'incomplete'] as const) {
     outcome = kind;
-    await send(`Do not count ${kind}`);
-    await expect(page.getByTestId('bonus-ai-query-balance')).toContainText('2 bonus');
+    await send(`Charge ${kind} attempt`);
+    await expect(page.getByTestId('bonus-ai-query-balance')).toContainText(`${--expectedBonus} bonus`);
+    await expect(page.getByTestId('ai-query-status-message')).toContainText('this request used one query');
   }
   outcome = 'success';
   await send('Use first bonus');
@@ -72,7 +74,11 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
   await expect(page.getByTestId('textarea-coach-input')).toBeDisabled();
   await expect(page.getByTestId('coach-sync-status')).toHaveCount(0);
   const before = requests;
-  await page.getByTestId('link-upgrade-from-coach').click();
+  await expect(page.getByRole('dialog', { name: 'Upgrade to Premium' })).toBeVisible();
+  await expect(page.getByTestId('upgrade-modal')).toContainText('Unlimited AI queries');
+  await expect(page.getByTestId('upgrade-modal')).toContainText('No ads');
+  await expect(page.getByTestId('upgrade-modal')).toContainText('Web portal access');
+  await page.getByTestId('btn-upgrade-now').click();
   await expect(page.getByTestId('upgrade-page')).toBeVisible();
   await expect(page.getByTestId('premium-coming-soon')).toHaveText('Coming Soon');
   expect(requests).toBe(before);
@@ -84,9 +90,10 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
     await page.getByTestId('btn-open-suggestions-sheet').click();
   }
   await page.getByTestId('tab-coach').click();
+  await page.getByRole('button', { name: 'Not now', exact: true }).click();
   await expect(page.getByTestId('coach-message-list')).toContainText('Use final bonus');
   await expect(page.getByTestId('coach-message-list')).toContainText('Successful reply.');
-  await expect(page.getByTestId('coach-message-list')).not.toContainText('Do not count');
+  await expect(page.getByTestId('coach-message-list')).not.toContainText('Charge ');
   await expect(page.getByTestId('bonus-ai-query-balance')).toContainText('0 bonus');
   expect(requests).toBe(before);
   await page.reload();
@@ -95,6 +102,7 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
     await page.getByTestId('btn-open-suggestions-sheet').click();
   }
   await page.getByTestId('tab-coach').click();
+  await page.getByRole('button', { name: 'Not now', exact: true }).click();
   await expect(page.getByTestId('coach-message-list')).toContainText('Use final bonus');
   expect(requests).toBe(before);
   await page.getByTestId('btn-coach-reset').click();
@@ -114,7 +122,11 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
   await send('Trial reply');
   await expect(page.getByTestId('bonus-ai-query-balance')).toContainText('2 bonus');
 
-  await page.evaluate((id: string) => localStorage.setItem(`lumina_admob_premium:${encodeURIComponent(id)}`, 'true'), user.id);
+  await page.evaluate(async () => {
+    const tier = await import(new URL('src/lib/userTier.ts', document.baseURI).href);
+    await tier.setTier('premium');
+    if (!tier.isPremium() || await tier.isFirebaseLoggedIn()) throw new Error('Local account tier helper failed');
+  });
   await openCoach();
   await expect(page.getByTestId('ai-query-balance')).toContainText('Premium · unlimited');
   await expect(page.getByTestId('ad-rewards-panel')).toHaveCount(0);

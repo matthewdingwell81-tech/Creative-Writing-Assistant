@@ -13,6 +13,7 @@ import {
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { setCurrentTierUser } from "@/services/userTierService";
+import { syncUserTier } from "@/lib/userTier";
 
 export interface AuthUser {
   id: string;
@@ -248,6 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? { id: authState.user.id, createdAt: authState.user.createdAt }
       : null,
   );
+  useEffect(() => syncUserTier(authState.user), [authState.user?.id, authState.user?.email, authState.user?.username]);
   return createElement(AuthContext.Provider, { value: authState }, children);
 }
 

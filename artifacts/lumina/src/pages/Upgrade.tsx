@@ -35,6 +35,7 @@ export default function Upgrade() {
         "Unlimited AI Coach queries",
         "No daily query limit",
         "No banner or rewarded ads",
+        "Web portal access",
         "All Free writing and planning features",
       ],
     },

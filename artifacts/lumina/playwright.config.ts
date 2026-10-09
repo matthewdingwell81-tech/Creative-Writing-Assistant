@@ -32,7 +32,7 @@ export default defineConfig({
     },
     {
       name: 'user-tier-service',
-      testMatch: '**/user-tier-service.spec.ts',
+      testMatch: ['**/user-tier-service.spec.ts', '**/query-tracker.spec.ts'],
     },
     {
       name: 'freemium-desktop',

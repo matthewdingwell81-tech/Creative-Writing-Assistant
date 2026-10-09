@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAdRewards } from '@/hooks/useAdRewards';
 import { showRewardedAdForAccount } from '@/lib/admob';
-import { addBonusQueries, isCurrentTierUser } from '@/services/userTierService';
+import { addBonusQueries } from '@/lib/queryTracker';
+import { isCurrentTierUser } from '@/lib/tierAccount';
 
 interface AdRewardButtonProps {
   userId: string;

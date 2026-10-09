@@ -58,10 +58,21 @@ test('Coach retains completed replies and drafts without replay across plans, do
       await page.getByTestId('btn-open-suggestions-sheet').click();
     }
     await page.getByTestId('tab-coach').click();
+    if (await page.getByTestId('upgrade-modal').isVisible()) {
+      await page.getByRole('button', { name: 'Not now', exact: true }).click();
+      await expect(page.getByTestId('upgrade-modal')).toBeHidden();
+    }
   };
   const closeSheet = async () => {
     if ((page.viewportSize()?.width ?? 1600) < 1440) {
-      await page.keyboard.press('Escape');
+      if (!(await page.getByTestId('tab-coach').isVisible())) return;
+      // Escape may close the nested upgrade dialog rather than its parent sheet.
+      if (await page.getByTestId('upgrade-modal').isVisible()) {
+        await page.getByRole('button', { name: 'Not now', exact: true }).click();
+        await expect(page.getByTestId('upgrade-modal')).toBeHidden();
+      }
+      await page.getByRole('dialog', { name: 'Creative Assistant', includeHidden: true })
+        .getByRole('button', { name: 'Close', exact: true, includeHidden: true }).click();
       await expect(page.getByTestId('tab-coach')).not.toBeVisible();
     }
   };
@@ -76,12 +87,12 @@ test('Coach retains completed replies and drafts without replay across plans, do
     await page.evaluate(({ id, used }) => {
       const d = new Date();
       const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      localStorage.setItem(`lumina_ai_daily_queries:${encodeURIComponent(id)}`, JSON.stringify({ date, used }));
+      localStorage.setItem(`lumina_ai_daily_queries:${encodeURIComponent(id)}`, JSON.stringify({ date, count: used, bonus: 0 }));
       window.dispatchEvent(new CustomEvent('lumina:ai-query-state-changed', { detail: { accountId: id } }));
     }, { id: account, used });
   };
   const balance = () => page.evaluate(id => {
-    return JSON.parse(localStorage.getItem(`lumina_ai_daily_queries:${encodeURIComponent(id)}`) ?? '{"used":0}').used;
+    return JSON.parse(localStorage.getItem(`lumina_ai_daily_queries:${encodeURIComponent(id)}`) ?? '{"count":0}').count;
   }, account);
 
   await page.goto('/');
@@ -94,7 +105,7 @@ test('Coach retains completed replies and drafts without replay across plans, do
   await page.getByTestId('textarea-coach-input').fill('Unsent draft');
   await setUsed(5);
   await expect(page.getByTestId('link-upgrade-from-coach')).toBeVisible();
-  await page.getByTestId('link-upgrade-from-coach').click();
+  await page.getByTestId('btn-upgrade-now').click();
   await expect(page.getByTestId('upgrade-page')).toBeVisible();
   await page.reload();
   await page.getByTestId('link-back-to-writing').click();
@@ -134,7 +145,7 @@ test('Coach retains completed replies and drafts without replay across plans, do
   await page.getByTestId('btn-coach-send').click();
   await expect(page.getByTestId('ai-query-status-message')).toContainText('did not complete');
   await expect(page.getByTestId('textarea-coach-input')).toHaveValue('Unsent draft');
-  expect(await balance()).toBe(1);
+  expect(await balance()).toBe(2);
   await expect(page.getByTestId('coach-message-list')).not.toContainText('Unsent draft');
 
   outcome = 'pending';
@@ -145,13 +156,13 @@ test('Coach retains completed replies and drafts without replay across plans, do
   await page.getByTestId('btn-user-menu').click();
   await page.getByRole('menuitem', { name: 'Free & Premium plans' }).click();
   await expect(page.getByTestId('upgrade-page')).toBeVisible();
-  releasePending?.(); // Even a late completion must not persist or charge.
+  releasePending?.(); // A late completion must not persist or charge a second time.
   await page.getByTestId('link-back-to-writing').click();
   await expect(page.getByTestId('input-title')).toHaveValue('History document 91002');
   await openCoach();
   await expect(page.getByTestId('textarea-coach-input')).toHaveValue('Interrupted prompt');
   await expect(page.getByTestId('coach-message-list')).not.toContainText('Interrupted prompt');
-  expect(await balance()).toBe(1);
+  expect(await balance()).toBe(3);
   expect(requests).toBe(3);
 
   await page.getByTestId('btn-coach-reset').click();

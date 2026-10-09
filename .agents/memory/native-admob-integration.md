@@ -21,11 +21,11 @@ Treat local premium flags and bonus-query balances as temporary test entitlement
 
 **How to apply:** Before a production reward rollout, move entitlement storage and reward verification to a trusted backend rather than trusting a browser-controlled balance.
 
-Daily free queries are used before ad bonuses. Once the daily allowance is exhausted, a successful, nonempty free-account Coach reply spends one bonus credit. Failed, cancelled, trial, and premium-account requests do not spend bonus credits.
+Daily free queries are used before ad bonuses. Free-account Coach requests are charged before sending, including failed, empty, or interrupted replies. Trial and Premium requests do not spend queries or ad bonuses.
 
-**Why:** Earned credits must reflect actual successful usage and remain available after the daily allowance or unlimited trial has ended.
+**Why:** The user explicitly changed accounting to count requests before sending rather than only successful replies. Unused earned credits remain available after the daily allowance or unlimited trial has ended.
 
-**How to apply:** Preserve this accounting rule when changing Coach streaming or reward storage. Deduplicate completion notifications, and do not spend credits merely because an HTTP request started.
+**How to apply:** Charge each allowed free request once before starting its stream, never again on completion or history restoration. Carry only unspent bonuses across local midnight.
 
 Banner dismissals last for the currently loaded app session and are scoped to the account. Navigation must not revive a dismissed banner; a fresh app launch must restore eligibility.
 

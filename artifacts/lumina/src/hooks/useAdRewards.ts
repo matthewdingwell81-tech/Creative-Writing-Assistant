@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
+import {
+  addBonusQueriesForAccount,
+  availableBonus,
+  bonusQueriesStorageKey,
+  BONUS_QUERIES_STORAGE_PREFIX,
+  consumeBonusQueryForAccount,
+  dailyAiQueryStorageKey,
+  getQueryUsageForAccount,
+} from "@/lib/queryTracker";
+export { bonusQueriesStorageKey, BONUS_QUERIES_STORAGE_PREFIX };
 
 export const PREMIUM_STORAGE_PREFIX = "lumina_admob_premium:";
-export const BONUS_QUERIES_STORAGE_PREFIX = "lumina_admob_bonus_queries:";
 const AD_REWARDS_CHANGED_EVENT = "lumina:admob-account-state";
 
 function accountStorageKey(prefix: string, accountId: string) {
@@ -12,14 +21,11 @@ export function premiumStorageKey(accountId: string) {
   return accountStorageKey(PREMIUM_STORAGE_PREFIX, accountId);
 }
 
-export function bonusQueriesStorageKey(accountId: string) {
-  return accountStorageKey(BONUS_QUERIES_STORAGE_PREFIX, accountId);
-}
-
 export function isPremiumAccount(accountId: string | null | undefined): boolean {
   if (!accountId || typeof window === "undefined") return false;
   try {
-    return window.localStorage.getItem(premiumStorageKey(accountId)) === "true";
+    const stored = window.localStorage.getItem(premiumStorageKey(accountId));
+    return stored === "premium" || stored === "true";
   } catch {
     return false;
   }
@@ -27,13 +33,7 @@ export function isPremiumAccount(accountId: string | null | undefined): boolean 
 
 function getBonusQueryBalance(accountId: string | null | undefined): number {
   if (!accountId || typeof window === "undefined") return 0;
-  try {
-    const stored = window.localStorage.getItem(bonusQueriesStorageKey(accountId));
-    const parsed = stored === null ? 0 : Number(stored);
-    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
-  } catch {
-    return 0;
-  }
+  return availableBonus(getQueryUsageForAccount(accountId));
 }
 
 export function getBonusAIQueriesForAccount(accountId: string | null | undefined): number {
@@ -41,42 +41,19 @@ export function getBonusAIQueriesForAccount(accountId: string | null | undefined
 }
 
 export function addBonusAIQueriesForAccount(accountId: string, amount: number): number {
-  if (!accountId) throw new Error("A signed-in account is required.");
-  if (!Number.isSafeInteger(amount) || amount < 1) {
-    throw new Error("Bonus query credits must be a positive whole number.");
-  }
-
-  const nextBalance = getBonusQueryBalance(accountId) + amount;
-  if (!Number.isSafeInteger(nextBalance)) {
-    throw new Error("The bonus query balance is too large.");
-  }
-  window.localStorage.setItem(bonusQueriesStorageKey(accountId), String(nextBalance));
-  window.dispatchEvent(
-    new CustomEvent(AD_REWARDS_CHANGED_EVENT, { detail: { accountId } }),
-  );
-  return nextBalance;
+  return addBonusQueriesForAccount(accountId, amount);
 }
 
 export function consumeBonusAIQueryForAccount(accountId: string): boolean {
   if (!accountId || isPremiumAccount(accountId)) return false;
-  const currentBalance = getBonusQueryBalance(accountId);
-  if (currentBalance < 1) return false;
-
-  window.localStorage.setItem(
-    bonusQueriesStorageKey(accountId),
-    String(currentBalance - 1),
-  );
-  window.dispatchEvent(
-    new CustomEvent(AD_REWARDS_CHANGED_EVENT, { detail: { accountId } }),
-  );
-  return true;
+  return consumeBonusQueryForAccount(accountId);
 }
 
 export function setPremiumAccountStatus(accountId: string, isPremium: boolean) {
   if (!accountId) throw new Error("A signed-in account is required.");
   window.localStorage.setItem(
     premiumStorageKey(accountId),
-    isPremium ? "true" : "false",
+    isPremium ? "premium" : "free",
   );
   window.dispatchEvent(
     new CustomEvent(AD_REWARDS_CHANGED_EVENT, {
@@ -129,6 +106,7 @@ export function useAdRewards(accountId: string | null) {
       if (
         event.key === null ||
         event.key === premiumStorageKey(accountId ?? "") ||
+        event.key === dailyAiQueryStorageKey(accountId ?? "") ||
         event.key === bonusQueriesStorageKey(accountId ?? "")
       ) {
         refresh();

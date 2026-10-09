@@ -79,6 +79,8 @@ test('reward UI grants once, handles skipped/failed videos, and temporarily dism
   const mobile = (page.viewportSize()?.width ?? 1600) < 1440;
   if (mobile) await page.getByTestId('btn-open-suggestions-sheet').click();
   await page.getByTestId('tab-coach').click();
+  await expect(page.getByTestId('upgrade-modal')).toBeVisible();
+  await page.getByRole('button', { name: 'Not now', exact: true }).click();
   await expect(page.getByTestId('btn-coach-send')).toBeDisabled();
   await expect(page.getByTestId('ai-query-limit-prompt')).toBeVisible();
   const reward = page.getByTestId('btn-watch-ad-for-ai-queries');

@@ -20,6 +20,9 @@ import { COACH_RETENTION_LABEL, type CoachMessage } from '@/services/coachHistor
 import type { Suggestion, SuggestionAnalysisMode, ChangeHistoryEntry } from '@/hooks/useSuggestions';
 import { useAdRewards } from '@/hooks/useAdRewards';
 import AdRewardButton from '@/components/AdRewardButton';
+import UpgradeModal from '@/components/UpgradeModal';
+import { incrementQuery } from '@/lib/queryTracker';
+import { isPremium as isPremiumTier, TIER_SYNC_ERROR_EVENT } from '@/lib/userTier';
 import {
   AI_QUERY_STATE_CHANGED_EVENT,
   dailyAiQueryStorageKey,
@@ -29,7 +32,6 @@ import {
   getNextTierRefreshDelay,
   isFreeTrialActive,
   isCurrentTierUser,
-  useAiQuery,
 } from '@/services/userTierService';
 
 interface SuggestionsSidebarProps {
@@ -241,6 +243,7 @@ export default function SuggestionsSidebar({
   const coachAbortRef = useRef<AbortController | null>(null);
   const [pendingReplacement, setPendingReplacement] = useState<{ messageIndex: number; text: string } | null>(null);
   const [tierMessage, setTierMessage] = useState('');
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [, setTierRevision] = useState(0);
   const { isPremium, bonusAIQueries } = useAdRewards(userId);
   const canEarnAdReward = Boolean(userId && !isPremium);
@@ -249,6 +252,20 @@ export default function SuggestionsSidebar({
   const dailyQueriesRemaining = getDailyAIQueriesRemaining();
   const totalQueriesRemaining = getAIQueriesRemaining();
   const hasAvailableAIQueries = totalQueriesRemaining > 0;
+
+  useEffect(() => {
+    const onSyncError = (event: Event) => {
+      const detail = (event as CustomEvent<{ accountId: string; message: string }>).detail;
+      if (detail?.accountId === userId) setTierMessage(detail.message);
+    };
+    window.addEventListener(TIER_SYNC_ERROR_EVENT, onSyncError);
+    return () => window.removeEventListener(TIER_SYNC_ERROR_EVENT, onSyncError);
+  }, [userId]);
+
+  useEffect(() => {
+    if (hasAvailableAIQueries) setUpgradeOpen(false);
+    else if (activeTab === 'coach' && !coachLoading) setUpgradeOpen(true);
+  }, [activeTab, hasAvailableAIQueries, coachLoading]);
 
   useEffect(() => {
     return () => { coachAbortRef.current?.abort(); };
@@ -353,7 +370,20 @@ export default function SuggestionsSidebar({
   const handleCoachSend = async (messageText?: string) => {
     const text = (messageText ?? coachInput).trim();
     if (!text || coachLoading || !userId || coachAbortRef.current || !coachHistory.canEdit) return;
-    if (getAIQueriesRemaining() <= 0) return;
+    if (!isPremiumTier() && getAIQueriesRemaining() <= 0) {
+      setUpgradeOpen(true);
+      return;
+    }
+    const chargedQuery = !isPremiumTier() && !isFreeTrialActive();
+    if (chargedQuery) {
+      try {
+        incrementQuery();
+      } catch {
+        setTierMessage('This device could not save the query count. No request was sent.');
+        return;
+      }
+    }
+    setTierMessage('');
 
     const controller = new AbortController();
     coachAbortRef.current = controller;
@@ -390,11 +420,7 @@ export default function SuggestionsSidebar({
           if (!responseCompleted && responseReceived) {
             responseCompleted = true;
             coachHistory.complete([...nextMessages, { role: 'assistant', content: reply }]);
-            if (!useAiQuery()) {
-              setTierMessage('Your reply completed, but this device could not update the AI query balance.');
-            } else {
-              setTierMessage('');
-            }
+            setTierMessage('');
           }
           setCoachLoading(false);
         },
@@ -408,7 +434,9 @@ export default function SuggestionsSidebar({
         if (!responseCompleted) {
           setCoachMessages(previousMessages);
           setCoachInput(text);
-          setTierMessage('The reply did not complete. Your prompt was kept as a draft; no query was used.');
+          setTierMessage(chargedQuery
+            ? 'The reply did not complete. Your prompt was kept as a draft; this request used one query.'
+            : 'The reply did not complete. Your prompt was kept as a draft.');
         }
         setCoachLoading(false);
         if (coachAbortRef.current === controller) coachAbortRef.current = null;
@@ -805,6 +833,7 @@ export default function SuggestionsSidebar({
                 <Link href="/upgrade" onClick={(event) => { event.preventDefault(); void onUpgrade(); }} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline" data-testid="link-upgrade-from-coach">
                   Compare plans
                 </Link>
+                <button className="mt-1 block min-h-11 text-sm font-medium text-primary hover:underline" onClick={() => setUpgradeOpen(true)} data-testid="btn-show-upgrade-modal">Upgrade to Premium</button>
               </div>
             )}
             <div className="flex flex-col flex-1 min-h-0">
@@ -908,6 +937,7 @@ export default function SuggestionsSidebar({
         </div>
       </Tabs>
     </div>
+    <UpgradeModal open={upgradeOpen} onOpenChange={setUpgradeOpen} onUpgrade={onUpgrade} />
     <AlertDialog open={pendingReplacement !== null} onOpenChange={(open) => { if (!open) setPendingReplacement(null); }}>
       <AlertDialogContent>
         <AlertDialogHeader>

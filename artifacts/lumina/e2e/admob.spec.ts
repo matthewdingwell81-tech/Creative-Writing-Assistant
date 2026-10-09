@@ -87,7 +87,7 @@ test('Coach ad rewards persist per account and stay hidden for premium users', a
     await expect(page.getByTestId('ai-query-status-message')).toContainText('did not complete');
     await expect(page.getByTestId('textarea-coach-input')).toHaveValue('This request will fail');
     await expect(page.getByTestId('coach-message-list')).not.toContainText('This request will fail');
-    await expect(page.getByTestId('bonus-ai-query-balance')).toHaveText('2 bonus AI queries available');
+    await expect(page.getByTestId('bonus-ai-query-balance')).toHaveText('1 bonus AI query available');
     // Reload only after the draft is confirmed on the account. Reloading an
     // unsynced draft intentionally offers the local-recovery import choice.
     await expect(page.getByTestId('coach-sync-status')).toHaveCount(0);
@@ -95,7 +95,7 @@ test('Coach ad rewards persist per account and stay hidden for premium users', a
     await page.reload();
     await page.waitForLoadState('networkidle');
     await openDocumentAndCoach();
-    await expect(page.getByTestId('bonus-ai-query-balance')).toHaveText('2 bonus AI queries available');
+    await expect(page.getByTestId('bonus-ai-query-balance')).toHaveText('1 bonus AI query available');
 
     await successfulCoachReply();
     await page.evaluate((accountId: string) => {
@@ -111,7 +111,7 @@ test('Coach ad rewards persist per account and stay hidden for premium users', a
     await expect(page.getByTestId('coach-message-list')).toContainText('A completed Coach reply.');
     expect(await page.evaluate((accountId: string) =>
       localStorage.getItem(`lumina_admob_bonus_queries:${encodeURIComponent(accountId)}`),
-    user.id)).toBe('2');
+    user.id)).toBe('1');
   } finally {
     await page.request.delete(`/api/documents/${document.id}`);
   }

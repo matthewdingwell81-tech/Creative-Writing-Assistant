@@ -7,8 +7,9 @@ import {
 } from '../src/services/userTierService';
 import { bonusQueriesStorageKey, premiumStorageKey } from '../src/hooks/useAdRewards';
 
-const now = new Date(2026, 9, 8, 12);
-const oldSignup = new Date(2026, 8, 1).toISOString();
+const now = new Date();
+now.setHours(12, 0, 0, 0);
+const oldSignup = new Date(now.getTime() - 30 * 86400000).toISOString();
 let values: Map<string, string>;
 
 test.beforeEach(() => {
@@ -47,7 +48,9 @@ test('five daily replies, then bonus replies, then blocked', () => {
 test('local midnight resets daily usage but preserves bonus credits', () => {
   addBonusQueries(2);
   for (let i = 0; i < 5; i++) useAiQuery(now);
-  const tomorrow = new Date(2026, 9, 9, 0, 0, 0);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
   expect(getAIQueriesRemaining(tomorrow)).toBe(7);
   expect(useAiQuery(tomorrow)).toBe(true);
   expect(getAIQueriesRemaining(tomorrow)).toBe(6);
@@ -63,7 +66,7 @@ test('trial ends exactly seven days after signup and never consumes rewards', ()
   expect(isFreeTrialActive(now)).toBe(true);
   expect(getAIQueriesRemaining(now)).toBe(Infinity);
   expect(useAiQuery(now)).toBe(true);
-  expect(values.has(dailyAiQueryStorageKey('account-a'))).toBe(false);
+  expect(JSON.parse(values.get(dailyAiQueryStorageKey('account-a'))!).count).toBe(0);
   expect(values.get(bonusQueriesStorageKey('account-a'))).toBe('2');
   expect(getNextTierRefreshDelay(now)).toBe(1050);
   const end = new Date(now.getTime() + 1000);
@@ -77,7 +80,7 @@ test('premium access is unlimited without using daily or bonus credits', () => {
   expect(isPremium()).toBe(true);
   for (let i = 0; i < 8; i++) expect(useAiQuery(now)).toBe(true);
   expect(getAIQueriesRemaining(now)).toBe(Infinity);
-  expect(values.has(dailyAiQueryStorageKey('account-a'))).toBe(false);
+  expect(JSON.parse(values.get(dailyAiQueryStorageKey('account-a'))!).count).toBe(0);
   expect(values.get(bonusQueriesStorageKey('account-a'))).toBe('2');
 });
 
