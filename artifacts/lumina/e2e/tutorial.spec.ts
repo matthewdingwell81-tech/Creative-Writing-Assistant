@@ -337,7 +337,9 @@ test.describe('Tutorial system', () => {
 
   test('tutorial progress stays separate when switching accounts in one browser', async ({ browser, baseURL }) => {
     expect(baseURL).toBeTruthy();
-    const context = await browser.newContext({ baseURL });
+    // Explicitly override the project's saved authentication. newContext may
+    // inherit project defaults; registering must never mutate its shared session.
+    const context = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
     const page = await context.newPage();
     const accountSuffix = Date.now();
     const firstUsername = `tutorial_first_${accountSuffix}`;
@@ -347,6 +349,7 @@ test.describe('Tutorial system', () => {
       data: { username: firstUsername, password: accountPassword },
     });
     expect(initialRegister.ok()).toBe(true);
+    const firstAccount = await initialRegister.json() as { id: string };
 
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
@@ -363,6 +366,7 @@ test.describe('Tutorial system', () => {
     await expect(page.getByTestId('tutorial-card')).not.toBeVisible();
 
     const firstAccountKey = await tutorialStorageKey(page, 'lumina_tutorial_done');
+    expect(firstAccountKey).toBe(`lumina_tutorial_done:${encodeURIComponent(firstAccount.id)}`);
     const firstAccountFirstUseKey = await tutorialStorageKey(page, 'lumina_first_use');
     const migrated = await page.evaluate(([doneKey, firstUseKey]) => ({
       legacyDone: localStorage.getItem('lumina_tutorial_done'),
@@ -379,6 +383,7 @@ test.describe('Tutorial system', () => {
       data: { username: secondUsername, password: accountPassword },
     });
     expect(registerResponse.ok()).toBe(true);
+    const secondAccount = await registerResponse.json() as { id: string };
 
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -386,6 +391,7 @@ test.describe('Tutorial system', () => {
     await page.getByTestId('tutorial-skip').click();
 
     const secondAccountKey = await tutorialStorageKey(page, 'lumina_tutorial_done');
+    expect(secondAccountKey).toBe(`lumina_tutorial_done:${encodeURIComponent(secondAccount.id)}`);
     const secondAccountFirstUseKey = await tutorialStorageKey(page, 'lumina_first_use');
     expect(secondAccountKey).not.toBe(firstAccountKey);
     const accountStates = await page.evaluate(([firstDoneKey, firstUseKey, secondDoneKey, secondFirstUseKey]) => ({
@@ -403,6 +409,8 @@ test.describe('Tutorial system', () => {
       data: { username: firstUsername, password: accountPassword },
     });
     expect(loginResponse.ok()).toBe(true);
+    const returningAccount = await loginResponse.json() as { id: string };
+    expect(returningAccount.id).toBe(firstAccount.id);
 
     await page.goto('/');
     await page.waitForLoadState('networkidle');

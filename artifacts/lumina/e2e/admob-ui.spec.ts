@@ -1,17 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { registerTestAccount } from './helpers/test-account';
 
 test('reward UI grants once, handles skipped/failed videos, and temporarily dismisses banners', async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   // Other regression projects delete their documents while running in parallel.
   // A dedicated test account keeps this navigation/save check independent.
-  const signup = await page.request.post('/api/auth/register', {
-    data: {
-      username: `reward_ui_${testInfo.project.name.replace(/-/g, '_')}_${Date.now()}`,
-      password: 'RewardUiTest-2026!',
-    },
-  });
-  expect(signup.status()).toBe(201);
-  const user = await signup.json();
+  const user = await registerTestAccount(page, `reward_ui_${testInfo.project.name.replace(/-/g, '_')}`);
   const documentResponse = await page.request.post('/api/documents', {
     data: { title: 'Reward UI verification', content: '', documentType: 'fiction' },
   });

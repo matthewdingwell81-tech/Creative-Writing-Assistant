@@ -254,6 +254,7 @@ export default function SuggestionsSidebar({
   const hasAvailableAIQueries = totalQueriesRemaining > 0;
 
   useEffect(() => {
+    setTierMessage('');
     const onSyncError = (event: Event) => {
       const detail = (event as CustomEvent<{ accountId: string; message: string }>).detail;
       if (detail?.accountId === userId) setTierMessage(detail.message);

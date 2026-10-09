@@ -32,3 +32,15 @@ Clear inherited authentication cookies before registering an isolated test accou
 **Why:** Registration changes the identity attached to the existing server session. Reusing the shared saved-session cookie while registering makes parallel contexts switch to the new account too, despite their separate browser storage.
 
 **How to apply:** Start with an unauthenticated context or clear that context's cookies before registration. A unique username alone does not provide session isolation.
+
+Explicitly override project authentication even for manually created Playwright
+contexts; `browser.newContext()` in a test can inherit the project's context defaults.
+
+**Why:** A tutorial-switch context believed to be fresh inherited the saved shared
+session. An ad test registering against that session then changed the tutorial
+test's account mid-run, making completed tours appear to lose their progress.
+
+**How to apply:** Pass an empty storage state when a manual context must start
+anonymous, and use the account-registration helper that clears cookies for page
+fixtures. Assert the expected account ID before attributing a scoped-storage
+failure to the product.
