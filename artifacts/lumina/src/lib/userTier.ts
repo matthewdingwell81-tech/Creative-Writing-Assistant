@@ -4,6 +4,20 @@ import { auth, firestore } from "./firebase";
 import { getCurrentTierUser, isCurrentTierUser } from "./tierAccount";
 import { isPremiumAccount, setPremiumAccountStatus } from "@/hooks/useAdRewards";
 import { getVerifiedSubscription } from "./subscriptionCache";
+import developerIds from "../../../api-server/src/lib/developerIds.json";
+
+// Shared with the backend; these are Firebase UIDs, not Lumina account IDs.
+export const DEVELOPER_IDS: readonly string[] = Object.freeze(developerIds);
+
+function hasDeveloperPremium(): boolean {
+  const session = syncedSession;
+  const firebaseUser = auth.currentUser;
+  // Never attach a leftover Firebase login to another Lumina account, or
+  // authorize access from client identity/storage without backend verification.
+  return Boolean(session && isCurrentTierUser(session.id) &&
+    matchesFirebaseUser(session, firebaseUser) && DEVELOPER_IDS.includes(firebaseUser.uid) &&
+    getVerifiedSubscription(session.id)?.tier === "premium");
+}
 
 export type UserTier = "free" | "premium";
 export const TIER_SYNC_ERROR_EVENT = "lumina:tier-sync-error";
@@ -27,6 +41,7 @@ export async function isFirebaseLoggedIn(): Promise<boolean> {
 }
 
 export function getUserTier(): UserTier {
+  if (hasDeveloperPremium()) return "premium";
   const id = getCurrentTierUser()?.id;
   const verified = id ? getVerifiedSubscription(id) : undefined;
   if (verified) return verified.tier;
@@ -34,6 +49,7 @@ export function getUserTier(): UserTier {
 }
 
 export function isPremium(): boolean {
+  if (hasDeveloperPremium()) return true;
   return getUserTier() === "premium";
 }
 

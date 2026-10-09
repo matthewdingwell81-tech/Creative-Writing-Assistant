@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { deferred, emitAuth, firebase, flushTransactions, googleUser, resetFirebase, snapshot } from "./firebaseMock";
-import { getUserTier, isFirebaseLoggedIn, isPremium, setUserTier, syncUserTier, TIER_SYNC_ERROR_EVENT } from "@/lib/userTier";
+import { DEVELOPER_IDS, getUserTier, isFirebaseLoggedIn, isPremium, setUserTier, syncUserTier, TIER_SYNC_ERROR_EVENT } from "@/lib/userTier";
+import { recordSubscription, forgetSubscription } from "@/lib/subscriptionCache";
 import { setCurrentTierUser } from "@/lib/tierAccount";
 import { premiumStorageKey } from "@/hooks/useAdRewards";
 
@@ -17,6 +18,8 @@ function bind(account = accountA, user: ReturnType<typeof googleUser> | null = g
 
 beforeEach(() => { resetFirebase(); setCurrentTierUser(null); });
 afterEach(() => {
+  forgetSubscription(accountA.id);
+  forgetSubscription(accountB.id);
   disposers.forEach(stop => stop());
   disposers = [];
   syncUserTier(null);
@@ -24,6 +27,27 @@ afterEach(() => {
 });
 
 describe("Firebase tier documents", () => {
+  it("requires a server grant before the allowlisted Firebase identity gets Premium", () => {
+    bind(accountA, googleUser(DEVELOPER_IDS[0], accountA.email));
+    expect(isPremium()).toBe(false);
+    recordSubscription({
+      accountId: accountA.id, tier: "premium", status: "active", expiresAt: null,
+      subscriptionId: null, verifiedAt: Date.now(), receipt: "server-receipt", firebaseSync: "synced",
+    });
+    expect(isPremium()).toBe(true);
+    expect(getUserTier()).toBe("premium");
+    setCurrentTierUser(accountB);
+    expect(isPremium()).toBe(false);
+  });
+  it("expires a complimentary server grant after the offline window", () => {
+    bind(accountA, googleUser(DEVELOPER_IDS[0], accountA.email));
+    recordSubscription({
+      accountId: accountA.id, tier: "premium", status: "active", expiresAt: null,
+      subscriptionId: null, verifiedAt: Date.now() - 86400001, receipt: "server-receipt", firebaseSync: "synced",
+    });
+    expect(isPremium()).toBe(false);
+    expect(getUserTier()).toBe("free");
+  });
   it("reads users/{Firebase UID}, never the server ID, and follows confirmed upgrades/downgrades", async () => {
     const listener = bind(accountA, googleUser("google-uid", "A@EXAMPLE.TEST"));
     expect(listener.ref).toEqual({ path: "users/google-uid" });

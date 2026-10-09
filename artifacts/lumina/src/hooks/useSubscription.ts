@@ -113,8 +113,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!subscription?.expiresAt || subscription.tier !== "premium") return;
-    const expires = Math.min(subscription.expiresAt, subscription.verifiedAt + 24 * 60 * 60 * 1000);
+    if (!subscription || subscription.tier !== "premium") return;
+    const expires = Math.min(subscription.expiresAt ?? Infinity, subscription.verifiedAt + 24 * 60 * 60 * 1000);
     const timer = window.setTimeout(() => {
       const expired: SubscriptionState = { ...subscription, tier: "free", status: "expired" };
       applySubscription(expired); setSubscription(expired); void refresh();
@@ -138,7 +138,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       if (activeId.current === id) { setBusy(false); setPending(hasPendingPurchase(id)); }
     }
   };
-  const isPremium = subscription?.tier === "premium" && subscription.expiresAt !== null && subscription.expiresAt > Date.now();
+  const isPremium = subscription?.tier === "premium"
+    && (subscription.expiresAt === null || subscription.expiresAt > Date.now())
+    && Date.now() - subscription.verifiedAt < 24 * 60 * 60 * 1000;
   return createElement(context.Provider, { value: {
     subscription, isPremium, loading, busy, price, error, message, offline,
     nativeAvailable: nativePurchasesAvailable(), pendingVerification,

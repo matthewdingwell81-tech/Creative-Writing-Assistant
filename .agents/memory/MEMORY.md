@@ -10,3 +10,4 @@
 - [Coach persistence boundary](coach-persistence-boundary.md) — completed replies and interrupted drafts are separate; restoring a conversation must never resend or consume another query.
 - [Shared E2E execution](shared-e2e-execution.md) — avoid overlapping full-suite invocations against the shared writing account; setup races can appear as unrelated product failures.
 - [Lumina billing boundary](lumina-billing-boundary.md) — Capacitor uses real Play billing, not the simulated Test Store; verified subscriptions retain dual auth and bounded offline access.
+- [Developer Premium](developer-premium-policy.md) — allowlisted Firebase accounts get complimentary Premium with normal UI and server-verified identity.

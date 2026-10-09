@@ -34,3 +34,11 @@ Logic tests use isolated fixtures/mocks and never charge a real customer. Browse
 ## Offline trust and key rotation
 
 The receipt signing key is derived on the backend from `SESSION_SECRET` with a billing-specific domain separator. Only its public JWK is exposed. Rotating that secret rotates new receipt signatures. An already-offline client can retain previously verified access only through the receipt's bounded offline window; live revocations and renewals become visible after reconnecting.
+
+## Complimentary developer access
+
+`artifacts/api-server/src/lib/developerIds.json` is the shared Firebase UID allowlist, exported as `DEVELOPER_IDS` in `src/lib/userTier.ts`. Only add accounts you intend to grant free Premium. UIDs are identifiers, not secret unlock codes.
+
+Sign in with the allowlisted Google/Firebase account. The backend independently verifies and links its Firebase ID token before issuing normal Premium state and an account-bound signed receipt. No purchase is required, and there are no developer-mode indicators. Username/password-only accounts without a verified Firebase link do not qualify.
+
+Complimentary access has no billing expiry, but its offline verification still expires after 24 hours. Removing a UID and publishing the updated app revokes the grant on the next online verification; an already-offline device may retain access until its receipt expires. Existing paid subscriptions continue through RevenueCat. The optional shared-code unlock is intentionally not enabled.

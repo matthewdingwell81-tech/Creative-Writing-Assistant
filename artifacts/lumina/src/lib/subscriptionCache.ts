@@ -8,7 +8,8 @@ const key = (id: string) => `lumina_verified_subscription:${encodeURIComponent(i
 
 export function applySubscription(state: SubscriptionState): void {
   if (!isCurrentTierUser(state.accountId)) return;
-  const active = state.tier === "premium" && state.expiresAt !== null && state.expiresAt > Date.now();
+  const active = state.tier === "premium" && (state.expiresAt === null || state.expiresAt > Date.now())
+    && Date.now() - state.verifiedAt < 24 * 60 * 60 * 1000;
   setPremiumAccountStatus(state.accountId, active);
   window.dispatchEvent(new CustomEvent(SUBSCRIPTION_CHANGED, { detail: state }));
 }
@@ -29,8 +30,8 @@ export async function readSubscription(id: string, config: BillingConfiguration)
       algorithms: ["EdDSA"], issuer: "lumina-billing", audience: "lumina-premium",
     });
     const value = payload.subscription as SubscriptionState | undefined;
-    if (!value || value.accountId !== id || value.expiresAt === null ||
-        value.expiresAt <= Date.now() || value.verifiedAt > Date.now() ||
+    if (!value || value.accountId !== id ||
+        (value.expiresAt !== null && value.expiresAt <= Date.now()) || value.verifiedAt > Date.now() ||
         Date.now() - value.verifiedAt >= 24 * 60 * 60 * 1000 ||
         !["active", "cancelled"].includes(value.status) || value.tier !== "premium") return null;
     return { ...value, receipt, firebaseSync: "unavailable" };
@@ -43,7 +44,7 @@ export function recordSubscription(state: SubscriptionState): void { current.set
 export function getVerifiedSubscription(id: string): SubscriptionState | undefined {
   const value = current.get(id);
   if (!value) return undefined;
-  if (value.tier === "premium" && (value.expiresAt === null || value.expiresAt <= Date.now() ||
+  if (value.tier === "premium" && ((value.expiresAt !== null && value.expiresAt <= Date.now()) ||
       Date.now() - value.verifiedAt >= 24 * 60 * 60 * 1000)) {
     return { ...value, tier: "free", status: "expired" };
   }

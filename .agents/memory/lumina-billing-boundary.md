@@ -13,7 +13,7 @@ Keep both existing sign-in methods. Resolve paid subscriptions through the authe
 
 **Why:** The user explicitly retained dual auth, then requested real paid subscriptions. Backend receipt verification must support username/password accounts without requiring Firebase migration.
 
-**How to apply:** Treat RevenueCat as authoritative. Firebase is a server-written mirror for Google accounts, not a browser-authorized entitlement source. Preserve the separate seven-day app trial and device-local ad-credit accounting.
+**How to apply:** Treat RevenueCat as authoritative for paid subscriptions. Complimentary Firebase-allowlisted accounts follow the separate developer Premium policy. Firebase is a server-written mirror for Google accounts, not a browser-authorized entitlement source. Preserve the separate seven-day app trial and device-local ad-credit accounting.
 
 Offline Premium is bounded to the paid-through expiry and a maximum 24 hours since backend verification. Cancellation alone does not revoke the already-paid period; price changes alone do not invalidate a subscription.
 

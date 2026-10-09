@@ -55,6 +55,11 @@ function Sidebar() {
 async function mount(showSidebar = false) {
   const view = render(<AuthProvider><Consumer />{showSidebar && <Sidebar />}</AuthProvider>);
   await waitFor(() => expect(currentAuth.isLoading).toBe(false));
+  // Loading can settle before React flushes the tier-bridge effect. Wait for
+  // its listener before tests deliver a Firebase event.
+  if (currentAuth.user) {
+    await waitFor(() => expect(firebase.authListeners.length).toBeGreaterThan(0));
+  }
   return view;
 }
 

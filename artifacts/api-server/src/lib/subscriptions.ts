@@ -2,6 +2,7 @@ import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
 import { SignJWT, exportJWK } from "jose";
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import type { SubscriptionState } from "@workspace/api-zod";
+import developerIds from "./developerIds.json";
 
 export const RC_PROJECT_ID = "projc174b989";
 export const RC_ANDROID_APP_ID = "appd4e4b7a907";
@@ -9,6 +10,17 @@ export const RC_ENTITLEMENT_ID = "entla69f102c5e";
 export const MANAGEMENT_URL = "https://play.google.com/store/account/subscriptions?sku=lumina_premium&package=com.lumina.app";
 const connectors = new ReplitConnectors();
 export type VerifiedSubscription = Omit<SubscriptionState, "receipt" | "firebaseSync">;
+
+/** Only pass a Firebase UID already verified and linked by the server. */
+export function developerSubscription(
+  accountId: string, firebaseUid: string | null | undefined, now = Date.now(),
+): VerifiedSubscription | null {
+  if (!firebaseUid || !developerIds.includes(firebaseUid)) return null;
+  return {
+    accountId, tier: "premium", status: "active",
+    subscriptionId: null, expiresAt: null, verifiedAt: now,
+  };
+}
 
 interface RevenueCatSubscription {
   id: string;

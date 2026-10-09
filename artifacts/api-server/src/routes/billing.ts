@@ -9,6 +9,7 @@ import { verifyFirebaseIdToken } from "../lib/firebaseAuth";
 import {
   RC_PROJECT_ID, RC_ANDROID_APP_ID, MANAGEMENT_URL, receiptPublicKey, revenueCat,
   signVerificationReceipt, verifyRevenueCatSubscription,
+  developerSubscription,
 } from "../lib/subscriptions";
 import { syncSubscriptionToFirebase } from "../lib/subscriptionFirebase";
 
@@ -35,7 +36,7 @@ router.get("/billing/config", async (req, res) => {
 async function verifiedState(id: string) {
   const [user] = await db.select().from(users).where(eq(users.id, id));
   if (!user) throw new Error("Account not found.");
-  const subscription = await verifyRevenueCatSubscription(id);
+  const subscription = developerSubscription(id, user.firebaseUid) ?? await verifyRevenueCatSubscription(id);
   let firebaseSync: "not-linked" | "synced" | "unavailable" = "not-linked";
   if (user.firebaseUid) {
     try { firebaseSync = await syncSubscriptionToFirebase(user.firebaseUid, subscription) ? "synced" : "unavailable"; }

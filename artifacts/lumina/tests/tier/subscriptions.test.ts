@@ -4,7 +4,9 @@ import { importJWK, jwtVerify } from "jose";
 vi.mock("@replit/connectors-sdk", () => ({ ReplitConnectors: class {} }));
 import {
   RC_ENTITLEMENT_ID, subscriptionFromRevenueCat, receiptPublicKey, signVerificationReceipt,
+  developerSubscription,
 } from "../../../api-server/src/lib/subscriptions";
+import developerIds from "../../../api-server/src/lib/developerIds.json";
 
 const now = 1_800_000_000_000;
 const paid = (overrides = {}) => ({
@@ -16,6 +18,25 @@ const active = [{ entitlement_id: RC_ENTITLEMENT_ID, expires_at: now + 86400000 
 describe("authoritative subscription lifecycle", () => {
   beforeEach(() => { vi.stubEnv("SESSION_SECRET", "isolated-test-signing-secret"); });
   afterEach(() => { vi.unstubAllEnvs(); });
+  it("grants complimentary Premium only to a linked allowlisted Firebase UID", () => {
+    expect(developerSubscription("a", developerIds[0], now)).toEqual({
+      accountId: "a", tier: "premium", status: "active",
+      expiresAt: null, subscriptionId: null, verifiedAt: now,
+    });
+    for (const uid of [null, undefined, "", "unlisted-uid", "YOUR_UID_HERE"]) {
+      expect(developerSubscription("a", uid, now)).toBeNull();
+    }
+    expect(developerSubscription(developerIds[0], null, now)).toBeNull();
+  });
+  it("still bounds complimentary Premium offline receipts to 24 hours", async () => {
+    const state = developerSubscription("a", developerIds[0], now)!;
+    const receipt = await signVerificationReceipt(state);
+    const key = await importJWK(await receiptPublicKey(), "EdDSA");
+    const { payload } = await jwtVerify(receipt, key, { currentDate: new Date(now) });
+    expect(payload.exp).toBe((now + 86400000) / 1000);
+    expect(payload.sub).toBe("a");
+    await expect(jwtVerify(receipt, key, { currentDate: new Date(now + 86400001) })).rejects.toThrow();
+  });
   it("grants a verified active Premium subscription", () => {
     expect(subscriptionFromRevenueCat("a", [paid()], active, now)).toMatchObject({ tier: "premium", status: "active", subscriptionId: "subscription-1" });
   });

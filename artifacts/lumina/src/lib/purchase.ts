@@ -67,8 +67,6 @@ export async function getMonthlyPackage(): Promise<PurchasesPackage> {
 
 export async function verifyPurchase(): Promise<SubscriptionState> {
   const id = accountId();
-  await getPurchaseConfiguration();
-  assertAccount(id);
   const session = getCurrentTierUser();
   await auth.authStateReady();
   assertAccount(id);
@@ -83,6 +81,9 @@ export async function verifyPurchase(): Promise<SubscriptionState> {
   if (state.accountId !== id) throw new Error("Subscription verification returned a different account.");
   recordSubscription(state);
   saveSubscription(state);
+  // Store setup is not required for a backend-authorized complimentary grant.
+  // Cache the verification key for offline use when configuration is available.
+  void getPurchaseConfiguration().catch(() => {});
   if (state.tier === "premium") localStorage.removeItem(pendingKey(id));
   return state;
 }
