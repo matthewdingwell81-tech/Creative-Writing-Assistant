@@ -24,3 +24,9 @@ rules, or purchase enforcement.
 
 **How to apply:** Keep live-configuration checks separate from client behavior
 coverage and report any live configuration that remains unverified.
+
+An accepted Firebase service-account OAuth token does not prove Firestore is usable. Firestore permission-denied (code 7) can mean its API is disabled, not that the credential is wrong.
+
+**Why:** Billing setup accepted the credential for the matching Firebase project but Firestore rejected a read because the service was disabled.
+
+**How to apply:** Use a read-only probe of a nonexistent document and distinguish service-disabled errors from IAM failures before requesting a replacement key. Never validate billing by changing a real user's tier.
