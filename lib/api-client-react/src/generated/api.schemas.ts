@@ -5,6 +5,86 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type BillingConfigurationReceiptPublicKey = { [key: string]: unknown };
+
+export interface BillingConfiguration {
+  androidApiKey: string;
+  entitlementIdentifier: string;
+  receiptPublicKey: BillingConfigurationReceiptPublicKey;
+  managementUrl: string;
+}
+
+export interface SubscriptionVerification {
+  /** @maxLength 8192 */
+  firebaseIdToken?: string;
+}
+
+export type SubscriptionEventEvent = {
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  type: string;
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  app_user_id?: string;
+  /** @maxItems 50 */
+  transferred_from?: string[];
+  /** @maxItems 50 */
+  transferred_to?: string[];
+};
+
+export interface SubscriptionEvent {
+  event: SubscriptionEventEvent;
+}
+
+export type SubscriptionStateTier = typeof SubscriptionStateTier[keyof typeof SubscriptionStateTier];
+
+
+export const SubscriptionStateTier = {
+  free: 'free',
+  premium: 'premium',
+} as const;
+
+export type SubscriptionStateStatus = typeof SubscriptionStateStatus[keyof typeof SubscriptionStateStatus];
+
+
+export const SubscriptionStateStatus = {
+  none: 'none',
+  active: 'active',
+  cancelled: 'cancelled',
+  expired: 'expired',
+} as const;
+
+export type SubscriptionStateFirebaseSync = typeof SubscriptionStateFirebaseSync[keyof typeof SubscriptionStateFirebaseSync];
+
+
+export const SubscriptionStateFirebaseSync = {
+  'not-linked': 'not-linked',
+  synced: 'synced',
+  unavailable: 'unavailable',
+} as const;
+
+export interface SubscriptionState {
+  accountId: string;
+  tier: SubscriptionStateTier;
+  status: SubscriptionStateStatus;
+  /** @nullable */
+  subscriptionId: string | null;
+  /** @nullable */
+  expiresAt: number | null;
+  verifiedAt: number;
+  receipt: string;
+  firebaseSync: SubscriptionStateFirebaseSync;
+}
+
 export type CoachMessageRole = typeof CoachMessageRole[keyof typeof CoachMessageRole];
 
 

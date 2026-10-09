@@ -1,6 +1,8 @@
 export interface TierUser {
   id: string;
   createdAt: string;
+  email?: string | null;
+  username?: string;
 }
 
 let currentUser: TierUser | null = null;

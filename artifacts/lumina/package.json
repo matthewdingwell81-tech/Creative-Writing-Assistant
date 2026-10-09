@@ -17,7 +17,9 @@
     "@capacitor-community/admob": "^8.2.1",
     "@capacitor/android": "^8.5.3",
     "@capacitor/core": "^8.5.3",
-    "firebase": "^11.0.0"
+    "@revenuecat/purchases-capacitor": "^13.7.0",
+    "firebase": "^11.0.0",
+    "jose": "^6.2.12"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",

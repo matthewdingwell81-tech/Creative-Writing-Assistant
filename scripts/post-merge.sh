@@ -23,5 +23,8 @@ pnpm --filter @workspace/db run migrate:planning
 step="Coach migration"
 echo "Post-merge: $step"
 pnpm --filter @workspace/db run migrate:coach
+step="subscription account-link migration"
+echo "Post-merge: $step"
+pnpm --filter @workspace/db run migrate:subscriptions
 
 echo "Post-merge setup completed."

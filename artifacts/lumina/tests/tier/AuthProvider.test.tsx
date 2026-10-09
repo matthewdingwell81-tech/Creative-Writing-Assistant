@@ -16,6 +16,16 @@ vi.mock("@/hooks/useCoachHistory", () => ({
   }),
 }));
 vi.mock("@/components/AdRewardButton", () => ({ default: () => null }));
+// This suite verifies the cloud tier bridge, not store billing. Paid lifecycle
+// verification has its own tests and App supplies the real provider.
+vi.mock("@/hooks/useSubscription", () => ({
+  useSubscription: () => ({
+    subscription: null, isPremium: false, loading: false, busy: false,
+    nativeAvailable: false, pendingVerification: false, price: null,
+    error: null, message: null, offline: false,
+    restore: vi.fn(), retry: vi.fn(), refresh: vi.fn(), purchase: vi.fn(), manage: vi.fn(),
+  }),
+}));
 
 const accountA = { id: "server-a", username: "a", email: "a@example.test", createdAt: "2020-01-01T00:00:00Z" };
 const accountB = { ...accountA, id: "server-b", username: "b", email: "b@example.test" };

@@ -246,7 +246,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authState = useAuthState();
   setCurrentTierUser(
     authState.user
-      ? { id: authState.user.id, createdAt: authState.user.createdAt }
+      ? { id: authState.user.id, createdAt: authState.user.createdAt, email: authState.user.email, username: authState.user.username }
       : null,
   );
   useEffect(() => syncUserTier(authState.user), [authState.user?.id, authState.user?.email, authState.user?.username]);

@@ -16,6 +16,8 @@
     "@capacitor-community/admob": "^8.2.1",
     "@capacitor/android": "^8.5.3",
     "@capacitor/cli": "^8.5.3",
-    "@capacitor/core": "^8.5.3"
+    "@capacitor/core": "^8.5.3",
+    "@replit/revenuecat-sdk": "^5.0.0",
+    "@revenuecat/purchases-capacitor": "^13.7.0"
   }
 }

@@ -8,6 +8,73 @@
 import * as zod from 'zod';
 
 
+export const GetBillingConfigurationResponse = zod.object({
+  "androidApiKey": zod.string(),
+  "entitlementIdentifier": zod.string(),
+  "receiptPublicKey": zod.record(zod.string(), zod.unknown()),
+  "managementUrl": zod.string()
+})
+
+
+export const GetSubscriptionResponse = zod.object({
+  "accountId": zod.string(),
+  "tier": zod.enum(['free', 'premium']),
+  "status": zod.enum(['none', 'active', 'cancelled', 'expired']),
+  "subscriptionId": zod.string().nullable(),
+  "expiresAt": zod.number().nullable(),
+  "verifiedAt": zod.number(),
+  "receipt": zod.string(),
+  "firebaseSync": zod.enum(['not-linked', 'synced', 'unavailable'])
+})
+
+
+export const refreshSubscriptionBodyFirebaseIdTokenMax = 8192;
+
+
+
+export const RefreshSubscriptionBody = zod.object({
+  "firebaseIdToken": zod.string().max(refreshSubscriptionBodyFirebaseIdTokenMax).optional()
+})
+
+export const RefreshSubscriptionResponse = zod.object({
+  "accountId": zod.string(),
+  "tier": zod.enum(['free', 'premium']),
+  "status": zod.enum(['none', 'active', 'cancelled', 'expired']),
+  "subscriptionId": zod.string().nullable(),
+  "expiresAt": zod.number().nullable(),
+  "verifiedAt": zod.number(),
+  "receipt": zod.string(),
+  "firebaseSync": zod.enum(['not-linked', 'synced', 'unavailable'])
+})
+
+
+export const receiveSubscriptionEventBodyEventIdMax = 256;
+
+export const receiveSubscriptionEventBodyEventTypeMax = 128;
+
+export const receiveSubscriptionEventBodyEventAppUserIdMax = 256;
+
+export const receiveSubscriptionEventBodyEventTransferredFromItemMax = 256;
+
+export const receiveSubscriptionEventBodyEventTransferredFromMax = 50;
+
+export const receiveSubscriptionEventBodyEventTransferredToItemMax = 256;
+
+export const receiveSubscriptionEventBodyEventTransferredToMax = 50;
+
+
+
+export const ReceiveSubscriptionEventBody = zod.object({
+  "event": zod.object({
+  "id": zod.string().min(1).max(receiveSubscriptionEventBodyEventIdMax),
+  "type": zod.string().min(1).max(receiveSubscriptionEventBodyEventTypeMax),
+  "app_user_id": zod.string().min(1).max(receiveSubscriptionEventBodyEventAppUserIdMax).optional(),
+  "transferred_from": zod.array(zod.string().max(receiveSubscriptionEventBodyEventTransferredFromItemMax)).max(receiveSubscriptionEventBodyEventTransferredFromMax).optional(),
+  "transferred_to": zod.array(zod.string().max(receiveSubscriptionEventBodyEventTransferredToItemMax)).max(receiveSubscriptionEventBodyEventTransferredToMax).optional()
+})
+})
+
+
 /**
  * @summary Passively restore owned Coach history without invoking AI
  */

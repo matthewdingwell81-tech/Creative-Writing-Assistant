@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      function owner() { return request.auth != null && request.auth.uid == uid; }
+      allow read: if owner();
+      // Preserve free-profile initialization, never allow the client to grant
+      // Premium or modify a verified subscription. Admin writes bypass rules.
+      allow create: if owner() && request.resource.data.get('tier', 'free') == 'free'
+        && !request.resource.data.keys().hasAny(['subscriptionId', 'expiresAt', 'subscriptionStatus', 'subscriptionVerifiedAt']);
+      allow update: if owner() && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(
+          ['tier', 'subscriptionId', 'expiresAt', 'subscriptionStatus', 'subscriptionVerifiedAt'])
+        || (resource.data.get('tier', 'free') == 'free' && request.resource.data.tier == 'free'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tier', 'updatedAt']))
+      );
+    }
+  }
+}

@@ -11,6 +11,75 @@ tags:
   - name: health
     description: Health operations
 paths:
+  /billing/config:
+    get:
+      operationId: getBillingConfiguration
+      responses:
+        "200":
+          description: Native billing and offline receipt verification configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingConfiguration"
+        "401":
+          description: Sign in required
+        "503":
+          description: Billing configuration unavailable
+  /billing/subscription:
+    get:
+      operationId: getSubscription
+      responses:
+        "200":
+          description: Server-verified subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionState"
+        "401":
+          description: Sign in required
+        "503":
+          description: Verification temporarily unavailable
+    post:
+      operationId: refreshSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionVerification"
+      responses:
+        "200":
+          description: Purchase verified against RevenueCat, not client receipt claims
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionState"
+        "400":
+          description: Invalid request
+        "401":
+          description: Sign in required
+        "403":
+          description: Firebase account does not match the session
+        "503":
+          description: Verification temporarily unavailable
+  /billing/webhook:
+    post:
+      operationId: receiveSubscriptionEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionEvent"
+      responses:
+        "204":
+          description: Authoritative subscription rechecked; duplicate or stale events are safe
+        "400":
+          description: Invalid event
+        "401":
+          description: Invalid webhook authorization
+        "503":
+          description: Retry delivery
   /documents/{documentId}/coach-history:
     parameters:
       - $ref: "#/components/parameters/PlanningDocumentId"
@@ -152,6 +221,49 @@ components:
             items:
               $ref: "#/components/schemas/PlanningRecord"
   schemas:
+    BillingConfiguration:
+      type: object
+      required: [androidApiKey, entitlementIdentifier, receiptPublicKey, managementUrl]
+      properties:
+        androidApiKey: { type: string }
+        entitlementIdentifier: { type: string }
+        receiptPublicKey: { type: object, additionalProperties: true }
+        managementUrl: { type: string }
+    SubscriptionVerification:
+      type: object
+      properties:
+        firebaseIdToken: { type: string, maxLength: 8192 }
+    SubscriptionEvent:
+      type: object
+      required: [event]
+      properties:
+        event:
+          type: object
+          required: [id, type]
+          properties:
+            id: { type: string, minLength: 1, maxLength: 256 }
+            type: { type: string, minLength: 1, maxLength: 128 }
+            app_user_id: { type: string, minLength: 1, maxLength: 256 }
+            transferred_from:
+              type: array
+              maxItems: 50
+              items: { type: string, maxLength: 256 }
+            transferred_to:
+              type: array
+              maxItems: 50
+              items: { type: string, maxLength: 256 }
+    SubscriptionState:
+      type: object
+      required: [accountId, tier, status, subscriptionId, expiresAt, verifiedAt, receipt, firebaseSync]
+      properties:
+        accountId: { type: string }
+        tier: { type: string, enum: [free, premium] }
+        status: { type: string, enum: [none, active, cancelled, expired] }
+        subscriptionId: { type: [string, "null"] }
+        expiresAt: { type: [integer, "null"] }
+        verifiedAt: { type: integer }
+        receipt: { type: string }
+        firebaseSync: { type: string, enum: [not-linked, synced, unavailable] }
     CoachMessage:
       type: object
       required: [role, content]

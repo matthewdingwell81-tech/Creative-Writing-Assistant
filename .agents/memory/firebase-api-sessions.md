@@ -9,11 +9,11 @@ Firebase client state must not be used by itself to authorize Lumina's main UI. 
 
 **How to apply:** Any new Firebase provider must complete the server-session exchange before the app treats the user as authenticated. Session expiration must also clear client auth state immediately so protected UI unmounts.
 
-Keep existing sign-in methods when extending tier tracking: Google accounts synchronize their tier through Firebase user documents; username/password accounts retain account-scoped local tiers.
+Keep existing sign-in methods when extending tier tracking. Google accounts can mirror verified subscriptions through Firebase user documents; username/password accounts use their existing server accounts, not a forced Firebase migration.
 
 **Why:** The user explicitly chose to retain the two existing sign-in methods instead of migrating every account to Firebase.
 
-**How to apply:** Do not require Firebase login for server-only accounts or silently migrate their passwords. Cloud tier persistence is only applicable to a matching Firebase sign-in.
+**How to apply:** Do not require Firebase login for server-only accounts or silently migrate their passwords. The earlier local-tier milestone is superseded for paid subscriptions by backend RevenueCat verification (see lumina-billing-boundary.md). Firebase mirroring is only applicable to a matching, independently verified Google identity.
 
 Verify entitlement-changing Firebase behavior using controlled mocks or a dedicated
 staging/emulator environment, never by mutating real user tiers.

@@ -3,6 +3,7 @@ import { doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from "fireba
 import { auth, firestore } from "./firebase";
 import { getCurrentTierUser, isCurrentTierUser } from "./tierAccount";
 import { isPremiumAccount, setPremiumAccountStatus } from "@/hooks/useAdRewards";
+import { getVerifiedSubscription } from "./subscriptionCache";
 
 export type UserTier = "free" | "premium";
 export const TIER_SYNC_ERROR_EVENT = "lumina:tier-sync-error";
@@ -26,6 +27,9 @@ export async function isFirebaseLoggedIn(): Promise<boolean> {
 }
 
 export function getUserTier(): UserTier {
+  const id = getCurrentTierUser()?.id;
+  const verified = id ? getVerifiedSubscription(id) : undefined;
+  if (verified) return verified.tier;
   return isPremiumAccount(getCurrentTierUser()?.id) ? "premium" : "free";
 }
 
@@ -88,9 +92,14 @@ export function syncUserTier(session: SessionUser | null): () => void {
       // A queued/offline write is not a confirmed cloud entitlement.
       if (snapshot.metadata.hasPendingWrites) return;
       const tier = snapshot.data()?.tier;
+      // Paid subscriptions are owned by RevenueCat + backend verification.
+      // A delayed Firestore profile snapshot cannot replace a newer purchase.
+      if (getVerifiedSubscription(session.id)) return;
       if (tier === "free" || tier === "premium") {
         try {
-          setPremiumAccountStatus(session.id, tier === "premium");
+          const expiresAt = snapshot.data()?.expiresAt;
+          setPremiumAccountStatus(session.id, tier === "premium" &&
+            (typeof expiresAt !== "number" || expiresAt > Date.now()));
         } catch { reportDocumentError(); }
       } else if (tier === undefined && !snapshot.metadata.fromCache && !provisioning) {
         provisioning = true;

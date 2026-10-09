@@ -8,6 +8,8 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import AuthPage from "@/pages/AuthPage";
 import Upgrade from "@/pages/Upgrade";
+import SettingsPage from "@/pages/SettingsPage";
+import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { setSessionExpired } from "@/lib/sessionState";
 import { TutorialProvider } from "@/hooks/useTutorial";
@@ -51,6 +53,12 @@ function Router() {
       <Route path="/upgrade">
         {user ? <Upgrade /> : <Redirect to="/auth" />}
       </Route>
+      <Route path="/pricing">
+        {user ? <Upgrade /> : <Redirect to="/auth" />}
+      </Route>
+      <Route path="/settings">
+        {user ? <SettingsPage /> : <Redirect to="/auth" />}
+      </Route>
       <Route path="/">
         {user ? <Home key={user.id} /> : <Redirect to="/auth" />}
       </Route>
@@ -64,6 +72,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
+          <SubscriptionProvider>
           <TutorialProvider>
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
               <SessionExpiredHandler />
@@ -72,6 +81,7 @@ function App() {
               <TutorialOverlay />
             </WouterRouter>
           </TutorialProvider>
+          </SubscriptionProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

@@ -275,6 +275,14 @@ export default function Home() {
     }
     setLocation('/upgrade');
   }, [activeChapterId, activeDocId, content, title, saveNow, setLocation, user?.id, toast]);
+  const handleSettings = useCallback(async () => {
+    if (activeChapterId && !(await saveNow(content, title))) return;
+    if (user?.id && activeDocId) {
+      try { sessionStorage.setItem(`lumina_plans_document:${encodeURIComponent(user.id)}`, String(activeDocId)); }
+      catch { /* Saving the writing itself is the navigation guard. */ }
+    }
+    setLocation('/settings');
+  }, [activeChapterId, activeDocId, content, title, saveNow, setLocation, user?.id]);
 
   const { data: documents = [] } = useQuery<Document[]>({
     queryKey: ['/api/documents'],
@@ -993,6 +1001,9 @@ export default function Home() {
                   <Sparkles className="w-4 h-4 mr-2" />
                   Free & Premium plans
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void handleSettings()} data-testid="btn-subscription-settings">
+                  Subscription settings
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => logout().catch(() => toast({ title: "Sign out failed", description: "Please try again.", variant: "destructive" }))}
                   data-testid="btn-logout"
@@ -1191,6 +1202,9 @@ export default function Home() {
                 >
                   <Sparkles className="w-4 h-4 mr-2" />
                   Free & Premium plans
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void handleSettings()} data-testid="btn-mobile-subscription-settings">
+                  Subscription settings
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => logout().catch(() => toast({ title: "Sign out failed", description: "Please try again.", variant: "destructive" }))}
