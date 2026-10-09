@@ -9,8 +9,8 @@ Existing Lumina accounts receive a fresh seven-day unlimited-AI trial beginning 
 
 **How to apply:** Preserve that rollout start when migrating or revisiting account timestamps; do not restart a legacy account's trial on subsequent logins or deployments.
 
-Stripe and live Premium purchases are deferred. Daily usage and ad bonuses remain account-scoped device storage for this milestone, not authoritative server-enforced entitlements.
+Native Premium subscriptions are now in scope at the user's requested $4.99/month price, with verified purchases, restore, renewal/cancellation handling, and expiry-based downgrades. Preserve the existing seven-day trial.
 
-**Why:** The requested milestone deliberately stops at a Coming Soon comparison page and local query accounting.
+**Why:** The user explicitly expanded the earlier Coming Soon milestone to a real native upgrade flow. Paid access must reflect a verified subscription, not an unverified local Premium flag.
 
-**How to apply:** Treat server-side limits and billing activation as separate work, not as already secured or commercially active.
+**How to apply:** Use the store's current product pricing at checkout; a price change alone must not invalidate an existing paid subscription. Cancellation stops renewal, not access before the paid-through expiry. Daily usage and ad bonuses remain device-local unless separately requested; do not assume they are server-enforced.
