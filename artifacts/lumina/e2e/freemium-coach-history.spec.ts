@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { mockVerifiedBilling } from './helpers/verified-billing';
 
 test('Coach retains completed replies and drafts without replay across plans, documents, accounts and reset', async ({ page }) => {
   test.setTimeout(90_000);
   const now = new Date().toISOString();
   const accounts = ['history-account-a', 'history-account-b'];
   let account = accounts[0];
+  await mockVerifiedBilling(page, () => account);
   const histories = new Map<string, { messages: { role: string; content: string }[]; draft: string; revision: number; updatedAt: number | null }>();
   await page.route(/\/api\/documents\/9100[12]\/coach-history$/, async route => {
     const key = `${account}:${route.request().url()}`;

@@ -5,7 +5,7 @@ import {
   type BillingConfiguration, type SubscriptionState,
 } from "@workspace/api-client-react";
 import { auth } from "./firebase";
-import { getCurrentTierUser, isCurrentTierUser } from "./tierAccount";
+import { getCurrentTierUser, getTierAccountGeneration, isCurrentTierUser } from "./tierAccount";
 import { readSubscription, recordSubscription, saveSubscription } from "./subscriptionCache";
 
 let configuration: BillingConfiguration | null = null;
@@ -65,19 +65,26 @@ export async function getMonthlyPackage(): Promise<PurchasesPackage> {
   return pkg;
 }
 
-export async function verifyPurchase(): Promise<SubscriptionState> {
+export async function verifyPurchase(signal?: AbortSignal): Promise<SubscriptionState> {
   const id = accountId();
+  const generation = getTierAccountGeneration();
+  const assertVerificationAccount = () => {
+    signal?.throwIfAborted();
+    assertAccount(id);
+    if (getTierAccountGeneration() !== generation) throw new Error("Your account changed. Please try again.");
+  };
   const session = getCurrentTierUser();
   await auth.authStateReady();
-  assertAccount(id);
+  assertVerificationAccount();
   const firebaseUser = auth.currentUser;
   // Never attach a leftover Google login to a username/password account.
   const matched = firebaseUser?.email?.toLowerCase() ===
     (session?.email ?? session?.username)?.toLowerCase();
   const firebaseIdToken = matched && firebaseUser ? await firebaseUser.getIdToken() : undefined;
-  assertAccount(id);
-  const state = await refreshSubscription({ ...(firebaseIdToken ? { firebaseIdToken } : {}) });
-  assertAccount(id);
+  assertVerificationAccount();
+  const body = { ...(firebaseIdToken ? { firebaseIdToken } : {}) };
+  const state = signal ? await refreshSubscription(body, { signal }) : await refreshSubscription(body);
+  assertVerificationAccount();
   if (state.accountId !== id) throw new Error("Subscription verification returned a different account.");
   recordSubscription(state);
   saveSubscription(state);
@@ -137,12 +144,16 @@ export async function retryVerification(): Promise<SubscriptionState> {
   return state;
 }
 
-export async function loadOfflineSubscription(id: string): Promise<SubscriptionState | null> {
+export async function loadOfflineSubscription(id: string, signal?: AbortSignal): Promise<SubscriptionState | null> {
+  const generation = getTierAccountGeneration();
   try {
+    signal?.throwIfAborted();
     const config = configuration ?? JSON.parse(localStorage.getItem("lumina_billing_configuration") ?? "null");
     if (!config) return null;
     const state = await readSubscription(id, config);
-    if (state && isCurrentTierUser(id)) { recordSubscription(state); saveSubscription(state); }
+    if (state && !signal?.aborted && isCurrentTierUser(id) && getTierAccountGeneration() === generation) {
+      recordSubscription(state); saveSubscription(state);
+    } else return null;
     return state;
   } catch { return null; }
 }

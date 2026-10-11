@@ -1,11 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { registerTestAccount } from './helpers/test-account';
+import { mockVerifiedBilling } from './helpers/verified-billing';
 
 test('Coach applies free limits, preserves rewards in trial, and links to protected plans', async ({ page }) => {
   test.setTimeout(90_000);
   // Both viewport projects mutate history. Give each its own account/document
   // instead of racing resets and writes on the shared writing account.
   const user = await registerTestAccount(page, 'freemium_coach');
+  const billing = await mockVerifiedBilling(page, () => user.id);
   const documentResponse = await page.request.post('/api/documents', {
     data: { title: 'Freemium Coach test', content: '', documentType: 'fiction' },
   });
@@ -80,7 +82,9 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
   await expect(page.getByTestId('upgrade-modal')).toContainText('Web portal access');
   await page.getByTestId('btn-upgrade-now').click();
   await expect(page.getByTestId('upgrade-page')).toBeVisible();
-  await expect(page.getByTestId('premium-coming-soon')).toHaveText('Coming Soon');
+  await expect(page.getByTestId('subscription-native-note')).toContainText('Open Lumina on Android');
+  await expect(page.getByTestId('pricing-upgrade')).toBeDisabled();
+  await expect(page.getByTestId('pricing-restore')).toBeDisabled();
   expect(requests).toBe(before);
   await page.reload();
   await expect(page.getByTestId('upgrade-page')).toBeVisible();
@@ -122,11 +126,7 @@ test('Coach applies free limits, preserves rewards in trial, and links to protec
   await send('Trial reply');
   await expect(page.getByTestId('bonus-ai-query-balance')).toContainText('2 bonus');
 
-  await page.evaluate(async () => {
-    const tier = await import(new URL('src/lib/userTier.ts', document.baseURI).href);
-    await tier.setTier('premium');
-    if (!tier.isPremium() || await tier.isFirebaseLoggedIn()) throw new Error('Local account tier helper failed');
-  });
+  billing.setTier('premium');
   await openCoach();
   await expect(page.getByTestId('ai-query-balance')).toContainText('Premium · unlimited');
   await expect(page.getByTestId('ad-rewards-panel')).toHaveCount(0);

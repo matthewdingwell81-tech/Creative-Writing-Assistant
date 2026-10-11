@@ -8,6 +8,8 @@ import {
 } from "@/lib/purchase";
 import { applySubscription, forgetSubscription, getVerifiedSubscription, SUBSCRIPTION_CHANGED } from "@/lib/subscriptionCache";
 import { setPremiumAccountStatus } from "./useAdRewards";
+import { setPremiumCompatibilityMirror } from "@/lib/premiumMirror";
+import { SubscriptionStartup } from "@/components/SubscriptionStartup";
 
 export interface SubscriptionContextValue {
   subscription: SubscriptionState | null;
@@ -29,7 +31,7 @@ export interface SubscriptionContextValue {
 const context = createContext<SubscriptionContextValue | null>(null);
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading, logout } = useAuth();
   const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -41,38 +43,61 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const activeId = useRef(user?.id);
   activeId.current = user?.id;
   const refreshTask = useRef<Promise<void> | null>(null);
+  const refreshController = useRef<AbortController | null>(null);
+  const generation = useRef(0);
+  const [readyAccount, setReadyAccount] = useState<string | null>(null);
+  const [settledAccount, setSettledAccount] = useState<string | null>(null);
 
   const refresh = (): Promise<void> => {
     if (refreshTask.current) return refreshTask.current;
     const id = user?.id;
     if (!id) return Promise.resolve();
-    refreshTask.current = (async () => {
+    const epoch = generation.current;
+    const controller = new AbortController();
+    refreshController.current = controller;
+    const isActive = () => activeId.current === id && generation.current === epoch;
+    const task = (async () => {
       try {
-        const result = await verifyPurchase();
-        if (activeId.current !== id) return;
+        const result = await verifyPurchase(controller.signal);
+        if (!isActive()) return;
         setSubscription(result); setOffline(false); setError(null);
+        setReadyAccount(id);
       } catch {
-        const cached = await loadOfflineSubscription(id);
-        if (activeId.current !== id) return;
+        if (!isActive() || controller.signal.aborted) return;
+        const cached = await loadOfflineSubscription(id, controller.signal);
+        if (!isActive()) return;
         const previous = getVerifiedSubscription(id);
         setSubscription(cached ?? (previous?.status === "expired" ? previous : null)); setOffline(true);
-        if (!cached) setPremiumAccountStatus(id, false);
+        if (cached) setReadyAccount(id);
+        else {
+          setPremiumAccountStatus(id, false);
+          setPremiumCompatibilityMirror(false);
+        }
         setError(cached
           ? "You're offline. Verified Premium access is available for up to 24 hours, or until your subscription expires."
           : "Subscription verification is unavailable. Retry when you're connected.");
       } finally {
-        if (activeId.current === id) { setLoading(false); setPending(hasPendingPurchase(id)); }
+        if (isActive()) {
+          setLoading(false); setSettledAccount(id); setPending(hasPendingPurchase(id));
+        }
       }
-    })().finally(() => { refreshTask.current = null; });
-    return refreshTask.current;
+    })().finally(() => {
+      if (refreshTask.current === task) refreshTask.current = null;
+      if (refreshController.current === controller) refreshController.current = null;
+    });
+    refreshTask.current = task;
+    return task;
   };
 
   useEffect(() => {
+    generation.current++;
     const id = user?.id;
     let disposed = false;
     let stopNative: (() => void) | undefined;
     setSubscription(null); setPrice(null); setError(null); setMessage(null); setBusy(false);
     setOffline(false); setLoading(Boolean(id)); refreshTask.current = null;
+    setReadyAccount(null);
+    setSettledAccount(null);
     if (!id) return;
     void refresh();
     if (nativePurchasesAvailable()) {
@@ -85,7 +110,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
     const updated = (event: Event) => {
       const state = (event as CustomEvent<SubscriptionState>).detail;
-      if (state.accountId === id) { setSubscription(state); setPending(hasPendingPurchase(id)); }
+      if (!disposed && activeId.current === id && state.accountId === id) {
+        setSubscription(state); setPending(hasPendingPurchase(id));
+      }
     };
     const focused = () => { if (document.visibilityState === "visible") void refresh(); };
     const storage = (event: StorageEvent) => {
@@ -102,6 +129,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     window.addEventListener("storage", storage);
     document.addEventListener("visibilitychange", focused);
     return () => {
+      generation.current++;
+      refreshController.current?.abort();
       disposed = true; stopNative?.(); forgetSubscription(id);
       clearInterval(timer);
       window.removeEventListener(SUBSCRIPTION_CHANGED, updated);
@@ -113,41 +142,54 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!subscription || subscription.tier !== "premium") return;
+    if (!subscription || subscription.accountId !== user?.id || subscription.tier !== "premium") return;
+    const epoch = generation.current;
     const expires = Math.min(subscription.expiresAt ?? Infinity, subscription.verifiedAt + 24 * 60 * 60 * 1000);
     const timer = window.setTimeout(() => {
+      if (generation.current !== epoch || activeId.current !== subscription.accountId) return;
       const expired: SubscriptionState = { ...subscription, tier: "free", status: "expired" };
       applySubscription(expired); setSubscription(expired); void refresh();
     }, Math.min(2_147_483_647, Math.max(0, expires - Date.now())));
     return () => clearTimeout(timer);
-  }, [subscription]);
+  }, [subscription, user?.id]);
 
   const run = async (action: () => Promise<SubscriptionState>, restored = false) => {
     const id = user?.id;
     if (!id || busy) return;
+    const epoch = generation.current;
+    const isActive = () => activeId.current === id && generation.current === epoch;
     setBusy(true); setError(null); setMessage(null);
     try {
       const result = await action();
-      if (activeId.current !== id) return;
+      if (!isActive()) return;
       setSubscription(result); setOffline(false);
       setMessage(result.tier === "premium" ? "Premium is active. Enjoy unlimited AI queries and no ads."
         : restored ? "No active Premium purchase was found for this store account." : "Your subscription has been refreshed.");
     } catch (err) {
-      if (activeId.current === id) setError(err instanceof Error ? err.message : "Please retry verification.");
+      if (isActive()) setError(err instanceof Error ? err.message : "Please retry verification.");
     } finally {
-      if (activeId.current === id) { setBusy(false); setPending(hasPendingPurchase(id)); }
+      if (isActive()) { setBusy(false); setPending(hasPendingPurchase(id)); }
     }
   };
-  const isPremium = subscription?.tier === "premium"
+  const isPremium = subscription?.accountId === user?.id && subscription?.tier === "premium"
     && (subscription.expiresAt === null || subscription.expiresAt > Date.now())
     && Date.now() - subscription.verifiedAt < 24 * 60 * 60 * 1000;
+  const startupBlocked = Boolean(user && readyAccount !== user.id);
+  const visibleSubscription = subscription?.accountId === user?.id ? subscription : null;
   return createElement(context.Provider, { value: {
-    subscription, isPremium, loading, busy, price, error, message, offline,
+    subscription: visibleSubscription, isPremium, loading: loading || startupBlocked,
+    busy, price, error, message, offline,
     nativeAvailable: nativePurchasesAvailable(), pendingVerification,
     purchase: () => run(purchasePremium), restore: () => run(restorePurchase, true),
     retry: () => run(retryVerification), refresh,
     manage: async () => { try { await manageSubscription(); } catch { setError("Could not open subscription management. Please try again."); } },
-  } }, children);
+  } }, !authLoading && startupBlocked
+    ? createElement(SubscriptionStartup, {
+        loading: loading || settledAccount !== user?.id,
+        error, retry: () => { setLoading(true); void refresh(); },
+        signOut: () => { void logout().catch(() => setError("Could not sign out. Please try again.")); },
+      })
+    : children);
 }
 export function useSubscription(): SubscriptionContextValue {
   const value = useContext(context);

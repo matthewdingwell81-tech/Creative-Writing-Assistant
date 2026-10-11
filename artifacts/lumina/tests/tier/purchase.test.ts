@@ -9,7 +9,7 @@ vi.mock("@workspace/api-client-react", () => ({ getBillingConfiguration: mock.co
 vi.mock("@/lib/firebase", () => ({ auth: { authStateReady: async () => {}, currentUser: null } }));
 vi.mock("@/lib/subscriptionCache", () => ({ readSubscription: mock.receipt, recordSubscription: mock.record, saveSubscription: mock.save }));
 import { setCurrentTierUser } from "@/lib/tierAccount";
-import { hasPendingPurchase, manageSubscription, purchasePremium, restorePurchase, retryVerification } from "@/lib/purchase";
+import { hasPendingPurchase, manageSubscription, purchasePremium, restorePurchase, retryVerification, verifyPurchase } from "@/lib/purchase";
 const state = (tier = "free") => ({ accountId: "buyer", tier, status: tier === "premium" ? "active" : "none", expiresAt: Date.now() + 86400000 });
 describe("native purchase safety", () => {
   afterEach(() => { vi.unstubAllGlobals(); });
@@ -79,6 +79,28 @@ describe("native purchase safety", () => {
     expect(a).toBe(b);
     await a;
     expect(mock.purchasePackage).toHaveBeenCalledTimes(1);
+  });
+  it("rejects late verification even if the original account signs back in", async () => {
+    let resolve!: (value: ReturnType<typeof state>) => void;
+    mock.verify.mockImplementationOnce(() => new Promise<ReturnType<typeof state>>(yes => { resolve = yes; }));
+    const task = verifyPurchase();
+    await vi.waitFor(() => expect(mock.verify).toHaveBeenCalledOnce());
+    setCurrentTierUser({ id: "other", createdAt: new Date().toISOString() });
+    setCurrentTierUser({ id: "buyer", createdAt: new Date().toISOString() });
+    resolve(state("premium"));
+    await expect(task).rejects.toThrow("account changed");
+    expect(mock.save).not.toHaveBeenCalled();
+  });
+  it("cancels obsolete initialization before it can write a tier or receipt", async () => {
+    let resolve!: (value: ReturnType<typeof state>) => void;
+    mock.verify.mockImplementationOnce(() => new Promise<ReturnType<typeof state>>(yes => { resolve = yes; }));
+    const controller = new AbortController();
+    const task = verifyPurchase(controller.signal);
+    await vi.waitFor(() => expect(mock.verify).toHaveBeenCalledWith({}, { signal: controller.signal }));
+    controller.abort();
+    resolve(state("premium"));
+    await expect(task).rejects.toMatchObject({ name: "AbortError" });
+    expect(mock.save).not.toHaveBeenCalled();
   });
   it("management launches the subscription-specific Google Play page natively", async () => {
     const assign = vi.fn();

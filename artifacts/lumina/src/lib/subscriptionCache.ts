@@ -2,6 +2,7 @@ import { importJWK, jwtVerify } from "jose";
 import type { BillingConfiguration, SubscriptionState } from "@workspace/api-client-react";
 import { setPremiumAccountStatus } from "@/hooks/useAdRewards";
 import { isCurrentTierUser } from "./tierAccount";
+import { setPremiumCompatibilityMirror } from "./premiumMirror";
 
 export const SUBSCRIPTION_CHANGED = "lumina:subscription-changed";
 const key = (id: string) => `lumina_verified_subscription:${encodeURIComponent(id)}`;
@@ -11,10 +12,12 @@ export function applySubscription(state: SubscriptionState): void {
   const active = state.tier === "premium" && (state.expiresAt === null || state.expiresAt > Date.now())
     && Date.now() - state.verifiedAt < 24 * 60 * 60 * 1000;
   setPremiumAccountStatus(state.accountId, active);
+  setPremiumCompatibilityMirror(active);
   window.dispatchEvent(new CustomEvent(SUBSCRIPTION_CHANGED, { detail: state }));
 }
 
 export function saveSubscription(state: SubscriptionState): void {
+  if (!isCurrentTierUser(state.accountId)) return;
   // The native SDK retains the original store receipt. This is the backend's
   // signed verification receipt, not client-created entitlement information.
   try { localStorage.setItem(key(state.accountId), state.receipt); } catch { /* Online verification still succeeded. */ }
@@ -28,6 +31,7 @@ export async function readSubscription(id: string, config: BillingConfiguration)
     const publicKey = await importJWK(config.receiptPublicKey, "EdDSA");
     const { payload } = await jwtVerify(receipt, publicKey, {
       algorithms: ["EdDSA"], issuer: "lumina-billing", audience: "lumina-premium",
+      subject: id,
     });
     const value = payload.subscription as SubscriptionState | undefined;
     if (!value || value.accountId !== id ||

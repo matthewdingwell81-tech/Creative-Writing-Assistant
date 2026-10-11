@@ -1,11 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { registerTestAccount } from './helpers/test-account';
+import { mockVerifiedBilling } from './helpers/verified-billing';
 
 test('reward UI grants once, handles skipped/failed videos, and temporarily dismisses banners', async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   // Other regression projects delete their documents while running in parallel.
   // A dedicated test account keeps this navigation/save check independent.
   const user = await registerTestAccount(page, `reward_ui_${testInfo.project.name.replace(/-/g, '_')}`);
+  const billing = await mockVerifiedBilling(page, () => user.id);
   const documentResponse = await page.request.post('/api/documents', {
     data: { title: 'Reward UI verification', content: '', documentType: 'fiction' },
   });
@@ -107,7 +109,7 @@ test('reward UI grants once, handles skipped/failed videos, and temporarily dism
   await expect(page.getByTestId('banner-ad-controls')).toHaveCount(0);
   await page.reload();
   await expect(page.getByTestId('banner-ad-controls')).toBeVisible();
-  await page.evaluate((id: string) => localStorage.setItem(`lumina_admob_premium:${encodeURIComponent(id)}`, 'true'), user.id);
+  billing.setTier('premium');
   await page.reload();
   await expect(page.getByTestId('btn-user-menu')).toBeVisible();
   await expect(page.getByTestId('banner-ad-controls')).toHaveCount(0);

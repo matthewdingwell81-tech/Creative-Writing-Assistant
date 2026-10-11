@@ -1,11 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { registerTestAccount } from './helpers/test-account';
+import { mockVerifiedBilling } from './helpers/verified-billing';
 
 test('Coach ad rewards persist per account and stay hidden for premium users', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   const suffix = `${testInfo.project.name}-${Date.now()}`;
   const title = `Ad rewards test ${suffix}`;
   const user = await registerTestAccount(page, 'ad_rewards');
+  const billing = await mockVerifiedBilling(page, () => user.id);
   await page.route('**/api/auth/me', route => route.fulfill({
     json: { ...user, createdAt: new Date(Date.now() - 8 * 86400000).toISOString() },
   }));
@@ -98,9 +100,7 @@ test('Coach ad rewards persist per account and stay hidden for premium users', a
     await expect(page.getByTestId('bonus-ai-query-balance')).toHaveText('1 bonus AI query available');
 
     await successfulCoachReply();
-    await page.evaluate((accountId: string) => {
-      localStorage.setItem(`lumina_admob_premium:${encodeURIComponent(accountId)}`, 'true');
-    }, user.id);
+    billing.setTier('premium');
     await expect(page.getByTestId('coach-sync-status')).toHaveCount(0);
     await page.reload();
     await page.waitForLoadState('networkidle');
