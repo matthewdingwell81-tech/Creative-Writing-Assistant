@@ -8,6 +8,38 @@
 import * as zod from 'zod';
 
 
+/**
+ * Restore a server session or validate a Firebase Bearer ID token and establish the session required by other APIs.
+ */
+export const GetAuthMeHeader = zod.object({
+  "Authorization": zod.string().optional().describe('Firebase ID token, prefixed by Bearer.'),
+  "X-Lumina-Preserve-Password-Session": zod.enum(['true']).optional().describe('Keep an existing unrelated username\/password session during passive Firebase restoration.')
+})
+
+export const GetAuthMeResponse = zod.object({
+  "id": zod.string(),
+  "username": zod.string(),
+  "email": zod.string().nullable(),
+  "firebaseUid": zod.string().nullable().describe('Independently verified Firebase UID, not the Lumina account ID.'),
+  "createdAt": zod.coerce.date(),
+  "premium": zod.boolean().nullable().describe('True for a verified complimentary grant. Null means general subscription status must be resolved through billing.')
+})
+
+
+export const CreateFirebaseSessionHeader = zod.object({
+  "Authorization": zod.string().describe('Firebase ID token, prefixed by Bearer.')
+})
+
+export const CreateFirebaseSessionResponse = zod.object({
+  "id": zod.string(),
+  "username": zod.string(),
+  "email": zod.string().nullable(),
+  "firebaseUid": zod.string().nullable().describe('Independently verified Firebase UID, not the Lumina account ID.'),
+  "createdAt": zod.coerce.date(),
+  "premium": zod.boolean().nullable().describe('True for a verified complimentary grant. Null means general subscription status must be resolved through billing.')
+})
+
+
 export const GetBillingConfigurationResponse = zod.object({
   "androidApiKey": zod.string(),
   "entitlementIdentifier": zod.string(),

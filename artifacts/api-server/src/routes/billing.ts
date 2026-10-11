@@ -12,6 +12,7 @@ import {
   developerSubscription,
 } from "../lib/subscriptions";
 import { syncSubscriptionToFirebase } from "../lib/subscriptionFirebase";
+import { storage } from "../storage";
 
 const router = Router();
 let publicApiKey: string | null = null;
@@ -64,10 +65,14 @@ router.post("/billing/subscription", async (req, res) => {
       try { firebaseUser = await verifyFirebaseIdToken(parsed.data.firebaseIdToken); }
       catch { res.status(403).json({ error: "Google account verification failed. Sign in again." }); return; }
       const [user] = await db.select().from(users).where(eq(users.id, req.session.userId));
-      if (!user || user.username.toLowerCase() !== firebaseUser.email.toLowerCase()) {
+      if (!user || (user.firebaseUid
+        ? user.firebaseUid !== firebaseUser.uid
+        : user.username.toLowerCase() !== firebaseUser.email.toLowerCase())) {
         res.status(403).json({ error: "Google account does not match your Lumina account." }); return;
       }
-      await db.update(users).set({ firebaseUid: firebaseUser.uid }).where(eq(users.id, user.id));
+      if (!user.firebaseUid && !await storage.linkFirebaseUser(user.id, firebaseUser.uid)) {
+        res.status(403).json({ error: "Account is already linked to a different Firebase identity." }); return;
+      }
     }
     res.json(await verifiedState(req.session.userId));
   } catch (error) {

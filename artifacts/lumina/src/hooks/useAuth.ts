@@ -20,6 +20,8 @@ export interface AuthUser {
   email: string | null;
   username: string;
   createdAt: string;
+  firebaseUid?: string | null;
+  premium?: boolean | null;
 }
 
 export interface UseAuthResult {
@@ -84,6 +86,8 @@ function toAuthUser(value: {
   username: string;
   email?: string | null;
   createdAt: string;
+  firebaseUid?: string | null;
+  premium?: boolean | null;
 }): AuthUser {
   if (!Number.isFinite(Date.parse(value.createdAt))) {
     throw new Error("Your account signup date is missing. Please try signing in again.");
@@ -93,12 +97,28 @@ function toAuthUser(value: {
     username: value.username,
     email: value.email ?? null,
     createdAt: value.createdAt,
+    firebaseUid: value.firebaseUid ?? null,
+    premium: value.premium ?? null,
   };
 }
 
-async function fetchServerSession(): Promise<AuthUser | null> {
-  const response = await fetch("/api/auth/me", { credentials: "include" });
-  if (response.status === 401) return null;
+async function fetchServerSession(firebaseUser: import("firebase/auth").User | null): Promise<AuthUser | null> {
+  // An unrelated, unverified Firebase login must not break a valid password
+  // session. It cannot authorize Firebase restoration under the server policy.
+  const idToken = firebaseUser && firebaseUser.emailVerified !== false ? await firebaseUser.getIdToken() : null;
+  const response = await fetch("/api/auth/me", {
+    credentials: "include",
+    ...(idToken ? { headers: {
+      Authorization: `Bearer ${idToken}`,
+      "X-Lumina-Preserve-Password-Session": "true",
+    } } : {}),
+  });
+  if (response.status === 401) {
+    if (firebaseUser?.emailVerified === false) {
+      throw new Error("Your Firebase email is not verified. Verify your email or sign in with Google, then try again.");
+    }
+    return null;
+  }
   if (!response.ok) {
     throw await parseApiError(response, "Could not check your session.");
   }
@@ -133,16 +153,11 @@ function useAuthState(): UseAuthResult {
     async function initializeSession() {
       try {
         const redirectResult = await getRedirectResult(auth);
-        const existingSession = await fetchServerSession();
-
-        if (!mounted) return;
-        if (existingSession) {
-          setUser(existingSession);
-        } else if (redirectResult?.user) {
-          setUser(await exchangeFirebaseSession(redirectResult.user));
-        } else {
-          setUser(null);
-        }
+        await auth.authStateReady();
+        const restored = redirectResult?.user
+          ? await exchangeFirebaseSession(redirectResult.user)
+          : await fetchServerSession(auth.currentUser);
+        if (mounted) setUser(restored);
       } catch (error) {
         if (mounted) {
           setUser(null);

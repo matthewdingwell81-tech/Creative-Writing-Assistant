@@ -2,7 +2,7 @@ import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
 import { SignJWT, exportJWK } from "jose";
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import type { SubscriptionState } from "@workspace/api-zod";
-import developerIds from "./developerIds.json";
+import { isDeveloperUid } from "./developerAccess";
 
 export const RC_PROJECT_ID = "projc174b989";
 export const RC_ANDROID_APP_ID = "appd4e4b7a907";
@@ -15,7 +15,7 @@ export type VerifiedSubscription = Omit<SubscriptionState, "receipt" | "firebase
 export function developerSubscription(
   accountId: string, firebaseUid: string | null | undefined, now = Date.now(),
 ): VerifiedSubscription | null {
-  if (!firebaseUid || !developerIds.includes(firebaseUid)) return null;
+  if (!isDeveloperUid(firebaseUid)) return null;
   return {
     accountId, tier: "premium", status: "active",
     subscriptionId: null, expiresAt: null, verifiedAt: now,

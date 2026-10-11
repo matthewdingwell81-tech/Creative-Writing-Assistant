@@ -46,3 +46,11 @@ Complimentary access has no billing expiry, but its offline verification still e
 Authenticated tier-dependent content waits for online subscription verification or a valid signed offline receipt before mounting. Failed initial verification shows a neutral retry/sign-out screen, not temporary Free controls or ads. The existing account-scoped tier remains authoritative; `lumina.admob.premium` is a compatibility mirror populated from verified state and reset on account change or sign-out, never a standalone unlock.
 
 Copy allowlist identifiers from Firebase Authentication, not the Lumina server account ID. Firebase tokens must have a verified email under the existing auth policy; allowlisting alone does not override that check or manufacture a token. Google sign-in can supply a verified Firebase identity, while username/password Lumina accounts continue to work without Firebase.
+
+### Firebase session recovery
+
+`GET /api/auth/me` accepts either the existing Lumina session cookie or a Firebase ID token in `Authorization: Bearer <token>`. Tokens are verified against Google's signing keys with this project's issuer/audience, expiry, and verified-email checks. A valid Firebase identity is linked by UID (or verified email for first-time linking) and creates/saves the server session used by document and billing APIs. Explicit Google redirect exchange uses `POST /api/auth/firebase-session` with the same rules.
+
+The response includes `firebaseUid` and `premium: true` for a verified allowlisted identity. For other identities, `premium: null` means billing has not been queried by this identity endpoint, not that a paid subscriber is Free. The subscription endpoint and its signed receipt still determine the UI tier. Passive restoration preserves an existing unrelated username/password session; explicit Google sign-in can intentionally change accounts.
+
+A 401 remains correct for missing or invalid authentication. Never send the Lumina account UUID in place of a Firebase ID token, and never treat an allowlist string alone as proof of ownership.

@@ -11,6 +11,60 @@ tags:
   - name: health
     description: Health operations
 paths:
+  /auth/me:
+    get:
+      operationId: getAuthMe
+      description: Restore a server session or validate a Firebase Bearer ID token and establish the session required by other APIs.
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+          description: Firebase ID token, prefixed by Bearer.
+        - in: header
+          name: X-Lumina-Preserve-Password-Session
+          required: false
+          schema:
+            type: string
+            enum: ["true"]
+          description: Keep an existing unrelated username/password session during passive Firebase restoration.
+      responses:
+        "200":
+          description: Authenticated account; premium is true for a verified complimentary grant, otherwise null until billing verification.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionUser"
+        "401":
+          description: No session, malformed token, or invalid Firebase identity
+        "403":
+          description: Account already linked to a different Firebase identity
+        "503":
+          description: Account or session storage temporarily unavailable
+  /auth/firebase-session:
+    post:
+      operationId: createFirebaseSession
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: Firebase ID token, prefixed by Bearer.
+      responses:
+        "200":
+          description: Verified Firebase identity linked to a server account and saved session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionUser"
+        "401":
+          description: Invalid Firebase identity
+        "403":
+          description: Account already linked to a different Firebase identity
+        "503":
+          description: Account or session storage temporarily unavailable
   /billing/config:
     get:
       operationId: getBillingConfiguration
@@ -221,6 +275,25 @@ components:
             items:
               $ref: "#/components/schemas/PlanningRecord"
   schemas:
+    AuthSessionUser:
+      type: object
+      required: [id, username, email, firebaseUid, createdAt, premium]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: [string, "null"]
+        firebaseUid:
+          type: [string, "null"]
+          description: Independently verified Firebase UID, not the Lumina account ID.
+        createdAt:
+          type: string
+          format: date-time
+        premium:
+          type: [boolean, "null"]
+          description: True for a verified complimentary grant. Null means general subscription status must be resolved through billing.
     BillingConfiguration:
       type: object
       required: [androidApiKey, entitlementIdentifier, receiptPublicKey, managementUrl]

@@ -5,6 +5,24 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface AuthSessionUser {
+  id: string;
+  username: string;
+  /** @nullable */
+  email: string | null;
+  /**
+     * Independently verified Firebase UID, not the Lumina account ID.
+     * @nullable
+     */
+  firebaseUid: string | null;
+  createdAt: string;
+  /**
+     * True for a verified complimentary grant. Null means general subscription status must be resolved through billing.
+     * @nullable
+     */
+  premium: boolean | null;
+}
+
 export type BillingConfigurationReceiptPublicKey = { [key: string]: unknown };
 
 export interface BillingConfiguration {

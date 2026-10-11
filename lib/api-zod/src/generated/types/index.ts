@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './authSessionUser';
 export * from './billingConfiguration';
 export * from './billingConfigurationReceiptPublicKey';
 export * from './coachHistoryInput';

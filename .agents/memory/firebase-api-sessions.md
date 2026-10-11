@@ -9,6 +9,12 @@ Firebase client state must not be used by itself to authorize Lumina's main UI. 
 
 **How to apply:** Any new Firebase provider must complete the server-session exchange before the app treats the user as authenticated. Session expiration must also clear client auth state immediately so protected UI unmounts.
 
+Treat Google redirect completion and persisted Firebase identity as separate cases. An absent redirect result does not mean Firebase is signed out, especially after the API cookie expires.
+
+**Why:** Restored Firebase identities previously could not recreate an expired API session on reload, leaving identity and Premium checks with 401 responses.
+
+**How to apply:** Wait for Firebase restoration and validate its token on the backend before mounting protected content. Passive recovery must preserve unrelated password sessions; explicit Google sign-in may intentionally switch accounts.
+
 Keep existing sign-in methods when extending tier tracking. Google accounts can mirror verified subscriptions through Firebase user documents; username/password accounts use their existing server accounts, not a forced Firebase migration.
 
 **Why:** The user explicitly chose to retain the two existing sign-in methods instead of migrating every account to Firebase.

@@ -116,6 +116,41 @@ describe("AuthProvider tier lifecycle", () => {
     act(() => firebase.documentListeners[0].next(snapshot({ tier: "premium" })));
     expect(getUserTier()).toBe("premium");
   });
+  it("restores persisted Firebase sign-in via a bearer token without a redirect result", async () => {
+    session = { ...accountA };
+    const user = googleUser();
+    firebase.auth.currentUser = user;
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({
+      ...accountA, firebaseUid: "firebase-a", premium: true,
+    })));
+    await mount();
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/me", {
+      credentials: "include",
+      headers: { Authorization: "Bearer mock-id-token", "X-Lumina-Preserve-Password-Session": "true" },
+    });
+    expect(currentAuth.user?.premium).toBe(true);
+    expect(currentAuth.user?.firebaseUid).toBe("firebase-a");
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/auth/firebase-session")).toBe(false);
+  });
+  it("does not let an unrelated unverified Firebase login break password-session restoration", async () => {
+    const user = googleUser("unrelated-uid", "unrelated@example.test");
+    Object.assign(user, { emailVerified: false });
+    firebase.auth.currentUser = user;
+    session = { ...accountA, email: null, username: "local-writer" };
+    await mount();
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/me", { credentials: "include" });
+    expect(user.getIdToken).not.toHaveBeenCalled();
+    expect(currentAuth.user?.username).toBe("local-writer");
+  });
+  it("explains unverified Firebase identity instead of claiming Premium on a missing server session", async () => {
+    session = null;
+    const user = googleUser();
+    Object.assign(user, { emailVerified: false });
+    firebase.auth.currentUser = user;
+    await mount();
+    expect(currentAuth.user).toBeNull();
+    expect(currentAuth.googleError?.message).toContain("email is not verified");
+  });
 
   it("a failed Google session exchange never exposes a Firebase-only premium account", async () => {
     session = null;

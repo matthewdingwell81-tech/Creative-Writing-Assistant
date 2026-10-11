@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 
 const FIREBASE_PROJECT_ID =
   process.env.FIREBASE_PROJECT_ID || "lumina-app-22fd7";
@@ -17,8 +17,9 @@ export interface VerifiedFirebaseUser {
 
 export async function verifyFirebaseIdToken(
   token: string,
+  keys: JWTVerifyGetKey = firebaseKeys,
 ): Promise<VerifiedFirebaseUser> {
-  const { payload } = await jwtVerify(token, firebaseKeys, {
+  const { payload } = await jwtVerify(token, keys, {
     algorithms: ["RS256"],
     audience: FIREBASE_PROJECT_ID,
     issuer: `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`,

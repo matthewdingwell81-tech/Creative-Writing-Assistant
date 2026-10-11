@@ -19,11 +19,13 @@ import {
   type Research,
   type InsertResearch,
 } from "@workspace/db";
-import { eq, desc, and, asc, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, asc, sql, inArray, or, isNull } from "drizzle-orm";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByFirebaseUid(uid: string): Promise<User | undefined>;
+  linkFirebaseUser(id: string, uid: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   getDocuments(userId: string): Promise<Document[]>;
   getDocument(id: number, userId: string): Promise<Document | undefined>;
@@ -64,6 +66,17 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+  async getUserByFirebaseUid(uid: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.firebaseUid, uid));
+    return user;
+  }
+
+  async linkFirebaseUser(id: string, uid: string): Promise<User | undefined> {
+    const [user] = await db.update(users).set({ firebaseUid: uid })
+      .where(and(eq(users.id, id), or(isNull(users.firebaseUid), eq(users.firebaseUid, uid))))
+      .returning();
     return user;
   }
 
