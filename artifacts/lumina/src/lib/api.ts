@@ -238,30 +238,19 @@ export async function streamCoach(
 
       for (const line of lines) {
         if (!line.startsWith("data: ")) continue;
+        let event;
         try {
-          const event = JSON.parse(line.slice(6));
-          if (event.blocked) throw new CoachRequestBlockedError();
-          if (event.code === "COACH_SAFETY_UNAVAILABLE") {
-            throw new CoachSafetyUnavailableError();
-          }
-          if (event.error) {
-            throw new Error(
-              typeof event.error === "string"
-                ? event.error
-                : "Failed to connect to coach",
-            );
-          }
-          if (event.content) onChunk(event.content);
-          if (event.done) onDone();
-        } catch (error) {
-          if (
-            error instanceof CoachRequestBlockedError ||
-            error instanceof CoachSafetyUnavailableError ||
-            (error instanceof Error && error.name !== "SyntaxError")
-          ) {
-            throw error;
-          }
+          event = JSON.parse(line.slice(6));
+        } catch {
+          continue;
         }
+        if (event.blocked) throw new CoachRequestBlockedError();
+        if (event.code === "COACH_SAFETY_UNAVAILABLE") {
+          throw new CoachSafetyUnavailableError();
+        }
+        if (event.error) throw new Error(typeof event.error === "string" ? event.error : "Failed to connect to coach");
+        if (event.content) onChunk(event.content);
+        if (event.done) onDone();
       }
     }
   } finally {

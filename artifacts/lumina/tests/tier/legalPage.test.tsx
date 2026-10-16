@@ -160,7 +160,7 @@ describe("public legal documents", () => {
 
     expect(URL.createObjectURL).toHaveBeenCalledOnce();
     expect(click).toHaveBeenCalledOnce();
-    expect(click.mock.instances[0]?.getAttribute("download")).toBe(
+    expect((click.mock.instances[0] as HTMLAnchorElement | undefined)?.getAttribute("download")).toBe(
       "lumina-privacy-statement.html",
     );
     expect(savedBlob).toBeTruthy();

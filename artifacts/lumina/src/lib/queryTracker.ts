@@ -97,6 +97,14 @@ export function incrementQuery(now = new Date()): number {
   return usage.count + 1;
 }
 
+/** Release this request's reservation after an explicit safety block or outage. */
+export function refundQueryForAccount(accountId: string, chargedOnDate: string, now = new Date()): void {
+  const usage = getQueryUsageForAccount(accountId, now);
+  // A response from yesterday must not subtract from today's usage.
+  if (!accountId || usage.date !== chargedOnDate || usage.count === 0) return;
+  writeUsage(accountId, { ...usage, count: usage.count - 1 });
+}
+
 export function addBonusQueriesForAccount(accountId: string, amount: number): number {
   if (!accountId) throw new Error("A signed-in account is required.");
   if (!wholeNumber(amount) || amount < 1) throw new Error("Bonus query credits must be a positive whole number.");

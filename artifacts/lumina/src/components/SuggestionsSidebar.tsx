@@ -14,14 +14,14 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { streamIdeas, streamCoach } from '@/lib/api';
+import { streamIdeas, streamCoach, CoachRequestBlockedError, CoachSafetyUnavailableError } from '@/lib/api';
 import { useCoachHistory } from '@/hooks/useCoachHistory';
 import { COACH_RETENTION_LABEL, type CoachMessage } from '@/services/coachHistory';
 import type { Suggestion, SuggestionAnalysisMode, ChangeHistoryEntry } from '@/hooks/useSuggestions';
 import { useAdRewards } from '@/hooks/useAdRewards';
 import AdRewardButton from '@/components/AdRewardButton';
 import UpgradeModal from '@/components/UpgradeModal';
-import { incrementQuery } from '@/lib/queryTracker';
+import { getLocalDateKey, incrementQuery, refundQueryForAccount } from '@/lib/queryTracker';
 import { isPremium as isPremiumTier, TIER_SYNC_ERROR_EVENT } from '@/lib/userTier';
 import {
   AI_QUERY_STATE_CHANGED_EVENT,
@@ -376,6 +376,7 @@ export default function SuggestionsSidebar({
       return;
     }
     const chargedQuery = !isPremiumTier() && !isFreeTrialActive();
+    const chargedOnDate = getLocalDateKey();
     if (chargedQuery) {
       try {
         incrementQuery();
@@ -391,6 +392,7 @@ export default function SuggestionsSidebar({
     let responseReceived = false;
     let responseCompleted = false;
     let reply = '';
+    let failureMessage: string | null = null;
 
     const userMessage: CoachMessage = { role: 'user', content: text };
     const previousMessages = coachHistory.completedMessages.current.messages;
@@ -429,15 +431,26 @@ export default function SuggestionsSidebar({
       );
     } catch (err: any) {
       if (controller.signal.aborted || err?.name === 'AbortError' || responseCompleted) return;
-      setTierMessage('Something went wrong. Your prompt was kept as a draft; please try again.');
+      if (err instanceof CoachRequestBlockedError || err instanceof CoachSafetyUnavailableError) {
+        failureMessage = err.message;
+      }
     } finally {
       if (!controller.signal.aborted) {
         if (!responseCompleted) {
           setCoachMessages(previousMessages);
           setCoachInput(text);
-          setTierMessage(chargedQuery
-            ? 'The reply did not complete. Your prompt was kept as a draft; this request used one query.'
-            : 'The reply did not complete. Your prompt was kept as a draft.');
+          if (failureMessage && chargedQuery) {
+            try {
+              refundQueryForAccount(userId, chargedOnDate);
+            } catch {
+              failureMessage += ' This device could not restore the reserved query credit.';
+            }
+          }
+          setTierMessage(failureMessage
+            ? failureMessage
+            : chargedQuery
+              ? 'The reply did not complete. Your prompt was kept as a draft; this request used one query.'
+              : 'The reply did not complete. Your prompt was kept as a draft.');
         }
         setCoachLoading(false);
         if (coachAbortRef.current === controller) coachAbortRef.current = null;
