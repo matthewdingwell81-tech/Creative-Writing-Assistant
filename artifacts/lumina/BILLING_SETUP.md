@@ -54,3 +54,9 @@ Copy allowlist identifiers from Firebase Authentication, not the Lumina server a
 The response includes `firebaseUid` and `premium: true` for a verified allowlisted identity. For other identities, `premium: null` means billing has not been queried by this identity endpoint, not that a paid subscriber is Free. The subscription endpoint and its signed receipt still determine the UI tier. Passive restoration preserves an existing unrelated username/password session; explicit Google sign-in can intentionally change accounts.
 
 A 401 remains correct for missing or invalid authentication. Never send the Lumina account UUID in place of a Firebase ID token, and never treat an allowlist string alone as proof of ownership.
+
+### Firebase UID uniqueness and database rollout
+
+Firebase UID account resolution is serialized per verified UID in a database transaction. The partial unique index `users_firebase_uid_unique` remains the database-level safeguard; the Drizzle schema declares the same index, and `lib/db/migrations/subscriptions.sql` adds it for databases using that migration. A unique-key race restores the account already linked to that UID rather than provisioning another account.
+
+The development and production databases were checked read-only on October 16, 2026: neither had duplicate non-null Firebase UID links, and both already had the unique index. No production schema or account data was changed for this work. If another environment lacks the index, review its duplicate UID links first and apply the schema change through the normal Publish schema review. Do not delete or merge accounts or documents to make the index succeed without explicit approval.

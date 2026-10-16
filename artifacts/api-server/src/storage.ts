@@ -25,6 +25,7 @@ export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByFirebaseUid(uid: string): Promise<User | undefined>;
+  resolveFirebaseUser(uid: string, email: string, password: string): Promise<User | undefined>;
   linkFirebaseUser(id: string, uid: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   getDocuments(userId: string): Promise<Document[]>;
@@ -73,11 +74,69 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async resolveFirebaseUser(uid: string, email: string, password: string): Promise<User | undefined> {
+    try {
+      return await db.transaction(async (tx) => {
+        // Serialize first-time account resolution for this verified identity.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${uid}, 0))`);
+
+        const [linked] = await tx.select().from(users).where(eq(users.firebaseUid, uid)).limit(1);
+        if (linked) return linked;
+
+        let [user] = await tx.select().from(users).where(eq(users.username, email)).limit(1);
+        if (!user) {
+          [user] = await tx.insert(users).values({ username: email, password })
+            .onConflictDoNothing().returning();
+          // A concurrent sign-in with a different UID may have created the
+          // verified-email account while this transaction was starting.
+          if (!user) {
+            [user] = await tx.select().from(users).where(eq(users.username, email)).limit(1);
+          }
+        }
+        if (!user) throw new Error("Could not provision Firebase account");
+
+        const [linkedUser] = await tx.update(users).set({ firebaseUid: uid })
+          .where(and(eq(users.id, user.id), or(isNull(users.firebaseUid), eq(users.firebaseUid, uid))))
+          .returning();
+        if (linkedUser) return linkedUser;
+
+        // The email account belongs to another Firebase identity. If another
+        // transaction already linked this UID, restore that account instead.
+        const [resolved] = await tx.select().from(users).where(eq(users.firebaseUid, uid)).limit(1);
+        return resolved;
+      });
+    } catch (error) {
+      // The unique index is the final guard if a writer that does not take our
+      // advisory lock races this transaction. Restore the established account.
+      if ((error as { code?: unknown })?.code === "23505") {
+        const [linked] = await db.select().from(users).where(eq(users.firebaseUid, uid)).limit(1);
+        if (linked) return linked;
+      }
+      throw error;
+    }
+  }
+
   async linkFirebaseUser(id: string, uid: string): Promise<User | undefined> {
-    const [user] = await db.update(users).set({ firebaseUid: uid })
-      .where(and(eq(users.id, id), or(isNull(users.firebaseUid), eq(users.firebaseUid, uid))))
-      .returning();
-    return user;
+    try {
+      return await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${uid}, 0))`);
+        const [linked] = await tx.select().from(users).where(eq(users.firebaseUid, uid)).limit(1);
+        if (linked && linked.id !== id) return undefined;
+
+        const [user] = await tx.update(users).set({ firebaseUid: uid })
+          .where(and(eq(users.id, id), or(isNull(users.firebaseUid), eq(users.firebaseUid, uid))))
+          .returning();
+        return user;
+      });
+    } catch (error) {
+      // Keep a raced link conflict on the billing path as a rejected link, not
+      // an unhandled database error or an overwrite of the existing identity.
+      if ((error as { code?: unknown })?.code === "23505") {
+        const [linked] = await db.select().from(users).where(eq(users.firebaseUid, uid)).limit(1);
+        return linked?.id === id ? linked : undefined;
+      }
+      throw error;
+    }
   }
 
   async createUser(user: InsertUser): Promise<User> {

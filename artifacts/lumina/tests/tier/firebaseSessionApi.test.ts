@@ -42,18 +42,35 @@ async function fixture() {
     firebaseUid: null, createdAt: new Date("2020-01-01T00:00:00Z"),
   };
   records.set(existing.id, existing);
+  const otherIdentity: User = {
+    id: "other-firebase-account", username: "claimed@example.test", password: "unusable-test-password",
+    firebaseUid: "another-firebase-uid", createdAt: new Date("2021-01-01T00:00:00Z"),
+  };
+  records.set(otherIdentity.id, otherIdentity);
+  let resolutionLock = Promise.resolve();
   const repository: AuthRepository = {
     getUserById: async id => records.get(id),
-    getUserByUsername: async name => [...records.values()].find(user => user.username === name),
     getUserByFirebaseUid: async id => [...records.values()].find(user => user.firebaseUid === id),
-    linkFirebaseUser: async (id, firebaseUid) => {
-      const user = records.get(id);
-      if (!user || (user.firebaseUid && user.firebaseUid !== firebaseUid)) return undefined;
-      const updated = { ...user, firebaseUid }; records.set(id, updated); return updated;
-    },
-    createUser: async input => {
-      const user = { ...input, id: `new-${records.size}`, firebaseUid: null, createdAt: new Date() };
-      records.set(user.id, user); return user;
+    resolveFirebaseUser: async (firebaseUid, email, password) => {
+      const previousResolution = resolutionLock;
+      let releaseResolution!: () => void;
+      resolutionLock = new Promise<void>(resolve => { releaseResolution = resolve; });
+      await previousResolution;
+      try {
+        const linked = [...records.values()].find(user => user.firebaseUid === firebaseUid);
+        if (linked) return linked;
+        let user = [...records.values()].find(candidate => candidate.username === email);
+        if (!user) {
+          user = { id: `new-${records.size}`, username: email, password, firebaseUid: null, createdAt: new Date() };
+          records.set(user.id, user);
+        }
+        if (user.firebaseUid && user.firebaseUid !== firebaseUid) return undefined;
+        const updated = { ...user, firebaseUid };
+        records.set(user.id, updated);
+        return updated;
+      } finally {
+        releaseResolution();
+      }
     },
   };
   const app = express();
@@ -67,6 +84,13 @@ async function fixture() {
   if (!address || typeof address === "string") throw new Error("Test server did not open a port");
   return { url: `http://127.0.0.1:${address.port}`, records };
 }
+
+async function signIn(url: string, email: string) {
+  return fetch(`${url}/auth/firebase-session`, {
+    method: "POST", headers: { Authorization: `Bearer ${await token({ email })}` },
+  });
+}
+
 describe("Firebase /auth/me restoration", () => {
   it("verifies the requested developer UID, links the account and restores its Premium session on reload", async () => {
     const { url, records } = await fixture();
@@ -121,7 +145,7 @@ describe("Firebase /auth/me restoration", () => {
     } });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ username: "local-writer", firebaseUid: null, premium: null });
-    expect(records.size).toBe(1);
+    expect(records.size).toBe(2);
   });
   it("requires authentication rather than accepting a client-supplied UID", async () => {
     const { url } = await fixture();
@@ -134,5 +158,26 @@ describe("Firebase /auth/me restoration", () => {
     const response = await fetch(`${url}/auth/me`, { headers: { Authorization: `Bearer ${await token()}` } });
     expect(response.status).toBe(403);
     expect(records.get(original.id)?.firebaseUid).toBe("different-owner");
+  });
+  it("serializes concurrent first sign-ins and keeps the linked account when the verified email changes", async () => {
+    const { url, records } = await fixture();
+    const [first, concurrent] = await Promise.all([
+      signIn(url, "first-snapshot@example.test"),
+      signIn(url, "changed-snapshot@example.test"),
+    ]);
+    expect(first.status).toBe(200);
+    expect(concurrent.status).toBe(200);
+    const firstAccount = await first.json() as { id: string; firebaseUid: string };
+    const concurrentAccount = await concurrent.json() as { id: string; firebaseUid: string };
+    expect(concurrentAccount).toMatchObject({ id: firstAccount.id, firebaseUid: uid });
+
+    // A later token with a changed, verified email must restore the UID link,
+    // not attach the already-owned email account to this Firebase identity.
+    const changedEmail = await signIn(url, "claimed@example.test");
+    expect(changedEmail.status).toBe(200);
+    expect(await changedEmail.json()).toMatchObject({ id: firstAccount.id, firebaseUid: uid });
+    expect(records.get("other-firebase-account")?.firebaseUid).toBe("another-firebase-uid");
+    expect([...records.values()].filter(user => user.firebaseUid === uid)).toHaveLength(1);
+    expect(records.size).toBe(3);
   });
 });

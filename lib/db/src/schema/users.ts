@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 export const users = pgTable("users", {
@@ -8,7 +8,9 @@ export const users = pgTable("users", {
   firebaseUid: varchar("firebase_uid", { length: 128 }),
   password: text("password").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("users_firebase_uid_unique").on(table.firebaseUid).where(sql`${table.firebaseUid} IS NOT NULL`),
+]);
 
 export const insertUserSchema = z.object({
   username: z.string().min(1),

@@ -6,7 +6,7 @@ import type { VerifiedFirebaseUser } from "./firebaseAuth";
 import { isDeveloperUid } from "./developerAccess";
 
 export type AuthRepository = Pick<IStorage,
-  "getUserById" | "getUserByUsername" | "getUserByFirebaseUid" | "linkFirebaseUser" | "createUser">;
+  "getUserById" | "getUserByFirebaseUid" | "resolveFirebaseUser">;
 
 export class FirebaseAccountConflictError extends Error {}
 
@@ -14,18 +14,10 @@ export async function resolveFirebaseAccount(identity: VerifiedFirebaseUser, rep
   const linked = await repository.getUserByFirebaseUid(identity.uid);
   if (linked) return linked;
   // Email linking is only allowed after verifyFirebaseIdToken verifies email_verified.
-  let user = await repository.getUserByUsername(identity.email);
-  if (!user) {
-    const password = await bcrypt.hash(randomUUID(), 10);
-    try { user = await repository.createUser({ username: identity.email, password }); }
-    catch {
-      user = await repository.getUserByUsername(identity.email);
-      if (!user) throw new Error("Could not provision Firebase account");
-    }
-  }
-  const result = await repository.linkFirebaseUser(user.id, identity.uid);
-  if (!result) throw new FirebaseAccountConflictError("Account is already linked to a different Firebase identity");
-  return result;
+  const password = await bcrypt.hash(randomUUID(), 10);
+  const user = await repository.resolveFirebaseUser(identity.uid, identity.email, password);
+  if (!user) throw new FirebaseAccountConflictError("Account is already linked to a different Firebase identity");
+  return user;
 }
 
 export function authUserData(user: User, identity?: VerifiedFirebaseUser) {
