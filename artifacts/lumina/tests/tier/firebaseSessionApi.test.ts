@@ -610,4 +610,142 @@ describeIdentityDatabase("PostgreSQL identity ownership across API storage insta
       await adminPool.end();
     }
   });
+
+  it("rejects a link when a writer without the advisory lock claims the UID after the ownership check", async () => {
+    if (!identityTestDatabaseUrl) throw new Error("LUMINA_IDENTITY_TEST_DATABASE_URL is required");
+
+    const isolatedSchema = `lumina_uid_race_${randomUUID().replaceAll("-", "")}`;
+    const applicationName = `${isolatedSchema.slice(0, 40)}_link`;
+    const adminPool = new Pool({ connectionString: identityTestDatabaseUrl, max: 4 });
+    let linkPool: any;
+    let gateClient: any;
+    let schemaCreated = false;
+    let gateHeld = false;
+    let linkAttempt: Promise<User | undefined> | undefined;
+    let raceUid: string | undefined;
+
+    try {
+      await adminPool.query(`CREATE SCHEMA "${isolatedSchema}"`);
+      schemaCreated = true;
+      await adminPool.query(`
+        CREATE TABLE "${isolatedSchema}".users (
+          id varchar PRIMARY KEY,
+          username text NOT NULL UNIQUE,
+          firebase_uid varchar(128),
+          password text NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now()
+        )
+      `);
+      await adminPool.query(`
+        CREATE UNIQUE INDEX users_firebase_uid_unique
+        ON "${isolatedSchema}".users (firebase_uid)
+        WHERE firebase_uid IS NOT NULL
+      `);
+      await adminPool.query(`
+        CREATE FUNCTION "${isolatedSchema}".pause_link_update() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          IF NEW.id = 'linking-account' AND NEW.firebase_uid IS NOT NULL THEN
+            PERFORM pg_advisory_xact_lock(
+              hashtextextended('firebase-link-race-gate:' || NEW.firebase_uid, 0)
+            );
+          END IF;
+          RETURN NEW;
+        END;
+        $$
+      `);
+      await adminPool.query(`
+        CREATE TRIGGER pause_link_update
+        BEFORE UPDATE OF firebase_uid ON "${isolatedSchema}".users
+        FOR EACH ROW EXECUTE FUNCTION "${isolatedSchema}".pause_link_update()
+      `);
+      await adminPool.query(`
+        INSERT INTO "${isolatedSchema}".users (id, username, password, firebase_uid)
+        VALUES
+          ('linking-account', 'linking@example.test', 'original-linking-password', NULL),
+          ('established-account', 'established@example.test', 'original-owner-password', NULL)
+      `);
+
+      const options = `-c search_path=${isolatedSchema}`;
+      linkPool = new Pool({
+        connectionString: identityTestDatabaseUrl, options, application_name: applicationName, max: 1,
+      });
+      const storage = new DatabaseStorage(
+        drizzle(linkPool, { schema: { users } }) as ConstructorParameters<typeof DatabaseStorage>[0],
+      );
+      raceUid = `firebase-no-lock-${randomUUID()}`;
+      gateClient = await adminPool.connect();
+      await gateClient.query(
+        "SELECT pg_advisory_lock(hashtextextended('firebase-link-race-gate:' || $1, 0))",
+        [raceUid],
+      );
+      gateHeld = true;
+
+      // The trigger pauses the update only after linkFirebaseUser has passed its
+      // initial ownership check, allowing a non-cooperating writer to win.
+      linkAttempt = storage.linkFirebaseUser("linking-account", raceUid);
+      const deadline = Date.now() + 5000;
+      let waitingInTrigger = false;
+      while (Date.now() < deadline) {
+        const waiting = await adminPool.query(
+          `SELECT 1 FROM pg_stat_activity
+           WHERE application_name = $1 AND wait_event_type = 'Lock' AND wait_event = 'advisory'`,
+          [applicationName],
+        );
+        if (waiting.rowCount) {
+          waitingInTrigger = true;
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      if (!waitingInTrigger) throw new Error("Link update did not reach the test gate after checking UID ownership");
+
+      // This writer intentionally does not take the advisory lock.
+      const winningWrite = await adminPool.query(
+        `UPDATE "${isolatedSchema}".users SET firebase_uid = $1 WHERE id = 'established-account'`,
+        [raceUid],
+      );
+      expect(winningWrite.rowCount).toBe(1);
+
+      await gateClient.query(
+        "SELECT pg_advisory_unlock(hashtextextended('firebase-link-race-gate:' || $1, 0))",
+        [raceUid],
+      );
+      gateHeld = false;
+      expect(await linkAttempt).toBeUndefined();
+
+      const accounts = await adminPool.query(
+        `SELECT id, username, password, firebase_uid
+         FROM "${isolatedSchema}".users ORDER BY id`,
+      );
+      expect(accounts.rows).toEqual([
+        {
+          id: "established-account",
+          username: "established@example.test",
+          password: "original-owner-password",
+          firebase_uid: raceUid,
+        },
+        {
+          id: "linking-account",
+          username: "linking@example.test",
+          password: "original-linking-password",
+          firebase_uid: null,
+        },
+      ]);
+      expect(accounts.rows.filter((user: { firebase_uid: string | null }) => user.firebase_uid === raceUid))
+        .toHaveLength(1);
+    } finally {
+      if (gateHeld && gateClient) {
+        await gateClient.query(
+          "SELECT pg_advisory_unlock(hashtextextended('firebase-link-race-gate:' || $1, 0))",
+          [raceUid],
+        ).catch(() => undefined);
+      }
+      if (gateClient) gateClient.release();
+      await linkAttempt?.catch(() => undefined);
+      await linkPool?.end();
+      if (schemaCreated) await adminPool.query(`DROP SCHEMA "${isolatedSchema}" CASCADE`);
+      await adminPool.end();
+    }
+  });
 });
