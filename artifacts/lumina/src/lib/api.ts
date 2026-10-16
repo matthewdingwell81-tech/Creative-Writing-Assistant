@@ -7,6 +7,20 @@ export class SessionExpiredError extends Error {
   }
 }
 
+export class CoachRequestBlockedError extends Error {
+  constructor() {
+    super("Coach can’t help with that request. Please keep it within Lumina’s User Agreement.");
+    this.name = "CoachRequestBlockedError";
+  }
+}
+
+export class CoachSafetyUnavailableError extends Error {
+  constructor() {
+    super("Coach safety checks are temporarily unavailable. Your prompt was kept as a draft; please try again later.");
+    this.name = "CoachSafetyUnavailableError";
+  }
+}
+
 function dispatchSessionExpired() {
   window.dispatchEvent(new CustomEvent("lumina:session-expired"));
 }
@@ -200,7 +214,12 @@ export async function streamCoach(
     signal,
   });
 
-  if (!res.ok) throw new Error("Failed to connect to coach");
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(
+      typeof body?.error === "string" ? body.error : "Failed to connect to coach",
+    );
+  }
 
   const reader = res.body?.getReader();
   if (!reader) throw new Error("No response body");
@@ -221,9 +240,28 @@ export async function streamCoach(
         if (!line.startsWith("data: ")) continue;
         try {
           const event = JSON.parse(line.slice(6));
+          if (event.blocked) throw new CoachRequestBlockedError();
+          if (event.code === "COACH_SAFETY_UNAVAILABLE") {
+            throw new CoachSafetyUnavailableError();
+          }
+          if (event.error) {
+            throw new Error(
+              typeof event.error === "string"
+                ? event.error
+                : "Failed to connect to coach",
+            );
+          }
           if (event.content) onChunk(event.content);
           if (event.done) onDone();
-        } catch {}
+        } catch (error) {
+          if (
+            error instanceof CoachRequestBlockedError ||
+            error instanceof CoachSafetyUnavailableError ||
+            (error instanceof Error && error.name !== "SyntaxError")
+          ) {
+            throw error;
+          }
+        }
       }
     }
   } finally {
