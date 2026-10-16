@@ -305,4 +305,131 @@ describe("subscription refresh racing Firebase account restoration", () => {
       unlockRestore();
     }
   });
+
+  it("restores the account linked by subscription refresh when refresh wins the UID lock", async () => {
+    const records = new Map<string, User>([
+      ["billing-account", {
+        id: "billing-account", username: "billing@example.test", password: "test-password",
+        firebaseUid: null, createdAt: new Date("2022-01-01T00:00:00Z"),
+      }],
+      ["restored-account", {
+        id: "restored-account", username: "restored@example.test", password: "test-password",
+        firebaseUid: null, createdAt: new Date("2023-01-01T00:00:00Z"),
+      }],
+    ]);
+    const billingStates = new Map<string, { tier: "premium" | "free"; status: "active" | "none" }>([
+      ["billing-account", { tier: "premium", status: "active" }],
+      ["restored-account", { tier: "free", status: "none" }],
+    ]);
+    const otherAccountBillingBefore = structuredClone(billingStates.get("restored-account"));
+    let unlockRefreshLink!: () => void;
+    let refreshLinkAcquired!: () => void;
+    let restorationQueued!: () => void;
+    const refreshMayFinish = new Promise<void>(resolve => { unlockRefreshLink = resolve; });
+    const refreshHasLock = new Promise<void>(resolve => { refreshLinkAcquired = resolve; });
+    const restorationIsQueued = new Promise<void>(resolve => { restorationQueued = resolve; });
+    let lockQueue = Promise.resolve();
+    async function withUidLock<T>(operation: () => Promise<T>, onQueued?: () => void): Promise<T> {
+      const previous = lockQueue;
+      let release!: () => void;
+      lockQueue = new Promise<void>(resolve => { release = resolve; });
+      onQueued?.();
+      await previous;
+      try { return await operation(); }
+      finally { release(); }
+    }
+
+    const repository: AuthRepository = {
+      getUserById: async id => records.get(id),
+      getUserByFirebaseUid: async firebaseUid => {
+        return [...records.values()].find(user => user.firebaseUid === firebaseUid);
+      },
+      resolveFirebaseUser: (firebaseUid, email, password) => withUidLock(async () => {
+        const linked = [...records.values()].find(user => user.firebaseUid === firebaseUid);
+        if (linked) return linked;
+        const account = [...records.values()].find(user => user.username === email);
+        if (!account || (account.firebaseUid && account.firebaseUid !== firebaseUid)) return undefined;
+        const updated = { ...account, firebaseUid };
+        records.set(updated.id, updated);
+        return updated;
+      }, restorationQueued),
+    };
+    const linkFirebaseUser = vi.fn((id: string, firebaseUid: string) => withUidLock(async () => {
+      refreshLinkAcquired();
+      await refreshMayFinish;
+      const linked = [...records.values()].find(user => user.firebaseUid === firebaseUid);
+      if (linked && linked.id !== id) return undefined;
+      const account = records.get(id);
+      if (!account || (account.firebaseUid && account.firebaseUid !== firebaseUid)) return undefined;
+      const updated = { ...account, firebaseUid };
+      records.set(id, updated);
+      return updated;
+    }));
+    const verifyBillingToken = vi.fn(async () => ({
+      uid, email: "billing@example.test", emailVerified: true, displayName: null,
+    }));
+    const getUserById = vi.fn(async (id: string) => records.get(id));
+    const verifiedState = vi.fn(async (id: string) => ({
+      accountId: id,
+      ...structuredClone(billingStates.get(id)!),
+      expiresAt: null,
+      receipt: `test-receipt-${id}`,
+      firebaseSync: "not-linked" as const,
+      subscriptionId: null,
+      verifiedAt: 1_800_000_000_000,
+    }));
+    const app = express();
+    app.use(session({ secret: "isolated-session-test-secret", resave: false, saveUninitialized: false }));
+    app.use(express.json());
+    app.get("/test-session/:id", (req: any, res: any) => {
+      req.session.userId = req.params.id;
+      res.sendStatus(204);
+    });
+    app.use(createFirebaseSessionRouter(repository, value => verifyFirebaseIdToken(value, jwks)));
+    app.use(createBillingRouter({
+      getUserById,
+      linkFirebaseUser,
+      verifyFirebaseIdToken: verifyBillingToken,
+      verifiedState,
+    }));
+    const server: Server = await new Promise(resolve => {
+      const value = app.listen(0, "127.0.0.1", () => resolve(value));
+    });
+    servers.push(server);
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Test server did not open a port");
+    const url = `http://127.0.0.1:${address.port}`;
+    const sessionResponse = await fetch(`${url}/test-session/billing-account`);
+    const cookie = sessionResponse.headers.get("set-cookie")!.split(";")[0];
+
+    const refresh = fetch(`${url}/billing/subscription`, {
+      method: "POST",
+      headers: { Cookie: cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ firebaseIdToken: "isolated-billing-token" }),
+    });
+    try {
+      await refreshHasLock;
+      const restoration = fetch(`${url}/auth/me`, {
+        headers: { Authorization: `Bearer ${await token({ email: "restored@example.test" })}` },
+      });
+      await restorationIsQueued;
+      unlockRefreshLink();
+
+      const [refreshResponse, restorationResponse] = await Promise.all([refresh, restoration]);
+      expect(refreshResponse.status).toBe(200);
+      expect(await refreshResponse.json()).toMatchObject({ tier: "premium", status: "active" });
+      expect(restorationResponse.status).toBe(200);
+      expect(await restorationResponse.json()).toMatchObject({
+        id: "billing-account",
+        firebaseUid: uid,
+      });
+      expect(records.get("billing-account")?.firebaseUid).toBe(uid);
+      expect(records.get("restored-account")?.firebaseUid).toBeNull();
+      expect(verifiedState.mock.calls).toEqual([["billing-account"]]);
+      expect(billingStates.get("restored-account")).toEqual(otherAccountBillingBefore);
+      expect(linkFirebaseUser).toHaveBeenCalledOnce();
+    } finally {
+      unlockRefreshLink();
+    }
+  });
 });
