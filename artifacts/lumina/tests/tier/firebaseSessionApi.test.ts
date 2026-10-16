@@ -1,10 +1,11 @@
 // @vitest-environment node
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
 import type { Server } from "node:http";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import type {} from "../../../api-server/src/types/session";
 import { createFirebaseSessionRouter } from "../../../api-server/src/routes/firebase-session";
+import { createBillingRouter } from "../../../api-server/src/routes/billing";
 import { verifyFirebaseIdToken } from "../../../api-server/src/lib/firebaseAuth";
 import type { AuthRepository } from "../../../api-server/src/lib/firebaseSession";
 import { developerSubscription } from "../../../api-server/src/lib/subscriptions";
@@ -179,5 +180,129 @@ describe("Firebase /auth/me restoration", () => {
     expect(records.get("other-firebase-account")?.firebaseUid).toBe("another-firebase-uid");
     expect([...records.values()].filter(user => user.firebaseUid === uid)).toHaveLength(1);
     expect(records.size).toBe(3);
+  });
+});
+
+describe("subscription refresh racing Firebase account restoration", () => {
+  it("rejects the losing Lumina account without reading or changing its billing state", async () => {
+    const records = new Map<string, User>([
+      ["billing-account", {
+        id: "billing-account", username: "billing@example.test", password: "test-password",
+        firebaseUid: null, createdAt: new Date("2022-01-01T00:00:00Z"),
+      }],
+      ["restored-account", {
+        id: "restored-account", username: "restored@example.test", password: "test-password",
+        firebaseUid: null, createdAt: new Date("2023-01-01T00:00:00Z"),
+      }],
+    ]);
+    let unlockRestore!: () => void;
+    let restoreLockAcquired!: () => void;
+    let billingLinkAttempted!: () => void;
+    const restorationMayFinish = new Promise<void>(resolve => { unlockRestore = resolve; });
+    const restorationHasLock = new Promise<void>(resolve => { restoreLockAcquired = resolve; });
+    const billingHasAttemptedLink = new Promise<void>(resolve => { billingLinkAttempted = resolve; });
+    let lockQueue = Promise.resolve();
+    async function withUidLock<T>(operation: () => Promise<T>): Promise<T> {
+      const previous = lockQueue;
+      let release!: () => void;
+      lockQueue = new Promise<void>(resolve => { release = resolve; });
+      await previous;
+      try { return await operation(); }
+      finally { release(); }
+    }
+
+    const repository: AuthRepository = {
+      getUserById: async id => records.get(id),
+      getUserByFirebaseUid: async firebaseUid => {
+        return [...records.values()].find(user => user.firebaseUid === firebaseUid);
+      },
+      resolveFirebaseUser: (firebaseUid, email, password) => withUidLock(async () => {
+        restoreLockAcquired();
+        await restorationMayFinish;
+        const linked = [...records.values()].find(user => user.firebaseUid === firebaseUid);
+        if (linked) return linked;
+        const account = [...records.values()].find(user => user.username === email);
+        if (!account || (account.firebaseUid && account.firebaseUid !== firebaseUid)) return undefined;
+        const updated = { ...account, firebaseUid };
+        records.set(updated.id, updated);
+        return updated;
+      }),
+    };
+    const linkFirebaseUser = vi.fn((id: string, firebaseUid: string) => {
+      billingLinkAttempted();
+      return withUidLock(async () => {
+        const linked = [...records.values()].find(user => user.firebaseUid === firebaseUid);
+        if (linked && linked.id !== id) return undefined;
+        const account = records.get(id);
+        if (!account || (account.firebaseUid && account.firebaseUid !== firebaseUid)) return undefined;
+        const updated = { ...account, firebaseUid };
+        records.set(id, updated);
+        return updated;
+      });
+    });
+    const verifyBillingToken = vi.fn(async () => ({
+      uid, email: "billing@example.test", emailVerified: true, displayName: null,
+    }));
+    const getUserById = vi.fn(async (id: string) => records.get(id));
+    const verifiedState = vi.fn(async () => {
+      throw new Error("The losing account must not have its subscription state checked.");
+    });
+    const billingRouter = createBillingRouter({
+      getUserById,
+      linkFirebaseUser,
+      verifyFirebaseIdToken: verifyBillingToken,
+      verifiedState,
+    });
+    const app = express();
+    app.use(session({ secret: "isolated-session-test-secret", resave: false, saveUninitialized: false }));
+    app.use(express.json());
+    app.get("/test-session/:id", (req: any, res: any) => {
+      req.session.userId = req.params.id;
+      res.sendStatus(204);
+    });
+    app.use(createFirebaseSessionRouter(repository, value => verifyFirebaseIdToken(value, jwks)));
+    app.use(billingRouter);
+    const server: Server = await new Promise(resolve => {
+      const value = app.listen(0, "127.0.0.1", () => resolve(value));
+    });
+    servers.push(server);
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Test server did not open a port");
+    const url = `http://127.0.0.1:${address.port}`;
+    const sessionResponse = await fetch(`${url}/test-session/billing-account`);
+    const cookie = sessionResponse.headers.get("set-cookie")!.split(";")[0];
+
+    const restoration = fetch(`${url}/auth/me`, {
+      headers: { Authorization: `Bearer ${await token({ email: "restored@example.test" })}` },
+    });
+    try {
+      await Promise.race([
+        restorationHasLock,
+        restoration.then(async response => {
+          throw new Error(`Firebase restoration completed before taking the UID lock: ${response.status} ${await response.text()}`);
+        }),
+      ]);
+      const refresh = fetch(`${url}/billing/subscription`, {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ firebaseIdToken: "isolated-billing-token" }),
+      });
+      await billingHasAttemptedLink;
+      unlockRestore();
+
+      const [restorationResponse, refreshResponse] = await Promise.all([restoration, refresh]);
+      expect(restorationResponse.status).toBe(200);
+      expect(refreshResponse.status).toBe(403);
+      expect(await refreshResponse.json()).toMatchObject({
+        error: "Account is already linked to a different Firebase identity.",
+      });
+      expect(records.get("restored-account")?.firebaseUid).toBe(uid);
+      expect(records.get("billing-account")?.firebaseUid).toBeNull();
+      expect(linkFirebaseUser).toHaveBeenCalledOnce();
+      expect(verifiedState).not.toHaveBeenCalled();
+      expect(getUserById).toHaveBeenCalledOnce();
+    } finally {
+      unlockRestore();
+    }
   });
 });
