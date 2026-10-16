@@ -60,8 +60,10 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  constructor(private readonly database: typeof db = db) {}
+
   async getUserById(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+    const [user] = await this.database.select().from(users).where(eq(users.id, id));
     return user;
   }
 
@@ -70,13 +72,13 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
   async getUserByFirebaseUid(uid: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.firebaseUid, uid));
+    const [user] = await this.database.select().from(users).where(eq(users.firebaseUid, uid));
     return user;
   }
 
   async resolveFirebaseUser(uid: string, email: string, password: string): Promise<User | undefined> {
     try {
-      return await db.transaction(async (tx) => {
+      return await this.database.transaction(async (tx) => {
         // Serialize first-time account resolution for this verified identity.
         await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${uid}, 0))`);
 
@@ -109,7 +111,7 @@ export class DatabaseStorage implements IStorage {
       // The unique index is the final guard if a writer that does not take our
       // advisory lock races this transaction. Restore the established account.
       if ((error as { code?: unknown })?.code === "23505") {
-        const [linked] = await db.select().from(users).where(eq(users.firebaseUid, uid)).limit(1);
+        const [linked] = await this.database.select().from(users).where(eq(users.firebaseUid, uid)).limit(1);
         if (linked) return linked;
       }
       throw error;
@@ -118,7 +120,7 @@ export class DatabaseStorage implements IStorage {
 
   async linkFirebaseUser(id: string, uid: string): Promise<User | undefined> {
     try {
-      return await db.transaction(async (tx) => {
+      return await this.database.transaction(async (tx) => {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${uid}, 0))`);
         const [linked] = await tx.select().from(users).where(eq(users.firebaseUid, uid)).limit(1);
         if (linked && linked.id !== id) return undefined;
@@ -132,7 +134,7 @@ export class DatabaseStorage implements IStorage {
       // Keep a raced link conflict on the billing path as a rejected link, not
       // an unhandled database error or an overwrite of the existing identity.
       if ((error as { code?: unknown })?.code === "23505") {
-        const [linked] = await db.select().from(users).where(eq(users.firebaseUid, uid)).limit(1);
+        const [linked] = await this.database.select().from(users).where(eq(users.firebaseUid, uid)).limit(1);
         return linked?.id === id ? linked : undefined;
       }
       throw error;

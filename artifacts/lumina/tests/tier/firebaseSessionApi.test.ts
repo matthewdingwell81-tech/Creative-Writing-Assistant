@@ -1,13 +1,16 @@
 // @vitest-environment node
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
+import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
+import { users } from "../../../../lib/db/src/schema/users";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import type {} from "../../../api-server/src/types/session";
 import { createFirebaseSessionRouter } from "../../../api-server/src/routes/firebase-session";
 import { createBillingRouter } from "../../../api-server/src/routes/billing";
 import { verifyFirebaseIdToken } from "../../../api-server/src/lib/firebaseAuth";
 import type { AuthRepository } from "../../../api-server/src/lib/firebaseSession";
+import { DatabaseStorage } from "../../../api-server/src/storage";
 import { developerSubscription } from "../../../api-server/src/lib/subscriptions";
 
 // Exercise the real HTTP router/session middleware and signature verifier with
@@ -15,7 +18,11 @@ import { developerSubscription } from "../../../api-server/src/lib/subscriptions
 const requireApi = createRequire(new URL("../../../api-server/package.json", import.meta.url));
 const express = requireApi("express");
 const session = requireApi("express-session");
+const { Pool } = requireApi("pg");
+const { drizzle } = requireApi("drizzle-orm/node-postgres");
 const uid = "b609ec1f-1c63-49e7-8f84-2cee1ab6f311";
+const identityTestDatabaseUrl = process.env.LUMINA_IDENTITY_TEST_DATABASE_URL;
+const describeIdentityDatabase = identityTestDatabaseUrl ? describe : describe.skip;
 type User = NonNullable<Awaited<ReturnType<AuthRepository["getUserById"]>>>;
 let keys: Awaited<ReturnType<typeof generateKeyPair>>;
 let jwks: ReturnType<typeof createLocalJWKSet>;
@@ -29,9 +36,9 @@ afterEach(async () => {
     server.close(error => error ? reject(error) : resolve()); server.closeAllConnections();
   })));
 });
-async function token(overrides: Record<string, unknown> = {}) {
+async function token(overrides: Record<string, unknown> = {}, subject = uid) {
   return new SignJWT({ email: "developer@example.test", email_verified: true, ...overrides })
-    .setSubject(uid).setAudience("lumina-app-22fd7")
+    .setSubject(subject).setAudience("lumina-app-22fd7")
     .setIssuer("https://securetoken.google.com/lumina-app-22fd7")
     .setIssuedAt().setExpirationTime("1h")
     .setProtectedHeader({ alg: "RS256" }).sign(keys.privateKey);
@@ -430,6 +437,177 @@ describe("subscription refresh racing Firebase account restoration", () => {
       expect(linkFirebaseUser).toHaveBeenCalledOnce();
     } finally {
       unlockRefreshLink();
+    }
+  });
+});
+
+describeIdentityDatabase("PostgreSQL identity ownership across API storage instances", () => {
+  it("gives one account the UID and rejects the competing subscription link", async () => {
+    if (!identityTestDatabaseUrl) throw new Error("LUMINA_IDENTITY_TEST_DATABASE_URL is required");
+
+    const isolatedSchema = `lumina_identity_${randomUUID().replaceAll("-", "")}`;
+    const restoreApplicationName = `${isolatedSchema.slice(0, 40)}_restore`;
+    const billingApplicationName = `${isolatedSchema.slice(0, 40)}_billing`;
+    const adminPool = new Pool({ connectionString: identityTestDatabaseUrl, max: 3 });
+    let restorePool: any;
+    let billingPool: any;
+    let schemaCreated = false;
+    let advisoryLockClient: any;
+
+    try {
+      await adminPool.query(`CREATE SCHEMA "${isolatedSchema}"`);
+      schemaCreated = true;
+      await adminPool.query(`
+        CREATE TABLE "${isolatedSchema}".users (
+          id varchar PRIMARY KEY,
+          username text NOT NULL UNIQUE,
+          firebase_uid varchar(128),
+          password text NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now()
+        )
+      `);
+      await adminPool.query(`
+        CREATE UNIQUE INDEX users_firebase_uid_unique
+        ON "${isolatedSchema}".users (firebase_uid)
+        WHERE firebase_uid IS NOT NULL
+      `);
+
+      const options = `-c search_path=${isolatedSchema}`;
+      restorePool = new Pool({
+        connectionString: identityTestDatabaseUrl, options, application_name: restoreApplicationName, max: 2,
+      });
+      billingPool = new Pool({
+        connectionString: identityTestDatabaseUrl, options, application_name: billingApplicationName, max: 2,
+      });
+      const databaseSchema = { users };
+      const restoreStorage = new DatabaseStorage(
+        drizzle(restorePool, { schema: databaseSchema }) as ConstructorParameters<typeof DatabaseStorage>[0],
+      );
+      const billingStorage = new DatabaseStorage(
+        drizzle(billingPool, { schema: databaseSchema }) as ConstructorParameters<typeof DatabaseStorage>[0],
+      );
+      const raceUid = `firebase-race-${randomUUID()}`;
+
+      await adminPool.query(`
+        INSERT INTO "${isolatedSchema}".users (id, username, password, firebase_uid)
+        VALUES
+          ('restored-account', 'restored@example.test', 'test-password', NULL),
+          ('billing-account', 'billing@example.test', 'test-password', NULL),
+          ('prelinked-account', 'prelinked@example.test', 'test-password', 'pre-existing-google-uid')
+      `);
+
+      const restoreApp = express();
+      restoreApp.use(session({ secret: "isolated-session-test-secret", resave: false, saveUninitialized: false }));
+      restoreApp.use(createFirebaseSessionRouter(
+        restoreStorage as AuthRepository,
+        value => verifyFirebaseIdToken(value, jwks),
+      ));
+
+      const verifiedState = vi.fn(async () => {
+        throw new Error("A losing subscription-link request must not read billing state.");
+      });
+      const verifyBillingToken = vi.fn(async () => ({
+        uid: raceUid, email: "billing@example.test", emailVerified: true, displayName: null,
+      }));
+      const billingApp = express();
+      billingApp.use(session({ secret: "isolated-session-test-secret", resave: false, saveUninitialized: false }));
+      billingApp.use(express.json());
+      billingApp.get("/test-session/:id", (req: any, res: any) => {
+        req.session.userId = req.params.id;
+        res.sendStatus(204);
+      });
+      billingApp.use(createBillingRouter({
+        getUserById: billingStorage.getUserById.bind(billingStorage),
+        linkFirebaseUser: billingStorage.linkFirebaseUser.bind(billingStorage),
+        verifyFirebaseIdToken: verifyBillingToken,
+        verifiedState,
+      }));
+
+      const restoreServer: Server = await new Promise(resolve => {
+        const value = restoreApp.listen(0, "127.0.0.1", () => resolve(value));
+      });
+      const billingServer: Server = await new Promise(resolve => {
+        const value = billingApp.listen(0, "127.0.0.1", () => resolve(value));
+      });
+      servers.push(restoreServer, billingServer);
+      const restoreAddress = restoreServer.address();
+      const billingAddress = billingServer.address();
+      if (!restoreAddress || typeof restoreAddress === "string" ||
+          !billingAddress || typeof billingAddress === "string") {
+        throw new Error("Test servers did not open ports");
+      }
+      const restoreUrl = `http://127.0.0.1:${restoreAddress.port}`;
+      const billingUrl = `http://127.0.0.1:${billingAddress.port}`;
+      const sessionResponse = await fetch(`${billingUrl}/test-session/billing-account`);
+      const cookie = sessionResponse.headers.get("set-cookie")!.split(";")[0];
+
+      // Hold the UID lock while each independent API storage instance reaches
+      // PostgreSQL. Waiting for the restore transaction first makes the losing
+      // billing request deterministic instead of depending on scheduler timing.
+      advisoryLockClient = await adminPool.connect();
+      await advisoryLockClient.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [raceUid]);
+      const restoration = fetch(`${restoreUrl}/auth/me`, {
+        headers: { Authorization: `Bearer ${await token({ email: "restored@example.test" }, raceUid)}` },
+      });
+      const waitForLockWait = async (applicationName: string) => {
+        const deadline = Date.now() + 5000;
+        while (Date.now() < deadline) {
+          const waiting = await adminPool.query(
+            `SELECT 1 FROM pg_stat_activity
+             WHERE application_name = $1 AND wait_event_type = 'Lock'
+               AND query ILIKE '%pg_advisory_xact_lock%'`,
+            [applicationName],
+          );
+          if (waiting.rowCount) return;
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        throw new Error(`Storage instance ${applicationName} did not wait for the PostgreSQL UID lock`);
+      };
+
+      let lockHeld = true;
+      try {
+        await waitForLockWait(restoreApplicationName);
+        const refresh = fetch(`${billingUrl}/billing/subscription`, {
+          method: "POST",
+          headers: { Cookie: cookie, "Content-Type": "application/json" },
+          body: JSON.stringify({ firebaseIdToken: "locally-verified-test-token" }),
+        });
+        await waitForLockWait(billingApplicationName);
+        await advisoryLockClient.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [raceUid]);
+        lockHeld = false;
+
+        const [restoreResponse, billingResponse] = await Promise.all([restoration, refresh]);
+        expect(restoreResponse.status).toBe(200);
+        expect(await restoreResponse.json()).toMatchObject({ id: "restored-account", firebaseUid: raceUid });
+        expect(billingResponse.status).toBe(403);
+        expect(await billingResponse.json()).toMatchObject({
+          error: "Account is already linked to a different Firebase identity.",
+        });
+
+        const ownership = await adminPool.query(
+          `SELECT id, firebase_uid FROM "${isolatedSchema}".users ORDER BY id`,
+        );
+        expect(ownership.rows).toEqual([
+          { id: "billing-account", firebase_uid: null },
+          { id: "prelinked-account", firebase_uid: "pre-existing-google-uid" },
+          { id: "restored-account", firebase_uid: raceUid },
+        ]);
+        expect(ownership.rows.filter((user: { firebase_uid: string | null }) => user.firebase_uid === raceUid))
+          .toHaveLength(1);
+        expect(verifyBillingToken).toHaveBeenCalledOnce();
+        expect(verifiedState).not.toHaveBeenCalled();
+      } finally {
+        if (lockHeld) {
+          await advisoryLockClient.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [raceUid]);
+        }
+        advisoryLockClient.release();
+        advisoryLockClient = undefined;
+      }
+    } finally {
+      advisoryLockClient?.release();
+      await Promise.all([restorePool?.end(), billingPool?.end()].filter(Boolean));
+      if (schemaCreated) await adminPool.query(`DROP SCHEMA "${isolatedSchema}" CASCADE`);
+      await adminPool.end();
     }
   });
 });
