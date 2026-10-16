@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, Crown } from "lucide-react";
+import { ArrowLeft, Crown, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -48,6 +48,20 @@ export default function SettingsPage() {
             </div>
           )}
           <PurchaseActions upgradeLabel="Upgrade to Premium" testIdPrefix="settings" />
+        </section>
+        <section className="mt-6 rounded-xl border border-border bg-card p-6" aria-labelledby="legal-heading" data-testid="settings-legal">
+          <h2 id="legal-heading" className="flex items-center gap-2 text-xl font-semibold">
+            <FileText className="h-5 w-5 text-primary" aria-hidden="true" />
+            Legal
+          </h2>
+          <nav aria-label="Legal documents" className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+            <Link href="/legal#privacy-statement" className="inline-flex min-h-11 items-center text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="settings-link-privacy">
+              Privacy Statement
+            </Link>
+            <Link href="/legal#user-agreement" className="inline-flex min-h-11 items-center text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="settings-link-agreement">
+              User Agreement
+            </Link>
+          </nav>
         </section>
       </div>
     </main>

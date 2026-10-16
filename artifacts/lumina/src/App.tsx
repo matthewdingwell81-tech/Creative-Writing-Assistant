@@ -9,6 +9,7 @@ import Home from "@/pages/Home";
 import AuthPage from "@/pages/AuthPage";
 import Upgrade from "@/pages/Upgrade";
 import SettingsPage from "@/pages/SettingsPage";
+import LegalPage from "@/pages/LegalPage";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { setSessionExpired } from "@/lib/sessionState";
@@ -47,6 +48,9 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/legal">
+        <LegalPage />
+      </Route>
       <Route path="/auth">
         {user ? <Redirect to="/" /> : <AuthPage auth={auth} />}
       </Route>

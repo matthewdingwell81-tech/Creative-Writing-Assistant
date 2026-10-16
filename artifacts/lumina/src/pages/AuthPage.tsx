@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { consumeSessionExpired } from "@/lib/sessionState";
 import { FaGoogle } from "react-icons/fa";
+import { Link } from "wouter";
 
 interface AuthPageProps {
   auth: UseAuthResult;
@@ -217,6 +218,14 @@ export default function AuthPage({ auth }: AuthPageProps) {
             </button>
           </p>
         </div>
+        <nav aria-label="Legal documents" className="mt-5 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm">
+          <Link href="/legal#privacy-statement" className="inline-flex min-h-11 items-center text-slate-400 underline-offset-4 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+            Privacy Statement
+          </Link>
+          <Link href="/legal#user-agreement" className="inline-flex min-h-11 items-center text-slate-400 underline-offset-4 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+            User Agreement
+          </Link>
+        </nav>
       </div>
     </div>
   );
