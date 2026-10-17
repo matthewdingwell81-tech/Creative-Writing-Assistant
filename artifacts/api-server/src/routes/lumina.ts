@@ -19,6 +19,7 @@ import {
   htmlToGoogleDocsRequests,
 } from "../googleDocs";
 import { createCoachHandler } from "./coach";
+import { createIdeasHandler, createSuggestionsHandler } from "./writing-assistance";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -351,105 +352,11 @@ router.delete("/documents/:id", requireAuth, async (req: Request, res: Response)
 
 // === AI Suggestions ===
 
-router.post("/suggestions", requireAuth, async (req: Request, res: Response) => {
-  const { text, documentType = "fiction" } = req.body;
-  if (!text || text.trim().length < 10) {
-    res.json({ suggestions: [] });
-    return;
-  }
-
-  const systemPrompt = `You are a writing assistant analyzing text in real-time. The user is writing a ${documentType} document.
-
-Analyze the provided text and return a JSON array of suggestions. Each suggestion should have:
-- "type": one of "grammar", "vocabulary", "style", "pacing", "story", "tone"
-- "severity": one of "info", "warning", "error"
-- "title": a short title (3-6 words)
-- "description": a 1-2 sentence explanation of the issue or opportunity
-- "original": the exact text fragment being referenced (if applicable, otherwise null)
-- "alternatives": an array of replacement strings (1-3 options, if applicable, otherwise empty array)
-
-CRITICAL RULES for the "original" field:
-- Each suggestion MUST target exactly ONE contiguous word or short phrase (1-6 words) from the text.
-- The "original" field MUST be an EXACT copy of the text as it appears in the document.
-- If there are multiple spelling errors, return a SEPARATE suggestion object for EACH individual misspelled word.
-- Never use null for "original" when there is a specific word or phrase to reference.
-
-Focus on:
-1. Grammar and spelling corrections (one suggestion per individual misspelled word)
-2. Vocabulary enhancements (thesaurus-style suggestions for overused or weak words)
-3. Style improvements (sentence structure, flow, readability)
-4. For fiction: pacing alerts, tone consistency, story arc suggestions, chapter structure advice
-5. Positive reinforcement for things done well
-
-Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JSON array, no markdown.`;
-
-  try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: text },
-      ],
-      max_tokens: 2048,
-    });
-
-    const content = response.choices[0]?.message?.content || "[]";
-    let suggestions;
-    try {
-      suggestions = JSON.parse(content);
-    } catch {
-      const match = content.match(/\[[\s\S]*\]/);
-      suggestions = match ? JSON.parse(match[0]) : [];
-    }
-
-    res.json({ suggestions });
-  } catch (error: any) {
-    req.log.error({ err: error }, "AI suggestion error");
-    res.status(500).json({ error: "Failed to generate suggestions" });
-  }
-});
+router.post("/suggestions", requireAuth, createSuggestionsHandler(openai));
 
 // === AI Ideas (streaming) ===
 
-router.post("/ideas", requireAuth, async (req: Request, res: Response) => {
-  const { text, prompt: userPrompt, documentType = "fiction" } = req.body;
-
-  const systemPrompt = `You are a creative writing assistant helping with a ${documentType} document. The user will provide their current text and a specific request. Respond helpfully and creatively. Keep responses concise (2-4 paragraphs max).`;
-
-  try {
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-
-    const stream = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `Here is my current text:\n\n${text || "(empty document)"}\n\nMy request: ${userPrompt}` },
-      ],
-      stream: true,
-      max_tokens: 1024,
-    });
-
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || "";
-      if (content) {
-        res.write(`data: ${JSON.stringify({ content })}\n\n`);
-      }
-    }
-
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-    res.end();
-  } catch (error: any) {
-    req.log.error({ err: error }, "AI ideas error");
-    if (res.headersSent) {
-      res.write(`data: ${JSON.stringify({ error: "Failed to generate ideas" })}\n\n`);
-      res.end();
-    } else {
-      res.status(500).json({ error: "Failed to generate ideas" });
-    }
-  }
-});
+router.post("/ideas", requireAuth, createIdeasHandler(openai));
 
 // === Ideas Scratchpad CRUD ===
 

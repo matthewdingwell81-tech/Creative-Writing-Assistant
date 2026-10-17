@@ -21,6 +21,20 @@ export class CoachSafetyUnavailableError extends Error {
   }
 }
 
+export class WritingRequestBlockedError extends Error {
+  constructor(message = "Lumina can’t help with that request. Please keep it within Lumina’s User Agreement.") {
+    super(message);
+    this.name = "WritingRequestBlockedError";
+  }
+}
+
+export class WritingSafetyUnavailableError extends Error {
+  constructor(message = "Safety checks are temporarily unavailable. Your prompt was kept; please try again later.") {
+    super(message);
+    this.name = "WritingSafetyUnavailableError";
+  }
+}
+
 function dispatchSessionExpired() {
   window.dispatchEvent(new CustomEvent("lumina:session-expired"));
 }
@@ -119,7 +133,16 @@ export async function fetchSuggestions(text: string, documentType: string = "fic
     body: JSON.stringify({ text, documentType }),
     signal,
   });
-  if (!res.ok) throw new Error("Failed to fetch suggestions");
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    if (body?.code === "AI_REQUEST_BLOCKED") {
+      throw new WritingRequestBlockedError(body.error);
+    }
+    if (body?.code === "AI_SAFETY_UNAVAILABLE") {
+      throw new WritingSafetyUnavailableError(body.error);
+    }
+    throw new Error(typeof body?.error === "string" ? body.error : "Failed to fetch suggestions");
+  }
   return res.json();
 }
 
@@ -271,7 +294,16 @@ export async function streamIdeas(
     body: JSON.stringify({ text, prompt, documentType }),
   });
 
-  if (!res.ok) throw new Error("Failed to generate ideas");
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    if (body?.code === "AI_REQUEST_BLOCKED") {
+      throw new WritingRequestBlockedError(body.error);
+    }
+    if (body?.code === "AI_SAFETY_UNAVAILABLE") {
+      throw new WritingSafetyUnavailableError(body.error);
+    }
+    throw new Error(typeof body?.error === "string" ? body.error : "Failed to generate ideas");
+  }
 
   const reader = res.body?.getReader();
   if (!reader) throw new Error("No response body");
@@ -279,21 +311,35 @@ export async function streamIdeas(
   const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
 
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      try {
-        const event = JSON.parse(line.slice(6));
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        let event;
+        try {
+          event = JSON.parse(line.slice(6));
+        } catch {
+          continue;
+        }
+        if (event.blocked || event.code === "AI_REQUEST_BLOCKED") {
+          throw new WritingRequestBlockedError(event.message);
+        }
+        if (event.code === "AI_SAFETY_UNAVAILABLE") {
+          throw new WritingSafetyUnavailableError(event.error);
+        }
+        if (event.error) throw new Error(typeof event.error === "string" ? event.error : "Failed to generate ideas");
         if (event.content) onChunk(event.content);
         if (event.done) onDone();
-      } catch {}
+      }
     }
+  } finally {
+    reader.cancel();
   }
 }

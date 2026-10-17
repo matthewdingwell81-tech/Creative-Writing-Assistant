@@ -1,5 +1,9 @@
 import { useState, useRef, useCallback } from "react";
-import { fetchSuggestions } from "@/lib/api";
+import {
+  fetchSuggestions,
+  WritingRequestBlockedError,
+  WritingSafetyUnavailableError,
+} from "@/lib/api";
 
 export type SuggestionAnalysisMode = "automatic" | "manual";
 
@@ -67,6 +71,7 @@ export function useSuggestions() {
   const [savedSuggestions, setSavedSuggestions] = useState<Suggestion[]>([]);
   const [changeHistory, setChangeHistory] = useState<ChangeHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [analysisMessage, setAnalysisMessage] = useState("");
   const [pendingSuggestions, setPendingSuggestions] = useState<Suggestion[] | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTextRef = useRef("");
@@ -98,6 +103,7 @@ export function useSuggestions() {
     abortRef.current = controller;
 
     setLoading(true);
+    setAnalysisMessage("");
     try {
       const result = await fetchSuggestions(plainText, documentType, controller.signal);
       if (controller.signal.aborted || requestVersion !== requestVersionRef.current) return;
@@ -112,6 +118,13 @@ export function useSuggestions() {
       }
     } catch (e: any) {
       if (e?.name === "AbortError") return;
+      if (requestVersion === requestVersionRef.current) {
+        setAnalysisMessage(
+          e instanceof WritingRequestBlockedError || e instanceof WritingSafetyUnavailableError
+            ? e.message
+            : "Suggestions could not be generated. Please try again.",
+        );
+      }
     } finally {
       if (!controller.signal.aborted && requestVersion === requestVersionRef.current) {
         setLoading(false);
@@ -230,6 +243,7 @@ export function useSuggestions() {
     savedCount: savedSuggestions.length,
     changeHistory,
     loading,
+    analysisMessage,
     analysisMode,
     hasSuggestionUpdate: pendingSuggestions !== null,
     pendingSuggestionCount: pendingSuggestions?.length ?? 0,

@@ -14,7 +14,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { streamIdeas, streamCoach, CoachRequestBlockedError, CoachSafetyUnavailableError } from '@/lib/api';
+import {
+  streamIdeas, streamCoach, CoachRequestBlockedError, CoachSafetyUnavailableError,
+  WritingRequestBlockedError, WritingSafetyUnavailableError,
+} from '@/lib/api';
 import { useCoachHistory } from '@/hooks/useCoachHistory';
 import { COACH_RETENTION_LABEL, type CoachMessage } from '@/services/coachHistory';
 import type { Suggestion, SuggestionAnalysisMode, ChangeHistoryEntry } from '@/hooks/useSuggestions';
@@ -40,6 +43,7 @@ interface SuggestionsSidebarProps {
   savedCount: number;
   changeHistory: ChangeHistoryEntry[];
   loading: boolean;
+  analysisMessage?: string;
   hasSuggestionUpdate: boolean;
   pendingSuggestionCount: number;
   onShowLatestSuggestions: () => void;
@@ -219,7 +223,7 @@ const STARTER_PROMPTS = [
 ];
 
 export default function SuggestionsSidebar({
-  suggestions, savedSuggestions, savedCount, changeHistory, loading, onApplySuggestion,
+  suggestions, savedSuggestions, savedCount, changeHistory, loading, analysisMessage, onApplySuggestion,
   onDismiss, onSave, onRemoveSaved, onClearHistory, documentContent, documentType, selectedText,
   externalIdeaPrompt, onExternalIdeaHandled, onScrollToSuggestion, onInsertText,
   hasSuggestionUpdate, pendingSuggestionCount, onShowLatestSuggestions,
@@ -326,8 +330,10 @@ export default function SuggestionsSidebar({
         (chunk) => setIdeaResponse(prev => prev + chunk),
         () => setIdeaLoading(false)
       );
-    } catch {
-      setIdeaResponse('Failed to generate ideas. Please try again.');
+    } catch (error) {
+      setIdeaResponse(error instanceof WritingRequestBlockedError || error instanceof WritingSafetyUnavailableError
+        ? error.message
+        : 'Failed to generate ideas. Please try again.');
       setIdeaLoading(false);
     }
   };
@@ -341,8 +347,10 @@ export default function SuggestionsSidebar({
         (chunk) => setIdeaResponse(prev => prev + chunk),
         () => { setIdeaLoading(false); onExternalIdeaHandled?.(); }
       );
-    } catch {
-      setIdeaResponse('Failed to generate ideas. Please try again.');
+    } catch (error) {
+      setIdeaResponse(error instanceof WritingRequestBlockedError || error instanceof WritingSafetyUnavailableError
+        ? error.message
+        : 'Failed to generate ideas. Please try again.');
       setIdeaLoading(false);
       onExternalIdeaHandled?.();
     }
@@ -545,6 +553,11 @@ export default function SuggestionsSidebar({
             `${suggestions.length} suggestion${suggestions.length !== 1 ? 's' : ''} found`
           )}
         </p>
+        {analysisMessage && (
+          <p className="text-xs text-destructive mt-2" role="alert" data-testid="suggestion-analysis-message">
+            {analysisMessage}
+          </p>
+        )}
         {hasSuggestionUpdate && (
           <Button
             size="sm"

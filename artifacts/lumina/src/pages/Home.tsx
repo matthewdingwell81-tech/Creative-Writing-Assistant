@@ -219,7 +219,7 @@ export default function Home() {
 
   const {
     suggestions, savedSuggestions, savedCount, changeHistory, loading: suggestionsLoading,
-    analysisMode, hasSuggestionUpdate, pendingSuggestionCount, requestSuggestions, analyzeSuggestions,
+    analysisMode, analysisMessage, hasSuggestionUpdate, pendingSuggestionCount, requestSuggestions, analyzeSuggestions,
     setAnalysisMode, showLatestSuggestions, cancelPending, dismissSuggestion, applySuggestionById,
     saveSuggestion, removeSaved, clearHistory
   } = useSuggestions();
@@ -1387,6 +1387,7 @@ export default function Home() {
                     savedCount={savedCount}
                     changeHistory={changeHistory}
                     loading={suggestionsLoading}
+                    analysisMessage={analysisMessage}
                     analysisMode={analysisMode}
                     onAnalysisModeChange={handleAnalysisModeChange}
                     onAnalyzeWriting={() => analyzeSuggestions(content, documentType)}
@@ -1421,6 +1422,7 @@ export default function Home() {
                 savedCount={savedCount}
                 changeHistory={changeHistory}
                 loading={suggestionsLoading}
+                analysisMessage={analysisMessage}
                 analysisMode={analysisMode}
                 onAnalysisModeChange={handleAnalysisModeChange}
                 onAnalyzeWriting={() => analyzeSuggestions(content, documentType)}
