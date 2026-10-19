@@ -26,6 +26,7 @@ import type {
   CoachHistorySnapshot,
   HealthStatus,
   ListSafetyFlagsParams,
+  PendingSafetyFlagCount,
   PlanningInput,
   PlanningListResponse,
   PlanningOrderInput,
@@ -1113,6 +1114,83 @@ export function useListSafetyFlags<TData = Awaited<ReturnType<typeof listSafetyF
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListSafetyFlagsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCountPendingSafetyFlagsUrl = () => {
+
+
+
+
+  return `/api/admin/safety-flags/count`
+}
+
+/**
+ * @summary Count pending safety flags for developer administrators
+ */
+export const countPendingSafetyFlags = async ( options?: RequestInit): Promise<PendingSafetyFlagCount> => {
+
+  return customFetch<PendingSafetyFlagCount>(getCountPendingSafetyFlagsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getCountPendingSafetyFlagsQueryKey = () => {
+    return [
+    `/api/admin/safety-flags/count`
+    ] as const;
+    }
+
+
+export const getCountPendingSafetyFlagsQueryOptions = <TData = Awaited<ReturnType<typeof countPendingSafetyFlags>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof countPendingSafetyFlags>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getCountPendingSafetyFlagsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof countPendingSafetyFlags>>> = ({ signal }) => countPendingSafetyFlags({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof countPendingSafetyFlags>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type CountPendingSafetyFlagsQueryResult = NonNullable<Awaited<ReturnType<typeof countPendingSafetyFlags>>>
+export type CountPendingSafetyFlagsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Count pending safety flags for developer administrators
+ */
+
+export function useCountPendingSafetyFlags<TData = Awaited<ReturnType<typeof countPendingSafetyFlags>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof countPendingSafetyFlags>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getCountPendingSafetyFlagsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

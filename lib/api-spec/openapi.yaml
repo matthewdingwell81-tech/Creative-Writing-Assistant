@@ -257,6 +257,19 @@ paths:
                 $ref: "#/components/schemas/SafetyFlagList"
         "403":
           description: Developer administrator access required
+  /admin/safety-flags/count:
+    get:
+      operationId: countPendingSafetyFlags
+      summary: Count pending safety flags for developer administrators
+      responses:
+        "200":
+          description: Number of flags awaiting administrator review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingSafetyFlagCount"
+        "403":
+          description: Developer administrator access required
   /admin/safety-flags/{id}/review:
     post:
       operationId: reviewSafetyFlag
@@ -352,6 +365,11 @@ components:
         flags:
           type: array
           items: { $ref: "#/components/schemas/SafetyFlagRecord" }
+    PendingSafetyFlagCount:
+      type: object
+      required: [count]
+      properties:
+        count: { type: integer, minimum: 0 }
     SafetyFlagReviewInput:
       type: object
       required: [decision]

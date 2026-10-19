@@ -497,6 +497,18 @@ export const ListSafetyFlagsResponse = zod.object({
 
 
 /**
+ * @summary Count pending safety flags for developer administrators
+ */
+export const countPendingSafetyFlagsResponseCountMin = 0;
+
+
+
+export const CountPendingSafetyFlagsResponse = zod.object({
+  "count": zod.number().min(countPendingSafetyFlagsResponseCountMin)
+})
+
+
+/**
  * @summary Record an administrator decision without taking automatic account action
  */
 

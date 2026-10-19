@@ -27,6 +27,11 @@ async function exercise({ account = "developer", method = "GET", path = "/safety
       if (unavailable) throw new Error("Private database detail");
       return [{ id: 1, requestContext: "PRIVATE_REVIEW_CONTEXT" }];
     },
+    async countOpenFlags() {
+      calls.push({ action: "count" });
+      if (unavailable) throw new Error("Private database detail");
+      return 3;
+    },
     async reviewFlag(id, decision, note, reviewerId) {
       calls.push({ action: "review", id, decision, note, reviewerId });
       if (conflict) return undefined;
@@ -54,6 +59,9 @@ test("signed-out visitors cannot read flags", async () => {
   const result = await exercise({ account: "" });
   assert.equal(result.status, 401);
   assert.deepEqual(result.calls, []);
+  const count = await exercise({ account: "", path: "/safety-flags/count" });
+  assert.equal(count.status, 401);
+  assert.deepEqual(count.calls, []);
 });
 
 test("ordinary users cannot read private flags or review them", async () => {
@@ -67,6 +75,9 @@ test("ordinary users cannot read private flags or review them", async () => {
     assert.deepEqual(result.calls, []);
     assert.doesNotMatch(JSON.stringify(result.body), /PRIVATE_REVIEW_CONTEXT/);
   }
+  const count = await exercise({ account: "ordinary", path: "/safety-flags/count" });
+  assert.equal(count.status, 403);
+  assert.deepEqual(count.calls, []);
 });
 
 test("developer allowlisted accounts can read flags without cacheable private content", async () => {
@@ -82,6 +93,14 @@ test("status filters are validated and forwarded", async () => {
   const invalid = await exercise({ path: "/safety-flags?status=not-a-status" });
   assert.equal(invalid.status, 400);
   assert.deepEqual(invalid.calls, []);
+});
+
+test("developer allowlisted accounts can read the pending count without caching", async () => {
+  const result = await exercise({ path: "/safety-flags/count" });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { count: 3 });
+  assert.deepEqual(result.calls, [{ action: "count" }]);
+  assert.equal(result.headers.get("cache-control"), "no-store");
 });
 
 test("administrator decisions use the authenticated reviewer and trim notes", async () => {
@@ -118,4 +137,7 @@ test("database outages return a clear error without leaking internal details", a
   const result = await exercise({ unavailable: true });
   assert.equal(result.status, 503);
   assert.doesNotMatch(JSON.stringify(result.body), /Private database detail/);
+  const count = await exercise({ path: "/safety-flags/count", unavailable: true });
+  assert.equal(count.status, 503);
+  assert.doesNotMatch(JSON.stringify(count.body), /Private database detail/);
 });

@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { db, safetyFlags, users } from "@workspace/db";
 import { storage } from "./storage";
 import type { ModerationRepository } from "./routes/moderation";
@@ -23,6 +23,12 @@ export const moderationRepository: ModerationRepository = {
       .orderBy(desc(safetyFlags.createdAt))
       .limit(100);
     return status === "all" ? query : query.where(eq(safetyFlags.status, status));
+  },
+  async countOpenFlags() {
+    const [result] = await db.select({ count: count() })
+      .from(safetyFlags)
+      .where(eq(safetyFlags.status, "open"));
+    return result?.count ?? 0;
   },
   async reviewFlag(id, decision, note, reviewerId) {
     const [updated] = await db.update(safetyFlags).set({

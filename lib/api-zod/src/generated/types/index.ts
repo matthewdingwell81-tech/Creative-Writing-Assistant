@@ -16,6 +16,7 @@ export * from './coachMessageRole';
 export * from './healthStatus';
 export * from './listSafetyFlagsParams';
 export * from './listSafetyFlagsStatus';
+export * from './pendingSafetyFlagCount';
 export * from './planningFields';
 export * from './planningInput';
 export * from './planningKind';

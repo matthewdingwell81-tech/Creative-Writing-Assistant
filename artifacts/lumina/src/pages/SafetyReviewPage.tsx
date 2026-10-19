@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/lib/api";
 import { DEVELOPER_IDS } from "@/lib/userTier";
+import { pendingSafetyFlagCountQueryKey, usePendingSafetyFlagCount } from "@/hooks/usePendingSafetyFlagCount";
 import type { SafetyFlagRecord as Flag } from "@workspace/api-client-react";
 
 type Decision = "confirmed_violation" | "no_violation";
@@ -47,6 +48,7 @@ export default function SafetyReviewPage() {
 
 function ReviewList({ userId }: { userId: string }) {
   const qc = useQueryClient();
+  usePendingSafetyFlagCount(userId, true);
   const [status, setStatus] = useState("open");
   const root = ["admin-safety-flags", userId];
   const key = [...root, status];
@@ -72,6 +74,9 @@ function ReviewList({ userId }: { userId: string }) {
       return (await res.json()) as { id: number; status: string; reviewedAt: string };
     },
     onSuccess: (r, v) => {
+      qc.setQueryData<number>(pendingSafetyFlagCountQueryKey(userId), (old) =>
+        old === undefined ? old : Math.max(0, old - 1));
+      void qc.invalidateQueries({ queryKey: pendingSafetyFlagCountQueryKey(userId) });
       qc.setQueriesData<Flag[]>({ queryKey: root }, (old) => {
         if (!old) return old;
         return old.flatMap((f) => {
@@ -81,7 +86,12 @@ function ReviewList({ userId }: { userId: string }) {
       });
       qc.setQueryData<Flag[]>(key, (old) => old?.filter((f) => f.id !== r.id || status !== "open"));
     },
-    onError: (e) => { if ((e as { code?: number }).code === 409) void q.refetch(); },
+    onError: (e) => {
+      if ((e as { code?: number }).code === 409) {
+        void q.refetch();
+        void qc.invalidateQueries({ queryKey: pendingSafetyFlagCountQueryKey(userId) });
+      }
+    },
   });
 
   return (

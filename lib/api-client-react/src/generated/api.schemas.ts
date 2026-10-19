@@ -41,6 +41,11 @@ export interface SafetyFlagList {
   flags: SafetyFlagRecord[];
 }
 
+export interface PendingSafetyFlagCount {
+  /** @minimum 0 */
+  count: number;
+}
+
 export type SafetyFlagReviewInputDecision = typeof SafetyFlagReviewInputDecision[keyof typeof SafetyFlagReviewInputDecision];
 
 

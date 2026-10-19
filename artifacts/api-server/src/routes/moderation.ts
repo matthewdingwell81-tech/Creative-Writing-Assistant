@@ -5,6 +5,7 @@ import { ReviewSafetyFlagBody, ListSafetyFlagsQueryParams } from "@workspace/api
 export interface ModerationRepository {
   getUserById(id: string): Promise<{ firebaseUid: string | null } | undefined>;
   listFlags(status: string): Promise<unknown[]>;
+  countOpenFlags(): Promise<number>;
   reviewFlag(id: number, decision: string, note: string | null, reviewerId: string): Promise<unknown | undefined>;
 }
 
@@ -54,6 +55,14 @@ router.get("/safety-flags", requireDeveloper, async (req, res) => {
     res.json({ flags: await repository.listFlags(status) });
   } catch {
     res.status(503).json({ error: "Safety flags could not be loaded. Please retry." });
+  }
+});
+
+router.get("/safety-flags/count", requireDeveloper, async (_req, res) => {
+  try {
+    res.json({ count: await repository.countOpenFlags() });
+  } catch {
+    res.status(503).json({ error: "Pending safety flags could not be counted. Please retry." });
   }
 });
 
