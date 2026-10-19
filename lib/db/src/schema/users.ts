@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { boolean, pgTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 export const users = pgTable("users", {
@@ -7,6 +7,7 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   firebaseUid: varchar("firebase_uid", { length: 128 }),
   password: text("password").notNull(),
+  tutorialsEnabled: boolean("tutorials_enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("users_firebase_uid_unique").on(table.firebaseUid).where(sql`${table.firebaseUid} IS NOT NULL`),

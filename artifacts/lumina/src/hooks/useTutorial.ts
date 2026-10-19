@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import { getTutorialPreferences, updateTutorialPreferences } from '@workspace/api-client-react';
 import {
   type TourKey,
   type TutorialStep,
@@ -11,6 +12,13 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 
 interface TutorialContextValue {
+  tutorialsEnabled: boolean;
+  tutorialsReady: boolean;
+  tutorialsLoadingError: string | null;
+  tutorialsSaveError: string | null;
+  tutorialsSaving: boolean;
+  retryTutorialPreferences: () => void;
+  setTutorialsEnabled: (enabled: boolean) => Promise<void>;
   activeTour: TourKey | null;
   steps: TutorialStep[];
   stepIndex: number;
@@ -34,6 +42,11 @@ const TutorialContext = createContext<TutorialContextValue | null>(null);
 export function TutorialProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const accountId = user?.id ?? null;
+  const [loadedAccountId, setLoadedAccountId] = useState<string | null>(null);
+  const [tutorialsEnabled, setTutorialsEnabledState] = useState<boolean | null>(null);
+  const [tutorialsLoadingError, setTutorialsLoadingError] = useState<string | null>(null);
+  const [tutorialsSaveError, setTutorialsSaveError] = useState<string | null>(null);
+  const [tutorialsSaving, setTutorialsSaving] = useState(false);
   const [activeTour, setActiveTour] = useState<TourKey | null>(null);
   const [steps, setSteps] = useState<TutorialStep[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
@@ -49,6 +62,57 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
   const doneRef = useRef<Record<string, boolean>>({});
   const accountIdRef = useRef<string | null>(accountId);
   const sideEffectsRef = useRef<Record<string, () => void>>({});
+  const preferenceVersionRef = useRef(0);
+  const savingRef = useRef(false);
+  const reloadPreferencesRef = useRef<(() => void) | null>(null);
+  const tutorialsReady = !!accountId && loadedAccountId === accountId && tutorialsEnabled !== null;
+  const canShowTutorials = tutorialsReady && tutorialsEnabled === true;
+
+  useEffect(() => {
+    let active = true;
+    let refreshing = false;
+    preferenceVersionRef.current += 1;
+    setLoadedAccountId(null);
+    setTutorialsEnabledState(null);
+    setTutorialsLoadingError(null);
+    setTutorialsSaveError(null);
+    setTutorialsSaving(false);
+    savingRef.current = false;
+    reloadPreferencesRef.current = null;
+
+    if (!accountId) return;
+
+    const load = async () => {
+      if (!active || refreshing || savingRef.current) return;
+      refreshing = true;
+      const version = preferenceVersionRef.current;
+      try {
+        const preferences = await getTutorialPreferences();
+        if (!active || version !== preferenceVersionRef.current) return;
+        setTutorialsEnabledState(preferences.enabled);
+        setLoadedAccountId(accountId);
+        setTutorialsLoadingError(null);
+      } catch {
+        if (!active || version !== preferenceVersionRef.current) return;
+        setTutorialsLoadingError("Tutorial settings couldn't be loaded. Retry before using tutorials.");
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    reloadPreferencesRef.current = () => { void load(); };
+    void load();
+    const interval = window.setInterval(() => { void load(); }, 30_000);
+    const onFocus = () => { if (document.visibilityState !== "hidden") void load(); };
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      reloadPreferencesRef.current = null;
+    };
+  }, [accountId]);
 
   useEffect(() => {
     accountIdRef.current = accountId;
@@ -58,6 +122,43 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
     setSteps([]);
     setStepIndex(0);
   }, [accountId]);
+
+  useEffect(() => {
+    if (!canShowTutorials && activeTourRef.current) {
+      setActiveTour(null);
+      setSteps([]);
+      setStepIndex(0);
+    }
+  }, [canShowTutorials]);
+
+  const retryTutorialPreferences = useCallback(() => {
+    reloadPreferencesRef.current?.();
+  }, []);
+
+  const setTutorialsEnabled = useCallback(async (enabled: boolean) => {
+    const currentAccountId = accountIdRef.current;
+    if (!currentAccountId || loadedAccountId !== currentAccountId || savingRef.current) return;
+    const version = ++preferenceVersionRef.current;
+    savingRef.current = true;
+    setTutorialsSaving(true);
+    setTutorialsSaveError(null);
+    try {
+      const saved = await updateTutorialPreferences({ enabled });
+      if (accountIdRef.current !== currentAccountId || preferenceVersionRef.current !== version) return;
+      setTutorialsEnabledState(saved.enabled);
+      setLoadedAccountId(currentAccountId);
+      setTutorialsLoadingError(null);
+    } catch {
+      if (accountIdRef.current === currentAccountId && preferenceVersionRef.current === version) {
+        setTutorialsSaveError("Tutorial settings couldn't be saved. Please try again.");
+      }
+    } finally {
+      if (preferenceVersionRef.current === version && accountIdRef.current === currentAccountId) {
+        setTutorialsSaving(false);
+        savingRef.current = false;
+      }
+    }
+  }, [loadedAccountId]);
 
   const registerSideEffect = useCallback((key: string, handler: () => void) => {
     sideEffectsRef.current[key] = handler;
@@ -80,12 +181,13 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const start = useCallback((key: TourKey) => {
+    if (!canShowTutorials) return;
     const tourSteps = key === 'full' ? FULL_TOUR : (FEATURE_TOURS[key] ?? []);
     if (tourSteps.length === 0) return;
     setSteps(tourSteps);
     setStepIndex(0);
     setActiveTour(key);
-  }, []);
+  }, [canShowTutorials]);
 
   const dismiss = useCallback(() => closeTour(false), [closeTour]);
   const complete = useCallback(() => closeTour(true), [closeTour]);
@@ -122,9 +224,16 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
     return !!latestDone[key];
   }, []);
 
-  const currentStep = activeTour && steps.length > 0 ? (steps[stepIndex] ?? null) : null;
+  const currentStep = canShowTutorials && activeTour && steps.length > 0 ? (steps[stepIndex] ?? null) : null;
 
   const value: TutorialContextValue = {
+    tutorialsEnabled: canShowTutorials,
+    tutorialsReady,
+    tutorialsLoadingError,
+    tutorialsSaveError,
+    tutorialsSaving,
+    retryTutorialPreferences,
+    setTutorialsEnabled,
     activeTour,
     steps,
     stepIndex,

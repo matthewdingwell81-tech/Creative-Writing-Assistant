@@ -170,28 +170,41 @@ export default function Home() {
   const chapterLoadVersionRef = useRef(0);
   const documentSelectionVersionRef = useRef(0);
 
-  const { start: startTutorial, registerSideEffect, isDone: isTutorialDone } = useTutorial();
+  const {
+    start: startTutorial, registerSideEffect, isDone: isTutorialDone,
+    tutorialsEnabled, tutorialsReady,
+  } = useTutorial();
   const tutorialAutoLaunchUserRef = useRef<string | null>(null);
+  const tutorialPromptsAllowedRef = useRef(false);
+  tutorialPromptsAllowedRef.current = tutorialsReady && tutorialsEnabled;
+  const pendingTutorialPromptTimersRef = useRef<Set<number>>(new Set());
+  useEffect(() => () => {
+    pendingTutorialPromptTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    pendingTutorialPromptTimersRef.current.clear();
+  }, []);
 
   // First-use tracking for contextual prompts
   const firstUseShownRef = useRef<Record<string, boolean>>({});
 
   const showFirstUsePrompt = useCallback((featureKey: TourKey, label: string) => {
-    if (!user) return;
+    if (!user || !tutorialsReady || !tutorialsEnabled) return;
     const seen = getFirstUse(user.id);
     if (seen[featureKey] || firstUseShownRef.current[featureKey]) return;
     firstUseShownRef.current[featureKey] = true;
     setFirstUseSeen(user.id, featureKey);
     // Capture startTutorial in a local var to avoid stale closure issues inside setTimeout
     const launchTour = () => startTutorial(featureKey);
-    setTimeout(() => {
+    const timer = window.setTimeout(() => {
+      pendingTutorialPromptTimersRef.current.delete(timer);
+      if (!tutorialPromptsAllowedRef.current) return;
       toast({
         title: `New to ${label}?`,
         description: 'See how it works',
         action: <ToastAction altText="Take tour" onClick={launchTour}>Take tour →</ToastAction>,
       });
     }, 600);
-  }, [toast, startTutorial, user]);
+    pendingTutorialPromptTimersRef.current.add(timer);
+  }, [toast, startTutorial, user, tutorialsReady, tutorialsEnabled]);
 
   useEffect(() => {
     firstUseShownRef.current = {};
@@ -226,17 +239,18 @@ export default function Home() {
 
   // Auto-launch once for an authenticated user who has not completed the full tour.
   useEffect(() => {
-    if (!user || tutorialAutoLaunchUserRef.current === user.id) return;
+    if (!user || !tutorialsReady || tutorialAutoLaunchUserRef.current === user.id) return;
     tutorialAutoLaunchUserRef.current = user.id;
+    if (!tutorialsEnabled) return;
     if (isTutorialDone('full')) return;
 
     const timer = setTimeout(() => {
       // Re-check at fire time in case the user completed a manually launched
       // tour while the delayed auto-launch was pending.
-      if (!isTutorialDone('full')) startTutorial('full');
+      if (tutorialsEnabled && !isTutorialDone('full')) startTutorial('full');
     }, 800);
     return () => clearTimeout(timer);
-  }, [isTutorialDone, startTutorial, user]);
+  }, [isTutorialDone, startTutorial, user, tutorialsEnabled, tutorialsReady]);
 
   // Register tutorial side effects — must come after cancelPending is in scope
   useEffect(() => {
@@ -926,15 +940,19 @@ export default function Home() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">Tours</DropdownMenuLabel>
-                {(Object.keys(TOUR_LABELS) as TourKey[]).map((key) => (
-                  <DropdownMenuItem key={key} onClick={() => startTutorial(key)} data-testid={`tour-${key}`}>
-                    {TOUR_LABELS[key]}
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
+                {tutorialsReady && tutorialsEnabled && (
+                  <>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">Tours</DropdownMenuLabel>
+                    {(Object.keys(TOUR_LABELS) as TourKey[]).map((key) => (
+                      <DropdownMenuItem key={key} onClick={() => startTutorial(key)} data-testid={`tour-${key}`}>
+                        {TOUR_LABELS[key]}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem
-                  onClick={() => { if (user) resetTourProgress(user.id); toast({ title: 'Tour progress reset', description: 'Contextual prompts and the full tour will appear again on your next visit.' }); }}
+                  onClick={() => { if (user) resetTourProgress(user.id); toast({ title: 'Tour progress reset', description: tutorialsEnabled ? 'Contextual prompts and the full tour will appear again on your next visit.' : 'Tutorials remain off until you turn them back on in Settings.' }); }}
                   data-testid="btn-reset-tour-progress"
                   className="text-muted-foreground focus:text-foreground"
                 >
@@ -1167,16 +1185,20 @@ export default function Home() {
                   Export to Google Docs
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">Help &amp; Tours</DropdownMenuLabel>
-                {(Object.keys(TOUR_LABELS) as TourKey[]).map((key) => (
-                  <DropdownMenuItem key={key} onClick={() => startTutorial(key)} data-testid={`tour-mobile-${key}`}>
-                    <HelpCircle className="w-4 h-4 mr-2" />
-                    {TOUR_LABELS[key]}
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
+                {tutorialsReady && tutorialsEnabled && (
+                  <>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">Help &amp; Tours</DropdownMenuLabel>
+                    {(Object.keys(TOUR_LABELS) as TourKey[]).map((key) => (
+                      <DropdownMenuItem key={key} onClick={() => startTutorial(key)} data-testid={`tour-mobile-${key}`}>
+                        <HelpCircle className="w-4 h-4 mr-2" />
+                        {TOUR_LABELS[key]}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem
-                  onClick={() => { if (user) resetTourProgress(user.id); toast({ title: 'Tour progress reset', description: 'Contextual prompts and the full tour will appear again on your next visit.' }); }}
+                  onClick={() => { if (user) resetTourProgress(user.id); toast({ title: 'Tour progress reset', description: tutorialsEnabled ? 'Contextual prompts and the full tour will appear again on your next visit.' : 'Tutorials remain off until you turn them back on in Settings.' }); }}
                   data-testid="btn-reset-tour-progress-mobile"
                   className="text-muted-foreground focus:text-foreground"
                 >

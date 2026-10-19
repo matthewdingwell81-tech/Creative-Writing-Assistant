@@ -1,8 +1,10 @@
 import { useEffect } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, Crown, FileText, ShieldAlert } from "lucide-react";
+import { ArrowLeft, BookOpen, Crown, FileText, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
+import { useTutorial } from "@/hooks/useTutorial";
 import { DEVELOPER_IDS } from "@/lib/userTier";
 import { usePendingSafetyFlagCount } from "@/hooks/usePendingSafetyFlagCount";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -10,6 +12,10 @@ import { PurchaseActions, SubscriptionFeedback, statusCopy } from "@/components/
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const {
+    tutorialsEnabled, tutorialsReady, tutorialsLoadingError, tutorialsSaveError,
+    tutorialsSaving, retryTutorialPreferences, setTutorialsEnabled,
+  } = useTutorial();
   const s = useSubscription();
   useEffect(() => {
     const prev = document.title;
@@ -52,6 +58,65 @@ export default function SettingsPage() {
             </div>
           )}
           <PurchaseActions upgradeLabel="Upgrade to Premium" testIdPrefix="settings" />
+        </section>
+        <section className="mt-6 rounded-xl border border-border bg-card p-6" aria-labelledby="tutorials-heading" data-testid="settings-tutorials">
+          <h2 id="tutorials-heading" className="flex items-center gap-2 text-xl font-semibold">
+            <BookOpen className="h-5 w-5 text-primary" aria-hidden="true" />
+            Tutorials
+          </h2>
+          {tutorialsReady ? (
+            <div className="mt-4 flex items-center justify-between gap-4">
+              <div>
+                <h3 id="tutorial-preferences-label" className="font-medium">Show tutorials and tips</h3>
+                <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                  This controls tours and contextual tips across your account. Turning them off stays in effect when progress is reset.
+                </p>
+              </div>
+              <Switch
+                checked={tutorialsEnabled}
+                onCheckedChange={(enabled) => { void setTutorialsEnabled(enabled); }}
+                disabled={tutorialsSaving}
+                aria-labelledby="tutorial-preferences-label"
+                data-testid="tutorial-preferences-switch"
+              />
+            </div>
+          ) : (
+            <div className="mt-4" role={tutorialsLoadingError ? "alert" : "status"} aria-live="polite">
+              <p className="text-sm text-muted-foreground">
+                {tutorialsLoadingError ?? "Loading your saved tutorial setting…"}
+              </p>
+              {tutorialsLoadingError && (
+                <Button
+                  className="mt-3 min-h-11"
+                  variant="outline"
+                  onClick={retryTutorialPreferences}
+                  data-testid="button-retry-tutorial-preferences"
+                >
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
+          {tutorialsReady && tutorialsLoadingError && (
+            <div className="mt-3 flex flex-wrap items-center gap-3" role="status" aria-live="polite">
+              <p className="text-sm text-muted-foreground">Could not refresh this setting from your other devices.</p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="min-h-11"
+                onClick={retryTutorialPreferences}
+                data-testid="button-retry-tutorial-preferences"
+              >
+                Retry
+              </Button>
+            </div>
+          )}
+          {tutorialsSaveError && <p className="mt-3 text-sm text-destructive" role="alert" data-testid="tutorial-preferences-save-error">{tutorialsSaveError}</p>}
+          {tutorialsReady && !tutorialsSaveError && (
+            <p className="mt-3 text-xs text-muted-foreground" data-testid="tutorial-preferences-save-status">
+              {tutorialsSaving ? "Saving your preference…" : "Saved to your account."}
+            </p>
+          )}
         </section>
         <section className="mt-6 rounded-xl border border-border bg-card p-6" aria-labelledby="legal-heading" data-testid="settings-legal">
           <h2 id="legal-heading" className="flex items-center gap-2 text-xl font-semibold">

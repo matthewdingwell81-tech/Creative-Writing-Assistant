@@ -84,6 +84,15 @@ export interface AuthSessionUser {
   premium: boolean | null;
 }
 
+export interface TutorialPreferences {
+  /** Whether automatic and manually started tutorials are enabled for this account */
+  enabled: boolean;
+}
+
+export interface TutorialPreferencesUpdate {
+  enabled: boolean;
+}
+
 export type BillingConfigurationReceiptPublicKey = { [key: string]: unknown };
 
 export interface BillingConfiguration {

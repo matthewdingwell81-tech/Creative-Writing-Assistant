@@ -40,6 +40,26 @@ export const CreateFirebaseSessionResponse = zod.object({
 })
 
 
+/**
+ * @summary Load the signed-in account's tutorial preference
+ */
+export const GetTutorialPreferencesResponse = zod.object({
+  "enabled": zod.boolean().describe('Whether automatic and manually started tutorials are enabled for this account')
+})
+
+
+/**
+ * @summary Update the signed-in account's tutorial preference
+ */
+export const UpdateTutorialPreferencesBody = zod.object({
+  "enabled": zod.boolean()
+})
+
+export const UpdateTutorialPreferencesResponse = zod.object({
+  "enabled": zod.boolean().describe('Whether automatic and manually started tutorials are enabled for this account')
+})
+
+
 export const GetBillingConfigurationResponse = zod.object({
   "androidApiKey": zod.string(),
   "entitlementIdentifier": zod.string(),

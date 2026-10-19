@@ -13,6 +13,9 @@ const commands = [
   "run typecheck",
   "--filter @workspace/db run migrate:planning",
   "--filter @workspace/db run migrate:coach",
+  "--filter @workspace/db run migrate:safety-flags",
+  "--filter @workspace/db run migrate:subscriptions",
+  "--filter @workspace/db run migrate:tutorial-preferences",
 ];
 
 function withMockPnpm(check) {
@@ -70,6 +73,9 @@ const stages = [
   "workspace type checking",
   "planning migration",
   "Coach migration",
+  "safety flags migration",
+  "subscription account-link migration",
+  "tutorial preferences migration",
 ];
 
 for (const [index, command] of commands.entries()) {

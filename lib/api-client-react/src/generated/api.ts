@@ -37,7 +37,9 @@ import type {
   SafetyFlagReviewResult,
   SubscriptionEvent,
   SubscriptionState,
-  SubscriptionVerification
+  SubscriptionVerification,
+  TutorialPreferences,
+  TutorialPreferencesUpdate
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -188,6 +190,154 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCreateFirebaseSessionMutationOptions(options));
+    }
+
+export const getGetTutorialPreferencesUrl = () => {
+
+
+
+
+  return `/api/tutorial-preferences`
+}
+
+/**
+ * @summary Load the signed-in account's tutorial preference
+ */
+export const getTutorialPreferences = async ( options?: RequestInit): Promise<TutorialPreferences> => {
+
+  return customFetch<TutorialPreferences>(getGetTutorialPreferencesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTutorialPreferencesQueryKey = () => {
+    return [
+    `/api/tutorial-preferences`
+    ] as const;
+    }
+
+
+export const getGetTutorialPreferencesQueryOptions = <TData = Awaited<ReturnType<typeof getTutorialPreferences>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTutorialPreferences>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTutorialPreferencesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTutorialPreferences>>> = ({ signal }) => getTutorialPreferences({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTutorialPreferences>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTutorialPreferencesQueryResult = NonNullable<Awaited<ReturnType<typeof getTutorialPreferences>>>
+export type GetTutorialPreferencesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Load the signed-in account's tutorial preference
+ */
+
+export function useGetTutorialPreferences<TData = Awaited<ReturnType<typeof getTutorialPreferences>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTutorialPreferences>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTutorialPreferencesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateTutorialPreferencesUrl = () => {
+
+
+
+
+  return `/api/tutorial-preferences`
+}
+
+/**
+ * @summary Update the signed-in account's tutorial preference
+ */
+export const updateTutorialPreferences = async (tutorialPreferencesUpdate: TutorialPreferencesUpdate, options?: RequestInit): Promise<TutorialPreferences> => {
+
+  return customFetch<TutorialPreferences>(getUpdateTutorialPreferencesUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      tutorialPreferencesUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateTutorialPreferencesMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTutorialPreferences>>, TError,{data: BodyType<TutorialPreferencesUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTutorialPreferences>>, TError,{data: BodyType<TutorialPreferencesUpdate>}, TContext> => {
+
+const mutationKey = ['updateTutorialPreferences'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTutorialPreferences>>, {data: BodyType<TutorialPreferencesUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateTutorialPreferences(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTutorialPreferencesMutationResult = NonNullable<Awaited<ReturnType<typeof updateTutorialPreferences>>>
+    export type UpdateTutorialPreferencesMutationBody = BodyType<TutorialPreferencesUpdate>
+    export type UpdateTutorialPreferencesMutationError = ErrorType<void>
+
+    /**
+ * @summary Update the signed-in account's tutorial preference
+ */
+export const useUpdateTutorialPreferences = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTutorialPreferences>>, TError,{data: BodyType<TutorialPreferencesUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateTutorialPreferences>>,
+        TError,
+        {data: BodyType<TutorialPreferencesUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateTutorialPreferencesMutationOptions(options));
     }
 
 export const getGetBillingConfigurationUrl = () => {

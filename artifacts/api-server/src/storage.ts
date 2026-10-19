@@ -23,6 +23,8 @@ import { eq, desc, and, asc, sql, inArray, or, isNull } from "drizzle-orm";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
+  getTutorialsEnabled(userId: string): Promise<boolean | undefined>;
+  updateTutorialsEnabled(userId: string, enabled: boolean): Promise<boolean | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByFirebaseUid(uid: string): Promise<User | undefined>;
   resolveFirebaseUser(uid: string, email: string, password: string): Promise<User | undefined>;
@@ -65,6 +67,18 @@ export class DatabaseStorage implements IStorage {
   async getUserById(id: string): Promise<User | undefined> {
     const [user] = await this.database.select().from(users).where(eq(users.id, id));
     return user;
+  }
+
+  async getTutorialsEnabled(userId: string): Promise<boolean | undefined> {
+    const [user] = await this.database.select({ enabled: users.tutorialsEnabled })
+      .from(users).where(eq(users.id, userId));
+    return user?.enabled;
+  }
+
+  async updateTutorialsEnabled(userId: string, enabled: boolean): Promise<boolean | undefined> {
+    const [user] = await this.database.update(users).set({ tutorialsEnabled: enabled })
+      .where(eq(users.id, userId)).returning({ enabled: users.tutorialsEnabled });
+    return user?.enabled;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {

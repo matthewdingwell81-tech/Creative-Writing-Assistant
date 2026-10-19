@@ -6,11 +6,14 @@ import planningRouter from "./planning";
 import billingRouter from "./billing";
 import { createModerationRouter } from "./moderation";
 import { moderationRepository } from "../moderationStorage";
+import { storage } from "../storage";
+import { createTutorialPreferencesRouter } from "./tutorial-preferences";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/admin", createModerationRouter(moderationRepository));
+router.use(createTutorialPreferencesRouter(storage));
 router.use(billingRouter);
 router.use(storageRouter);
 router.use(planningRouter);

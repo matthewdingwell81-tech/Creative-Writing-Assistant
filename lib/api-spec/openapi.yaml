@@ -65,6 +65,49 @@ paths:
           description: Account already linked to a different Firebase identity
         "503":
           description: Account or session storage temporarily unavailable
+  /tutorial-preferences:
+    get:
+      operationId: getTutorialPreferences
+      summary: Load the signed-in account's tutorial preference
+      responses:
+        "200":
+          description: Saved tutorial preference; existing accounts default to enabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TutorialPreferences"
+        "401":
+          description: Sign in required
+        "404":
+          description: Account not found
+        "503":
+          description: Tutorial preference temporarily unavailable
+    patch:
+      operationId: updateTutorialPreferences
+      summary: Update the signed-in account's tutorial preference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TutorialPreferencesUpdate"
+      responses:
+        "200":
+          description: Saved tutorial preference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TutorialPreferences"
+        "400":
+          description: Invalid tutorial preference
+        "401":
+          description: Sign in required
+        "403":
+          description: Cross-origin preference changes are not allowed
+        "404":
+          description: Account not found
+        "503":
+          description: Tutorial preference temporarily unavailable
   /billing/config:
     get:
       operationId: getBillingConfiguration
@@ -402,6 +445,20 @@ components:
         premium:
           type: [boolean, "null"]
           description: True for a verified complimentary grant. Null means general subscription status must be resolved through billing.
+    TutorialPreferences:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether automatic and manually started tutorials are enabled for this account
+    TutorialPreferencesUpdate:
+      type: object
+      required: [enabled]
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
     BillingConfiguration:
       type: object
       required: [androidApiKey, entitlementIdentifier, receiptPublicKey, managementUrl]

@@ -29,5 +29,8 @@ pnpm --filter @workspace/db run migrate:safety-flags
 step="subscription account-link migration"
 echo "Post-merge: $step"
 pnpm --filter @workspace/db run migrate:subscriptions
+step="tutorial preferences migration"
+echo "Post-merge: $step"
+pnpm --filter @workspace/db run migrate:tutorial-preferences
 
 echo "Post-merge setup completed."

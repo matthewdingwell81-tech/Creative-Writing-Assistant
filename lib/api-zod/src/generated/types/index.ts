@@ -39,3 +39,5 @@ export * from './subscriptionStateFirebaseSync';
 export * from './subscriptionStateStatus';
 export * from './subscriptionStateTier';
 export * from './subscriptionVerification';
+export * from './tutorialPreferences';
+export * from './tutorialPreferencesUpdate';
