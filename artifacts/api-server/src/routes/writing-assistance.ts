@@ -4,9 +4,12 @@ import {
   checkCoachContent,
   CoachSafetyCheckError,
   runCoachSafetyPipeline,
-  WRITING_BLOCKED_MESSAGE,
+  SAFETY_FLAG_NOTICE,
+  SAFETY_REVIEW_UNAVAILABLE_MESSAGE,
   WRITING_SAFETY_UNAVAILABLE_MESSAGE,
+  type CoachSafetyResult,
 } from "../lib/coachSafety";
+import { saveSafetyFlag, SafetyFlagPersistenceError } from "../lib/safetyReporting";
 
 const MAX_WRITING_REQUEST_LENGTH = 120_000;
 
@@ -63,7 +66,10 @@ function getSuggestions(content: string): unknown[] {
   }
 }
 
-export function createSuggestionsHandler(openai: Pick<OpenAI, "chat">): RequestHandler {
+export function createSuggestionsHandler(
+  openai: Pick<OpenAI, "chat">,
+  recordFlag: (userId: string, feature: string, result: CoachSafetyResult) => Promise<void> = saveSafetyFlag,
+): RequestHandler {
   const moderate = createModerator(openai);
   return async (req, res) => {
     const { text, documentType = "fiction" } = req.body ?? {};
@@ -119,15 +125,19 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
         return response.choices[0]?.message?.content || "[]";
       });
 
-      if (result.kind === "blocked") {
-        res.status(403).json({
-          error: WRITING_BLOCKED_MESSAGE,
-          code: "AI_REQUEST_BLOCKED",
+      if (result.flags.length) await recordFlag(req.session.userId!, "suggestions", result);
+      res.json({
+        suggestions: getSuggestions(result.content),
+        ...(result.flags.length ? { flagged: true, notice: SAFETY_FLAG_NOTICE } : {}),
+      });
+    } catch (error) {
+      if (error instanceof SafetyFlagPersistenceError) {
+        res.status(503).json({
+          error: SAFETY_REVIEW_UNAVAILABLE_MESSAGE,
+          code: "SAFETY_REVIEW_UNAVAILABLE",
         });
         return;
       }
-      res.json({ suggestions: getSuggestions(result.content) });
-    } catch (error) {
       if (error instanceof CoachSafetyCheckError) {
         res.status(503).json({
           error: WRITING_SAFETY_UNAVAILABLE_MESSAGE,
@@ -141,7 +151,10 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
   };
 }
 
-export function createIdeasHandler(openai: Pick<OpenAI, "chat">): RequestHandler {
+export function createIdeasHandler(
+  openai: Pick<OpenAI, "chat">,
+  recordFlag: (userId: string, feature: string, result: CoachSafetyResult) => Promise<void> = saveSafetyFlag,
+): RequestHandler {
   const moderate = createModerator(openai);
   return async (req, res) => {
     const { text = "", prompt: userPrompt, documentType = "fiction" } = req.body ?? {};
@@ -192,19 +205,19 @@ export function createIdeasHandler(openai: Pick<OpenAI, "chat">): RequestHandler
         return chunks.join("");
       });
 
-      if (result.kind === "blocked") {
-        send({
-          blocked: true,
-          message: WRITING_BLOCKED_MESSAGE,
-          code: "AI_REQUEST_BLOCKED",
-        });
-      } else {
-        // Do not expose any generated text until the complete reply passes review.
-        send({ content: result.content });
-        send({ done: true });
+      if (result.flags.length) {
+        await recordFlag(req.session.userId!, "ideas", result);
+        send({ flagged: true, notice: SAFETY_FLAG_NOTICE });
       }
+      send({ content: result.content });
+      send({ done: true });
     } catch (error) {
-      if (error instanceof CoachSafetyCheckError) {
+      if (error instanceof SafetyFlagPersistenceError) {
+        send({
+          error: SAFETY_REVIEW_UNAVAILABLE_MESSAGE,
+          code: "SAFETY_REVIEW_UNAVAILABLE",
+        });
+      } else if (error instanceof CoachSafetyCheckError) {
         send({
           error: WRITING_SAFETY_UNAVAILABLE_MESSAGE,
           code: "AI_SAFETY_UNAVAILABLE",

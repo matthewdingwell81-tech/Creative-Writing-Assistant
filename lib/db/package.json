@@ -10,6 +10,7 @@
   "scripts": {
     "migrate:subscriptions": "node ./migrate-subscriptions.mjs",
     "migrate:coach": "node ./migrate-coach.mjs",
+    "migrate:safety-flags": "node ./migrate-safety-flags.mjs",
     "migrate:planning": "node ./migrate-planning.mjs",
     "push": "drizzle-kit push --config ./drizzle.config.ts",
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts"
