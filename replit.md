@@ -13,6 +13,13 @@ Lumina is an AI-powered writing companion that helps authors draft, organize, an
 - `pnpm --filter @workspace/api-server run test:planning` — test story-planning persistence and access boundaries against the running preview API
 - Required env: `DATABASE_URL` — Postgres connection string
 
+### Managed database releases
+
+- Apply additive development migrations through `scripts/post-merge.sh` (or the corresponding `@workspace/db` migration command during development).
+- Replit's Publish flow diffs the development and managed production schemas and applies the schema update before releasing the new build. Re-publish to release tutorial preferences; post-merge setup alone is not a production deployment.
+- New schema changes must not introduce production startup DDL or deploy-build schema mutations. The tutorial preference startup check is read-only and refuses to serve requests against an outdated schema.
+- `node --test artifacts/api-server/test/tutorial-schema.test.mjs` verifies an older users schema upgrades safely, using a connection-local temporary table in the development database.
+
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9

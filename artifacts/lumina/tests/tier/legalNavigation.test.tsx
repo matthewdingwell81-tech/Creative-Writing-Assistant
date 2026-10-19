@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { email: "reader@example.com", username: "reader" } }),
@@ -12,6 +13,13 @@ vi.mock("@/hooks/useSubscription", () => ({
     nativeAvailable: true,
     isPremium: true,
     subscription: { status: "active" },
+  }),
+}));
+vi.mock("@/hooks/useTutorial", () => ({
+  useTutorial: () => ({
+    tutorialsEnabled: true, tutorialsReady: true,
+    tutorialsLoadingError: null, tutorialsSaveError: null, tutorialsSaving: false,
+    retryTutorialPreferences: vi.fn(), setTutorialsEnabled: vi.fn(),
   }),
 }));
 vi.mock("@/components/PricingPage", () => ({
@@ -39,7 +47,7 @@ const auth = {
 describe("legal entry points", () => {
   it("links to both documents from Settings", async () => {
     const SettingsPage = (await import("@/pages/SettingsPage")).default;
-    render(<SettingsPage />);
+    render(<QueryClientProvider client={new QueryClient()}><SettingsPage /></QueryClientProvider>);
 
     expect(screen.getByTestId("settings-link-privacy").getAttribute("href")).toBe("/legal#privacy-statement");
     expect(screen.getByTestId("settings-link-agreement").getAttribute("href")).toBe("/legal#user-agreement");

@@ -67,6 +67,8 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
   const reloadPreferencesRef = useRef<(() => void) | null>(null);
   const tutorialsReady = !!accountId && loadedAccountId === accountId && tutorialsEnabled !== null;
   const canShowTutorials = tutorialsReady && tutorialsEnabled === true;
+  const canShowTutorialsRef = useRef(false);
+  canShowTutorialsRef.current = canShowTutorials;
 
   useEffect(() => {
     let active = true;
@@ -181,13 +183,13 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const start = useCallback((key: TourKey) => {
-    if (!canShowTutorials) return;
+    if (!canShowTutorialsRef.current) return;
     const tourSteps = key === 'full' ? FULL_TOUR : (FEATURE_TOURS[key] ?? []);
     if (tourSteps.length === 0) return;
     setSteps(tourSteps);
     setStepIndex(0);
     setActiveTour(key);
-  }, [canShowTutorials]);
+  }, []);
 
   const dismiss = useCallback(() => closeTour(false), [closeTour]);
   const complete = useCallback(() => closeTour(true), [closeTour]);

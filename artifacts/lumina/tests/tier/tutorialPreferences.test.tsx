@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({
@@ -15,7 +15,7 @@ vi.mock("@workspace/api-client-react", () => ({
 }));
 
 import { TutorialProvider, useTutorial } from "@/hooks/useTutorial";
-import { resetTourProgress } from "@/lib/tutorial";
+import { resetTourProgress, TOUR_LABELS, type TourKey } from "@/lib/tutorial";
 
 function Probe() {
   const tutorial = useTutorial();
@@ -121,6 +121,40 @@ describe("server-saved tutorial preference", () => {
     expect(screen.getByTestId("tutorial-state").textContent).toBe("loading:off:closed");
 
     await act(async () => { resolveSecond({ enabled: false }); });
+    await waitFor(() => expect(screen.getByTestId("tutorial-state").textContent).toBe("ready:off:closed"));
+  });
+
+  it("closes an active tour after a remote opt-out and blocks even previously captured launch callbacks", async () => {
+    const { result } = renderHook(() => useTutorial(), {
+      wrapper: ({ children }) => <TutorialProvider>{children}</TutorialProvider>,
+    });
+    await waitFor(() => expect(result.current.tutorialsEnabled).toBe(true));
+    const previousStart = result.current.start;
+    act(() => previousStart("full"));
+    expect(result.current.currentStep).not.toBeNull();
+
+    mock.saved.set("tutorial-account-a", false);
+    act(() => result.current.retryTutorialPreferences());
+    await waitFor(() => expect(result.current.tutorialsEnabled).toBe(false));
+    expect(result.current.currentStep).toBeNull();
+    expect(result.current.activeTour).toBeNull();
+    for (const key of Object.keys(TOUR_LABELS) as TourKey[]) {
+      act(() => previousStart(key));
+      expect(result.current.currentStep).toBeNull();
+      expect(result.current.activeTour).toBeNull();
+    }
+  });
+
+  it("reports a failed save without pretending the preference was saved", async () => {
+    mock.update.mockRejectedValueOnce(new Error("offline"));
+    renderProvider();
+    await screen.findByText(/^ready:on:closed$/);
+    fireEvent.click(screen.getByText("Turn off"));
+    await screen.findByRole("alert");
+    expect(screen.getByTestId("tutorial-state").textContent).toBe("ready:on:closed");
+    expect(mock.saved.get("tutorial-account-a")).toBe(true);
+
+    fireEvent.click(screen.getByText("Turn off"));
     await waitFor(() => expect(screen.getByTestId("tutorial-state").textContent).toBe("ready:off:closed"));
   });
 });

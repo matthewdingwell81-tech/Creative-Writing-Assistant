@@ -47,12 +47,12 @@ async function fixture() {
   const records = new Map<string, User>();
   const existing: User = {
     id: "server-account", username: "developer@example.test", password: "unusable-test-password",
-    firebaseUid: null, createdAt: new Date("2020-01-01T00:00:00Z"),
+    firebaseUid: null, tutorialsEnabled: true, createdAt: new Date("2020-01-01T00:00:00Z"),
   };
   records.set(existing.id, existing);
   const otherIdentity: User = {
     id: "other-firebase-account", username: "claimed@example.test", password: "unusable-test-password",
-    firebaseUid: "another-firebase-uid", createdAt: new Date("2021-01-01T00:00:00Z"),
+    firebaseUid: "another-firebase-uid", tutorialsEnabled: true, createdAt: new Date("2021-01-01T00:00:00Z"),
   };
   records.set(otherIdentity.id, otherIdentity);
   let resolutionLock = Promise.resolve();
@@ -69,7 +69,7 @@ async function fixture() {
         if (linked) return linked;
         let user = [...records.values()].find(candidate => candidate.username === email);
         if (!user) {
-          user = { id: `new-${records.size}`, username: email, password, firebaseUid: null, createdAt: new Date() };
+          user = { id: `new-${records.size}`, username: email, password, firebaseUid: null, tutorialsEnabled: true, createdAt: new Date() };
           records.set(user.id, user);
         }
         if (user.firebaseUid && user.firebaseUid !== firebaseUid) return undefined;
@@ -195,11 +195,11 @@ describe("subscription refresh racing Firebase account restoration", () => {
     const records = new Map<string, User>([
       ["billing-account", {
         id: "billing-account", username: "billing@example.test", password: "test-password",
-        firebaseUid: null, createdAt: new Date("2022-01-01T00:00:00Z"),
+        firebaseUid: null, tutorialsEnabled: true, createdAt: new Date("2022-01-01T00:00:00Z"),
       }],
       ["restored-account", {
         id: "restored-account", username: "restored@example.test", password: "test-password",
-        firebaseUid: null, createdAt: new Date("2023-01-01T00:00:00Z"),
+        firebaseUid: null, tutorialsEnabled: true, createdAt: new Date("2023-01-01T00:00:00Z"),
       }],
     ]);
     let unlockRestore!: () => void;
@@ -317,11 +317,11 @@ describe("subscription refresh racing Firebase account restoration", () => {
     const records = new Map<string, User>([
       ["billing-account", {
         id: "billing-account", username: "billing@example.test", password: "test-password",
-        firebaseUid: null, createdAt: new Date("2022-01-01T00:00:00Z"),
+        firebaseUid: null, tutorialsEnabled: true, createdAt: new Date("2022-01-01T00:00:00Z"),
       }],
       ["restored-account", {
         id: "restored-account", username: "restored@example.test", password: "test-password",
-        firebaseUid: null, createdAt: new Date("2023-01-01T00:00:00Z"),
+        firebaseUid: null, tutorialsEnabled: true, createdAt: new Date("2023-01-01T00:00:00Z"),
       }],
     ]);
     const billingStates = new Map<string, { tier: "premium" | "free"; status: "active" | "none" }>([

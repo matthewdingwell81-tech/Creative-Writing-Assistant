@@ -173,6 +173,7 @@ export default function Home() {
   const {
     start: startTutorial, registerSideEffect, isDone: isTutorialDone,
     tutorialsEnabled, tutorialsReady,
+    tutorialsLoadingError, retryTutorialPreferences,
   } = useTutorial();
   const tutorialAutoLaunchUserRef = useRef<string | null>(null);
   const tutorialPromptsAllowedRef = useRef(false);
@@ -185,6 +186,15 @@ export default function Home() {
 
   // First-use tracking for contextual prompts
   const firstUseShownRef = useRef<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!tutorialsLoadingError || tutorialsReady) return;
+    toast({
+      title: "Tutorial settings unavailable",
+      description: "Tours are paused until your saved setting can be loaded.",
+      action: <ToastAction altText="Retry tutorial settings" onClick={retryTutorialPreferences}>Retry</ToastAction>,
+    });
+  }, [tutorialsLoadingError, tutorialsReady, retryTutorialPreferences, toast]);
 
   const showFirstUsePrompt = useCallback((featureKey: TourKey, label: string) => {
     if (!user || !tutorialsReady || !tutorialsEnabled) return;

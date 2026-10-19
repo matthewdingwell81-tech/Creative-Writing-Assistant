@@ -25,6 +25,7 @@ function rejectCrossOriginWrite(req: Request, res: Response): boolean {
 export function createTutorialPreferencesRouter(repository: TutorialPreferenceRepository): IRouter {
   const router = Router();
   const requireAccount = (req: Request, res: Response, next: NextFunction): void => {
+    res.set("Cache-Control", "no-store");
     if (!req.session.userId) {
       res.status(401).json({ error: "Unauthorized" });
       return;
@@ -47,7 +48,7 @@ export function createTutorialPreferencesRouter(repository: TutorialPreferenceRe
 
   router.patch("/tutorial-preferences", requireAccount, async (req, res): Promise<void> => {
     if (rejectCrossOriginWrite(req, res)) return;
-    const parsed = UpdateTutorialPreferencesBody.safeParse(req.body);
+    const parsed = UpdateTutorialPreferencesBody.strict().safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "Invalid tutorial preference." });
       return;

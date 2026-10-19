@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
 import { expireCoachHistory } from "./routes/coach-history";
 import coachMigration from "../../../lib/db/migrations/coach-history.sql";
+import { assertTutorialSchemaReady } from "./lib/tutorial-schema";
 
 const rawPort = process.env["PORT"];
 
@@ -20,6 +21,10 @@ if (Number.isNaN(port) || port <= 0) {
 
 async function startServer() {
   try {
+    // Publish applies managed database schema changes before releasing this
+    // build. Never accept auth requests against an older users schema.
+    // This is intentionally read-only, not a production startup migration.
+    await assertTutorialSchemaReady(pool);
     // This additive migration also gives existing accounts their selected
     // seven-day trial start date without Drizzle reconciliation.
     await pool.query(

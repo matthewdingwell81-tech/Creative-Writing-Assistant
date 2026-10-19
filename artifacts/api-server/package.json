@@ -8,7 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node test/build-asset-check.test.mjs && node --test test/coach-safety.test.mjs test/writing-assistance-safety.test.mjs test/moderation-review.test.mjs test/tutorial-preferences.test.mjs",
+    "test": "node test/build-asset-check.test.mjs && node --test test/coach-safety.test.mjs test/writing-assistance-safety.test.mjs test/moderation-review.test.mjs test/tutorial-preferences.test.mjs test/tutorial-schema.test.mjs",
     "test:planning": "node --test test/planning-api.test.mjs",
     "test:coach": "node --test test/coach-history-api.test.mjs"
   },
