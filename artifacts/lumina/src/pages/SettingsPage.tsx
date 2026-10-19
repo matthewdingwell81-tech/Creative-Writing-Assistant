@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, Crown, FileText } from "lucide-react";
+import { ArrowLeft, Crown, FileText, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { DEVELOPER_IDS } from "@/lib/userTier";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PurchaseActions, SubscriptionFeedback, statusCopy } from "@/components/PricingPage";
 
@@ -14,6 +15,7 @@ export default function SettingsPage() {
     document.title = "Settings | Lumina";
     return () => { document.title = prev; };
   }, []);
+  const isDev = !!user?.firebaseUid && DEVELOPER_IDS.includes(user.firebaseUid);
   const blocked = s.busy || s.loading || !s.nativeAvailable;
   const label = s.isPremium ? (s.subscription?.status === "cancelled" ? "Premium (cancelled)" : "Premium (active)")
     : s.subscription?.status === "expired" ? "Free (Premium expired)" : "Free";
@@ -63,6 +65,12 @@ export default function SettingsPage() {
             </Link>
           </nav>
         </section>
+        {isDev && (
+          <section className="mt-6 rounded-xl border border-border bg-card p-6" aria-labelledby="review-heading" data-testid="settings-review">
+            <h2 id="review-heading" className="flex items-center gap-2 text-xl font-semibold"><ShieldAlert className="h-5 w-5 text-primary" aria-hidden="true" />Administration</h2>
+            <Link href="/admin/review" className="mt-4 inline-flex min-h-11 items-center text-sm text-primary underline-offset-4 hover:underline" data-testid="settings-link-review">Safety review</Link>
+          </section>
+        )}
       </div>
     </main>
   );

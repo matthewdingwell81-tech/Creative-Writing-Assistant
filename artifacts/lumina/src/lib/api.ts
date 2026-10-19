@@ -1,4 +1,5 @@
 import { clearDeletedDocumentCoachHistory } from '@/services/coachHistory';
+import { getCurrentTierUser } from './tierAccount';
 
 export class SessionExpiredError extends Error {
   constructor() {
@@ -15,8 +16,8 @@ export class CoachRequestBlockedError extends Error {
 }
 
 export class CoachSafetyUnavailableError extends Error {
-  constructor() {
-    super("Coach safety checks are temporarily unavailable. Your prompt was kept as a draft; please try again later.");
+  constructor(message = "Coach safety checks are temporarily unavailable. Your prompt was kept as a draft; please try again later.") {
+    super(message);
     this.name = "CoachSafetyUnavailableError";
   }
 }
@@ -32,6 +33,14 @@ export class WritingSafetyUnavailableError extends Error {
   constructor(message = "Safety checks are temporarily unavailable. Your prompt was kept; please try again later.") {
     super(message);
     this.name = "WritingSafetyUnavailableError";
+  }
+}
+
+export const AI_FLAGGED_EVENT = "lumina:ai-flagged";
+
+function notifySafetyFlagged(event: { flagged?: boolean; notice?: string }, accountId?: string) {
+  if (accountId === getCurrentTierUser()?.id && event.flagged && typeof event.notice === "string") {
+    window.dispatchEvent(new CustomEvent(AI_FLAGGED_EVENT, { detail: { accountId, notice: event.notice } }));
   }
 }
 
@@ -127,6 +136,7 @@ export async function fetchRelatedResearch(documentId: number, chapterId: number
 }
 
 export async function fetchSuggestions(text: string, documentType: string = "fiction", signal?: AbortSignal) {
+  const accountId = getCurrentTierUser()?.id;
   const res = await apiFetch("/api/suggestions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -138,12 +148,14 @@ export async function fetchSuggestions(text: string, documentType: string = "fic
     if (body?.code === "AI_REQUEST_BLOCKED") {
       throw new WritingRequestBlockedError(body.error);
     }
-    if (body?.code === "AI_SAFETY_UNAVAILABLE") {
+    if (body?.code === "AI_SAFETY_UNAVAILABLE" || body?.code === "SAFETY_REVIEW_UNAVAILABLE") {
       throw new WritingSafetyUnavailableError(body.error);
     }
     throw new Error(typeof body?.error === "string" ? body.error : "Failed to fetch suggestions");
   }
-  return res.json();
+  const result = await res.json();
+  notifySafetyFlagged(result, accountId);
+  return result;
 }
 
 export async function fetchIdeas(documentId: number) {
@@ -230,6 +242,7 @@ export async function streamCoach(
   onDone: () => void,
   signal?: AbortSignal
 ) {
+  const accountId = getCurrentTierUser()?.id;
   const res = await apiFetch("/api/coach", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -268,10 +281,11 @@ export async function streamCoach(
           continue;
         }
         if (event.blocked) throw new CoachRequestBlockedError();
-        if (event.code === "COACH_SAFETY_UNAVAILABLE") {
-          throw new CoachSafetyUnavailableError();
+        if (event.code === "COACH_SAFETY_UNAVAILABLE" || event.code === "SAFETY_REVIEW_UNAVAILABLE") {
+          throw new CoachSafetyUnavailableError(event.code === "SAFETY_REVIEW_UNAVAILABLE" ? event.error : undefined);
         }
         if (event.error) throw new Error(typeof event.error === "string" ? event.error : "Failed to connect to coach");
+        notifySafetyFlagged(event, accountId);
         if (event.content) onChunk(event.content);
         if (event.done) onDone();
       }
@@ -288,6 +302,7 @@ export async function streamIdeas(
   onChunk: (content: string) => void,
   onDone: () => void
 ) {
+  const accountId = getCurrentTierUser()?.id;
   const res = await apiFetch("/api/ideas", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -299,7 +314,7 @@ export async function streamIdeas(
     if (body?.code === "AI_REQUEST_BLOCKED") {
       throw new WritingRequestBlockedError(body.error);
     }
-    if (body?.code === "AI_SAFETY_UNAVAILABLE") {
+    if (body?.code === "AI_SAFETY_UNAVAILABLE" || body?.code === "SAFETY_REVIEW_UNAVAILABLE") {
       throw new WritingSafetyUnavailableError(body.error);
     }
     throw new Error(typeof body?.error === "string" ? body.error : "Failed to generate ideas");
@@ -331,10 +346,11 @@ export async function streamIdeas(
         if (event.blocked || event.code === "AI_REQUEST_BLOCKED") {
           throw new WritingRequestBlockedError(event.message);
         }
-        if (event.code === "AI_SAFETY_UNAVAILABLE") {
+        if (event.code === "AI_SAFETY_UNAVAILABLE" || event.code === "SAFETY_REVIEW_UNAVAILABLE") {
           throw new WritingSafetyUnavailableError(event.error);
         }
         if (event.error) throw new Error(typeof event.error === "string" ? event.error : "Failed to generate ideas");
+        notifySafetyFlagged(event, accountId);
         if (event.content) onChunk(event.content);
         if (event.done) onDone();
       }

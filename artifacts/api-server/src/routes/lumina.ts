@@ -20,6 +20,7 @@ import {
 } from "../googleDocs";
 import { createCoachHandler } from "./coach";
 import { createIdeasHandler, createSuggestionsHandler } from "./writing-assistance";
+import { saveSafetyFlag } from "../lib/safetyReporting";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -352,11 +353,11 @@ router.delete("/documents/:id", requireAuth, async (req: Request, res: Response)
 
 // === AI Suggestions ===
 
-router.post("/suggestions", requireAuth, createSuggestionsHandler(openai));
+router.post("/suggestions", requireAuth, createSuggestionsHandler(openai, saveSafetyFlag));
 
 // === AI Ideas (streaming) ===
 
-router.post("/ideas", requireAuth, createIdeasHandler(openai));
+router.post("/ideas", requireAuth, createIdeasHandler(openai, saveSafetyFlag));
 
 // === Ideas Scratchpad CRUD ===
 
@@ -550,7 +551,7 @@ router.delete("/chapters/:id", requireAuth, async (req: Request, res: Response) 
 
 // === AI Writing Coach (streaming) ===
 
-router.post("/coach", requireAuth, createCoachHandler(openai));
+router.post("/coach", requireAuth, createCoachHandler(openai, saveSafetyFlag));
 
 // === Google Docs Integration ===
 

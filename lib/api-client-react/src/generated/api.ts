@@ -25,11 +25,15 @@ import type {
   CoachHistoryInput,
   CoachHistorySnapshot,
   HealthStatus,
+  ListSafetyFlagsParams,
   PlanningInput,
   PlanningListResponse,
   PlanningOrderInput,
   PlanningRecordResponse,
   PlanningUpdate,
+  SafetyFlagList,
+  SafetyFlagReviewInput,
+  SafetyFlagReviewResult,
   SubscriptionEvent,
   SubscriptionState,
   SubscriptionVerification
@@ -1035,6 +1039,162 @@ export const useDeleteStoryPlanning = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteStoryPlanningMutationOptions(options));
+    }
+
+export const getListSafetyFlagsUrl = (params?: ListSafetyFlagsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/safety-flags?${stringifiedParams}` : `/api/admin/safety-flags`
+}
+
+/**
+ * @summary List potential User Agreement violations for developer administrators
+ */
+export const listSafetyFlags = async (params?: ListSafetyFlagsParams, options?: RequestInit): Promise<SafetyFlagList> => {
+
+  return customFetch<SafetyFlagList>(getListSafetyFlagsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSafetyFlagsQueryKey = (params?: ListSafetyFlagsParams,) => {
+    return [
+    `/api/admin/safety-flags`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListSafetyFlagsQueryOptions = <TData = Awaited<ReturnType<typeof listSafetyFlags>>, TError = ErrorType<void>>(params?: ListSafetyFlagsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSafetyFlags>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSafetyFlagsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSafetyFlags>>> = ({ signal }) => listSafetyFlags(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSafetyFlags>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSafetyFlagsQueryResult = NonNullable<Awaited<ReturnType<typeof listSafetyFlags>>>
+export type ListSafetyFlagsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List potential User Agreement violations for developer administrators
+ */
+
+export function useListSafetyFlags<TData = Awaited<ReturnType<typeof listSafetyFlags>>, TError = ErrorType<void>>(
+ params?: ListSafetyFlagsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSafetyFlags>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSafetyFlagsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getReviewSafetyFlagUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/safety-flags/${id}/review`
+}
+
+/**
+ * @summary Record an administrator decision without taking automatic account action
+ */
+export const reviewSafetyFlag = async (id: number,
+    safetyFlagReviewInput: SafetyFlagReviewInput, options?: RequestInit): Promise<SafetyFlagReviewResult> => {
+
+  return customFetch<SafetyFlagReviewResult>(getReviewSafetyFlagUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      safetyFlagReviewInput,)
+  }
+);}
+
+
+
+
+export const getReviewSafetyFlagMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewSafetyFlag>>, TError,{id: number;data: BodyType<SafetyFlagReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewSafetyFlag>>, TError,{id: number;data: BodyType<SafetyFlagReviewInput>}, TContext> => {
+
+const mutationKey = ['reviewSafetyFlag'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewSafetyFlag>>, {id: number;data: BodyType<SafetyFlagReviewInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reviewSafetyFlag(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewSafetyFlagMutationResult = NonNullable<Awaited<ReturnType<typeof reviewSafetyFlag>>>
+    export type ReviewSafetyFlagMutationBody = BodyType<SafetyFlagReviewInput>
+    export type ReviewSafetyFlagMutationError = ErrorType<void>
+
+    /**
+ * @summary Record an administrator decision without taking automatic account action
+ */
+export const useReviewSafetyFlag = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewSafetyFlag>>, TError,{id: number;data: BodyType<SafetyFlagReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewSafetyFlag>>,
+        TError,
+        {id: number;data: BodyType<SafetyFlagReviewInput>},
+        TContext
+      > => {
+      return useMutation(getReviewSafetyFlagMutationOptions(options));
     }
 
 export const getHealthCheckUrl = () => {

@@ -8,15 +8,14 @@ import {
   SAFETY_REVIEW_UNAVAILABLE_MESSAGE,
   parseCoachRequest,
   runCoachSafetyPipeline,
-  type CoachSafetyResult,
+  type SafetyFlagRecorder,
+  SafetyFlagPersistenceError,
 } from "../lib/coachSafety";
-import { saveSafetyFlag } from "../lib/safetyReporting";
-import { SafetyFlagPersistenceError } from "../lib/safetyReporting";
 
 /** Injectable provider keeps the real HTTP boundary testable without paid calls. */
 export function createCoachHandler(
   openai: Pick<OpenAI, "chat">,
-  recordFlag: (userId: string, feature: string, result: CoachSafetyResult) => Promise<void> = saveSafetyFlag,
+  recordFlag: SafetyFlagRecorder,
 ): RequestHandler {
   return async (req, res) => {
     const request = parseCoachRequest(req.body);
@@ -50,7 +49,7 @@ export function createCoachHandler(
             ],
             response_format: { type: "json_object" },
             temperature: 0,
-            max_tokens: 32,
+            max_tokens: 180,
           }, { signal: controller.signal, timeout: 20_000, maxRetries: 0 });
           return result.choices[0]?.message?.content ?? "";
         });
@@ -85,10 +84,9 @@ ${documentContent.slice(0, 2_000) || "(empty document)"}`;
           if (content) chunks.push(content);
         }
         return chunks.join("");
-      });
+      }, record => recordFlag(req.session.userId!, "coach", record));
 
       if (result.flags.length) {
-        await recordFlag(req.session.userId!, "coach", result);
         send({ flagged: true, notice: SAFETY_FLAG_NOTICE });
       }
       send({ content: result.content });

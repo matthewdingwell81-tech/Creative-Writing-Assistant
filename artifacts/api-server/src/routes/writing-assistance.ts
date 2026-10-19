@@ -7,9 +7,9 @@ import {
   SAFETY_FLAG_NOTICE,
   SAFETY_REVIEW_UNAVAILABLE_MESSAGE,
   WRITING_SAFETY_UNAVAILABLE_MESSAGE,
-  type CoachSafetyResult,
+  type SafetyFlagRecorder,
+  SafetyFlagPersistenceError,
 } from "../lib/coachSafety";
-import { saveSafetyFlag, SafetyFlagPersistenceError } from "../lib/safetyReporting";
 
 const MAX_WRITING_REQUEST_LENGTH = 120_000;
 
@@ -28,7 +28,7 @@ function createModerator(openai: Pick<OpenAI, "chat">) {
         ],
         response_format: { type: "json_object" },
         temperature: 0,
-        max_tokens: 32,
+        max_tokens: 180,
       }, { timeout: 20_000, maxRetries: 0 });
       return result.choices[0]?.message?.content ?? "";
     });
@@ -68,7 +68,7 @@ function getSuggestions(content: string): unknown[] {
 
 export function createSuggestionsHandler(
   openai: Pick<OpenAI, "chat">,
-  recordFlag: (userId: string, feature: string, result: CoachSafetyResult) => Promise<void> = saveSafetyFlag,
+  recordFlag: SafetyFlagRecorder,
 ): RequestHandler {
   const moderate = createModerator(openai);
   return async (req, res) => {
@@ -123,15 +123,15 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
           max_tokens: 2048,
         });
         return response.choices[0]?.message?.content || "[]";
-      });
+      }, record => recordFlag(req.session.userId!, "suggestions", record));
 
-      if (result.flags.length) await recordFlag(req.session.userId!, "suggestions", result);
       res.json({
         suggestions: getSuggestions(result.content),
         ...(result.flags.length ? { flagged: true, notice: SAFETY_FLAG_NOTICE } : {}),
       });
     } catch (error) {
       if (error instanceof SafetyFlagPersistenceError) {
+        req.log.error({ errorName: error.name }, "Safety review record could not be saved");
         res.status(503).json({
           error: SAFETY_REVIEW_UNAVAILABLE_MESSAGE,
           code: "SAFETY_REVIEW_UNAVAILABLE",
@@ -153,7 +153,7 @@ Return 4-8 suggestions maximum. Be specific and actionable. Return ONLY valid JS
 
 export function createIdeasHandler(
   openai: Pick<OpenAI, "chat">,
-  recordFlag: (userId: string, feature: string, result: CoachSafetyResult) => Promise<void> = saveSafetyFlag,
+  recordFlag: SafetyFlagRecorder,
 ): RequestHandler {
   const moderate = createModerator(openai);
   return async (req, res) => {
@@ -203,16 +203,16 @@ export function createIdeasHandler(
           if (content) chunks.push(content);
         }
         return chunks.join("");
-      });
+      }, record => recordFlag(req.session.userId!, "ideas", record));
 
       if (result.flags.length) {
-        await recordFlag(req.session.userId!, "ideas", result);
         send({ flagged: true, notice: SAFETY_FLAG_NOTICE });
       }
       send({ content: result.content });
       send({ done: true });
     } catch (error) {
       if (error instanceof SafetyFlagPersistenceError) {
+        req.log.error({ errorName: error.name }, "Safety review record could not be saved");
         send({
           error: SAFETY_REVIEW_UNAVAILABLE_MESSAGE,
           code: "SAFETY_REVIEW_UNAVAILABLE",

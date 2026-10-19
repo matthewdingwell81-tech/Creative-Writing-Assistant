@@ -21,13 +21,25 @@ export interface SafetyFlag {
   reason: string;
 }
 
-export type CoachSafetyResult = {
-  kind: "reply";
-  content: string;
+export interface SafetyFlagRecord {
   requestContext: string;
   generatedContent: string | null;
   flags: SafetyFlag[];
-};
+}
+
+export type SafetyFlagRecorder = (userId: string, feature: string, record: SafetyFlagRecord) => Promise<void>;
+
+export interface CoachSafetyResult extends SafetyFlagRecord {
+  kind: "reply";
+  content: string;
+}
+
+export class SafetyFlagPersistenceError extends Error {
+  constructor() {
+    super("Safety flag persistence failed");
+    this.name = "SafetyFlagPersistenceError";
+  }
+}
 
 export class CoachSafetyCheckError extends Error {
   constructor() {
@@ -41,7 +53,7 @@ export const COACH_SAFETY_UNAVAILABLE_MESSAGE =
 export const WRITING_SAFETY_UNAVAILABLE_MESSAGE =
   "Safety checks are temporarily unavailable. Your prompt was kept; please try again later.";
 export const SAFETY_FLAG_NOTICE =
-  "This interaction was flagged for administrator review under the User Agreement.";
+  "This interaction was flagged for administrator review under the User Agreement. Relevant writing context is saved until review.";
 export const SAFETY_REVIEW_UNAVAILABLE_MESSAGE =
   "The administrator review record could not be saved. Your prompt was kept as a draft; please try again later.";
 
@@ -136,19 +148,11 @@ export async function checkCoachContent(
     throw new CoachSafetyCheckError();
   }
 
-  if (
-    !verdict ||
-    typeof verdict !== "object" ||
-    typeof (verdict as Record<string, unknown>).allowed !== "boolean" ||
-    (verdict as Record<string, unknown>).category !== undefined &&
-      (typeof (verdict as Record<string, unknown>).category !== "string" ||
-        (verdict as Record<string, unknown>).category.length > 80) ||
-    (verdict as Record<string, unknown>).reason !== undefined &&
-      (typeof (verdict as Record<string, unknown>).reason !== "string" ||
-        (verdict as Record<string, unknown>).reason.length > 500)
-  ) {
-    throw new CoachSafetyCheckError();
-  }
+  if (!verdict || typeof verdict !== "object") throw new CoachSafetyCheckError();
+  const { allowed, category, reason } = verdict as Record<string, unknown>;
+  if (typeof allowed !== "boolean" ||
+      category !== undefined && (typeof category !== "string" || category.length > 80) ||
+      reason !== undefined && (typeof reason !== "string" || reason.length > 500)) throw new CoachSafetyCheckError();
   const parsed = verdict as { allowed: boolean; category?: string; reason?: string };
   return {
     allowed: parsed.allowed,
@@ -161,6 +165,7 @@ export async function runCoachSafetyPipeline(
   request: Pick<CoachRequest, "messages" | "documentContent">,
   moderate: (content: string) => Promise<SafetyVerdict>,
   generate: () => Promise<string>,
+  recordFlag: (record: SafetyFlagRecord) => Promise<void>,
 ): Promise<CoachSafetyResult> {
   const flags: SafetyFlag[] = [];
   const requestContext = buildCoachSafetyContext(
@@ -168,11 +173,11 @@ export async function runCoachSafetyPipeline(
     request.documentContent,
   );
   const inputVerdict = await moderate(requestContext);
-  if (!inputVerdict.allowed) flags.push({
-    phase: "input",
-    category: inputVerdict.category,
-    reason: inputVerdict.reason,
-  });
+  if (!inputVerdict.allowed) {
+    const flag: SafetyFlag = { phase: "input", category: inputVerdict.category, reason: inputVerdict.reason };
+    flags.push(flag);
+    await recordFlag({ requestContext, generatedContent: null, flags: [flag] });
+  }
 
   const reply = await generate();
   if (!reply.trim()) throw new Error("Coach returned an empty response.");
@@ -181,11 +186,11 @@ export async function runCoachSafetyPipeline(
     requestContext: JSON.parse(requestContext),
     generatedReply: reply,
   }));
-  if (!outputVerdict.allowed) flags.push({
-    phase: "output",
-    category: outputVerdict.category,
-    reason: outputVerdict.reason,
-  });
+  if (!outputVerdict.allowed) {
+    const flag: SafetyFlag = { phase: "output", category: outputVerdict.category, reason: outputVerdict.reason };
+    flags.push(flag);
+    await recordFlag({ requestContext, generatedContent: reply, flags: [flag] });
+  }
 
   return {
     kind: "reply",

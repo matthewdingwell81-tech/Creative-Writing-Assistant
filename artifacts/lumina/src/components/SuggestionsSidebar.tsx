@@ -17,6 +17,7 @@ import {
 import {
   streamIdeas, streamCoach, CoachRequestBlockedError, CoachSafetyUnavailableError,
   WritingRequestBlockedError, WritingSafetyUnavailableError,
+  AI_FLAGGED_EVENT,
 } from '@/lib/api';
 import { useCoachHistory } from '@/hooks/useCoachHistory';
 import { COACH_RETENTION_LABEL, type CoachMessage } from '@/services/coachHistory';
@@ -247,6 +248,7 @@ export default function SuggestionsSidebar({
   const coachAbortRef = useRef<AbortController | null>(null);
   const [pendingReplacement, setPendingReplacement] = useState<{ messageIndex: number; text: string } | null>(null);
   const [tierMessage, setTierMessage] = useState('');
+  const [safetyNotice, setSafetyNotice] = useState('');
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [, setTierRevision] = useState(0);
   const { isPremium, bonusAIQueries } = useAdRewards(userId);
@@ -256,6 +258,16 @@ export default function SuggestionsSidebar({
   const dailyQueriesRemaining = getDailyAIQueriesRemaining();
   const totalQueriesRemaining = getAIQueriesRemaining();
   const hasAvailableAIQueries = totalQueriesRemaining > 0;
+
+  useEffect(() => {
+    setSafetyNotice('');
+    const onFlagged = (event: Event) => {
+      const detail = (event as CustomEvent<{ accountId?: string; notice: string }>).detail;
+      if (detail.accountId === userId) setSafetyNotice(detail.notice);
+    };
+    window.addEventListener(AI_FLAGGED_EVENT, onFlagged);
+    return () => window.removeEventListener(AI_FLAGGED_EVENT, onFlagged);
+  }, [userId, documentId]);
 
   useEffect(() => {
     setTierMessage('');
@@ -658,6 +670,7 @@ export default function SuggestionsSidebar({
         </div>
       )}
 
+      {safetyNotice && <p className="shrink-0 border-b border-border px-3 py-2 text-xs text-muted-foreground" role="status" data-testid="ai-flag-notice">{safetyNotice}</p>}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col w-full min-h-0">
         <div className="px-4 pt-3 pb-0 border-b border-border/50">
           <TabsList className="w-full bg-muted/50 grid grid-cols-6 p-1 rounded-lg">

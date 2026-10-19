@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, jsonb, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, varchar, jsonb, text, timestamp, index } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
 export type SafetyFlagPhase = {
@@ -19,4 +19,6 @@ export const safetyFlags = pgTable("safety_flags", {
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: "set null" }),
   reviewerNote: text("reviewer_note"),
-});
+}, table => [
+  index("safety_flags_status_created_at").on(table.status, table.createdAt.desc()),
+]);

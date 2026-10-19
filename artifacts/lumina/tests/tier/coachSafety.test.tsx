@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SuggestionsSidebar from "@/components/SuggestionsSidebar";
 import { CoachRequestBlockedError, CoachSafetyUnavailableError, streamCoach } from "@/lib/api";
+import { setCurrentTierUser } from "@/lib/tierAccount";
 
 const complete = vi.hoisted(() => vi.fn());
 const tier = vi.hoisted(() => ({ premium: true, trial: true }));
@@ -42,6 +43,7 @@ afterEach(() => {
   cleanup(); vi.unstubAllGlobals(); complete.mockClear();
   queryCharge.increment.mockClear(); queryCharge.refund.mockClear();
   tier.premium = true; tier.trial = true;
+  setCurrentTierUser(null);
 });
 
 function mountCoach() {
@@ -57,6 +59,26 @@ function mountCoach() {
 }
 
 describe("Coach safety feedback", () => {
+  it("flagging does not reject, refund, or lose the completed reply", async () => {
+    tier.premium = false; tier.trial = false;
+    setCurrentTierUser({ id: "safety-user", createdAt: "2026-10-16T00:00:00Z" });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(
+      'data: {"flagged":true,"notice":"Flagged for administrator review."}\n\n' +
+      'data: {"content":"Helpful writing response."}\n\n' +
+      'data: {"done":true}\n\n',
+    )));
+    mountCoach();
+    fireEvent.change(screen.getByTestId("textarea-coach-input"), { target: { value: "My draft request" } });
+    fireEvent.click(screen.getByTestId("btn-coach-send"));
+    await screen.findByText("Helpful writing response.");
+    await screen.findByText("Flagged for administrator review.");
+    expect(complete).toHaveBeenCalledWith([
+      { role: "user", content: "My draft request" },
+      { role: "assistant", content: "Helpful writing response." },
+    ]);
+    expect(queryCharge.increment).toHaveBeenCalledOnce();
+    expect(queryCharge.refund).not.toHaveBeenCalled();
+  });
   it.each([
     [{ blocked: true }, CoachRequestBlockedError],
     [{ error: "Unavailable", code: "COACH_SAFETY_UNAVAILABLE" }, CoachSafetyUnavailableError],

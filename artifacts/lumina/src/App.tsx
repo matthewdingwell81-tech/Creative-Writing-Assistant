@@ -9,6 +9,7 @@ import Home from "@/pages/Home";
 import AuthPage from "@/pages/AuthPage";
 import Upgrade from "@/pages/Upgrade";
 import SettingsPage from "@/pages/SettingsPage";
+import SafetyReviewPage from "@/pages/SafetyReviewPage";
 import LegalPage from "@/pages/LegalPage";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
@@ -62,6 +63,9 @@ function Router() {
       </Route>
       <Route path="/settings">
         {user ? <SettingsPage /> : <Redirect to="/auth" />}
+      </Route>
+      <Route path="/admin/review">
+        {user ? <SafetyReviewPage key={user.id} /> : <Redirect to="/auth" />}
       </Route>
       <Route path="/">
         {user ? <Home key={user.id} /> : <Redirect to="/auth" />}

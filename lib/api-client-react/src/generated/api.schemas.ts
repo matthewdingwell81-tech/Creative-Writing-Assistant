@@ -5,6 +5,62 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type SafetyFlagPhasePhase = typeof SafetyFlagPhasePhase[keyof typeof SafetyFlagPhasePhase];
+
+
+export const SafetyFlagPhasePhase = {
+  input: 'input',
+  output: 'output',
+} as const;
+
+export interface SafetyFlagPhase {
+  phase: SafetyFlagPhasePhase;
+  category: string;
+  reason: string;
+}
+
+export interface SafetyFlagRecord {
+  id: number;
+  userId: string;
+  username: string;
+  feature: string;
+  phases: SafetyFlagPhase[];
+  /** @nullable */
+  requestContext: string | null;
+  /** @nullable */
+  generatedContent: string | null;
+  status: string;
+  createdAt: string;
+  /** @nullable */
+  reviewedAt: string | null;
+  /** @nullable */
+  reviewerNote: string | null;
+}
+
+export interface SafetyFlagList {
+  flags: SafetyFlagRecord[];
+}
+
+export type SafetyFlagReviewInputDecision = typeof SafetyFlagReviewInputDecision[keyof typeof SafetyFlagReviewInputDecision];
+
+
+export const SafetyFlagReviewInputDecision = {
+  confirmed_violation: 'confirmed_violation',
+  no_violation: 'no_violation',
+} as const;
+
+export interface SafetyFlagReviewInput {
+  decision: SafetyFlagReviewInputDecision;
+  /** @maxLength 2000 */
+  note?: string;
+}
+
+export interface SafetyFlagReviewResult {
+  id: number;
+  status: string;
+  reviewedAt: string;
+}
+
 export interface AuthSessionUser {
   id: string;
   username: string;
@@ -218,4 +274,18 @@ export type PlanningRecordResponse = PlanningRecord;
  * Complete story plan ordered by position then ID
  */
 export type PlanningListResponse = PlanningRecord[];
+
+export type ListSafetyFlagsParams = {
+status?: ListSafetyFlagsStatus;
+};
+
+export type ListSafetyFlagsStatus = typeof ListSafetyFlagsStatus[keyof typeof ListSafetyFlagsStatus];
+
+
+export const ListSafetyFlagsStatus = {
+  open: 'open',
+  all: 'all',
+  confirmed_violation: 'confirmed_violation',
+  no_violation: 'no_violation',
+} as const;
 

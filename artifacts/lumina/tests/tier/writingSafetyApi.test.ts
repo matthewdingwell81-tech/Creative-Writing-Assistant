@@ -4,6 +4,7 @@ import {
   streamIdeas,
   WritingRequestBlockedError,
   WritingSafetyUnavailableError,
+  AI_FLAGGED_EVENT,
 } from "@/lib/api";
 
 afterEach(() => {
@@ -11,6 +12,29 @@ afterEach(() => {
 });
 
 describe("writing safety API errors", () => {
+  it("returns flagged suggestions and emits a review notice without throwing", async () => {
+    const notice = vi.fn();
+    window.addEventListener(AI_FLAGGED_EVENT, notice);
+    try {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        suggestions: [{ title: "Writing feedback" }], flagged: true, notice: "Flagged for administrator review.",
+      }))));
+      const result = await fetchSuggestions("A sufficiently long document.");
+      expect(result.suggestions[0].title).toBe("Writing feedback");
+      expect(notice).toHaveBeenCalledOnce();
+    } finally { window.removeEventListener(AI_FLAGGED_EVENT, notice); }
+  });
+
+  it("Ideas continues to completion when flagged", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+      'data: {"flagged":true,"notice":"Flagged for administrator review."}\n\n' +
+      'data: {"content":"Writing feedback."}\n\ndata: {"done":true}\n\n',
+    )));
+    const onChunk = vi.fn(), onDone = vi.fn();
+    await streamIdeas("fiction text", "write a scene", "fiction", onChunk, onDone);
+    expect(onChunk).toHaveBeenCalledWith("Writing feedback.");
+    expect(onDone).toHaveBeenCalledOnce();
+  });
   it("passes the suggestions refusal message to the caller", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
       error: "Lumina can’t help with that request. Keep it within the User Agreement.",

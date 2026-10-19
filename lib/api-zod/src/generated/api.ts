@@ -467,6 +467,62 @@ export const DeleteStoryPlanningParams = zod.object({
 
 
 /**
+ * @summary List potential User Agreement violations for developer administrators
+ */
+export const listSafetyFlagsQueryStatusDefault = `open`;
+
+export const ListSafetyFlagsQueryParams = zod.object({
+  "status": zod.enum(['open', 'all', 'confirmed_violation', 'no_violation']).default(listSafetyFlagsQueryStatusDefault)
+})
+
+export const ListSafetyFlagsResponse = zod.object({
+  "flags": zod.array(zod.object({
+  "id": zod.number(),
+  "userId": zod.string(),
+  "username": zod.string(),
+  "feature": zod.string(),
+  "phases": zod.array(zod.object({
+  "phase": zod.enum(['input', 'output']),
+  "category": zod.string(),
+  "reason": zod.string()
+})),
+  "requestContext": zod.string().nullable(),
+  "generatedContent": zod.string().nullable(),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "reviewedAt": zod.coerce.date().nullable(),
+  "reviewerNote": zod.string().nullable()
+}))
+})
+
+
+/**
+ * @summary Record an administrator decision without taking automatic account action
+ */
+
+
+
+export const ReviewSafetyFlagParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const reviewSafetyFlagBodyNoteMax = 2000;
+
+
+
+export const ReviewSafetyFlagBody = zod.object({
+  "decision": zod.enum(['confirmed_violation', 'no_violation']),
+  "note": zod.string().max(reviewSafetyFlagBodyNoteMax).optional()
+})
+
+export const ReviewSafetyFlagResponse = zod.object({
+  "id": zod.number(),
+  "status": zod.string(),
+  "reviewedAt": zod.coerce.date()
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */

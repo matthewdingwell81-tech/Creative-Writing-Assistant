@@ -16,12 +16,14 @@ const request = {
   documentType: "fiction",
 };
 
-async function exercise({ verdicts = [true, true], body = request, classify, reply = "A safe fictional outline." } = {}) {
+async function exercise({ verdicts = [true, true], body = request, classify, reply = "A safe fictional outline.", generationError = false, recordError = false } = {}) {
   const calls = [];
+  const reports = [];
   let reviews = 0;
   const client = { chat: { completions: { create: async (params) => {
     calls.push(params);
     if (params.stream) {
+      if (generationError) throw new Error("Generation unavailable");
       return (async function* () {
         yield { choices: [{ delta: { content: reply.slice(0, 7) } }] };
         yield { choices: [{ delta: { content: reply.slice(7) } }] };
@@ -35,27 +37,35 @@ async function exercise({ verdicts = [true, true], body = request, classify, rep
   } } } };
   const app = express();
   app.use(express.json({ limit: "2mb" }));
-  app.use((req, _res, next) => { req.log = { error() {} }; next(); });
-  app.post("/coach", createCoachHandler(client));
+  app.use((req, _res, next) => { req.log = { error() {} }; req.session = { userId: "writer-account" }; next(); });
+  app.post("/coach", createCoachHandler(client, async (userId, feature, record) => {
+    if (recordError) throw new Error("Storage unavailable");
+    reports.push({ userId, feature, ...record });
+  }));
   const server = app.listen(0, "127.0.0.1");
   await new Promise(resolve => server.once("listening", resolve));
   try {
     const response = await fetch(`http://127.0.0.1:${server.address().port}/coach`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
-    return { status: response.status, text: await response.text(), calls };
+    return { status: response.status, text: await response.text(), calls, reports };
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
 }
 
-test("blocked input never reaches Coach generation", async () => {
-  const result = await exercise({ verdicts: [false] });
-  assert.match(result.text, /"blocked":true/);
-  assert.match(result.text, /User Agreement/);
-  assert.equal(result.calls.length, 1);
-  assert.equal(result.calls[0].stream, undefined);
-  assert.doesNotMatch(result.text, /"content"|"done"/);
+test("flagged input is recorded and still receives Coach generation", async () => {
+  const result = await exercise({ verdicts: [false, true] });
+  assert.match(result.text, /"flagged":true/);
+  assert.match(result.text, /"done":true/);
+  assert.match(result.text, /A safe fictional outline/);
+  assert.equal(result.calls.length, 3);
+  assert.equal(result.reports.length, 1);
+  assert.equal(result.reports[0].userId, "writer-account");
+  assert.equal(result.reports[0].feature, "coach");
+  assert.equal(result.reports[0].flags[0].phase, "input");
+  assert.equal(result.reports[0].generatedContent, null);
+  assert.doesNotMatch(result.text, /"blocked":true/);
 });
 
 test("ordinary fiction reaches generation and is returned only after output review", async () => {
@@ -66,12 +76,35 @@ test("ordinary fiction reaches generation and is returned only after output revi
   assert.match(result.text, /"done":true/);
   const outputReview = JSON.parse(result.calls[2].messages[1].content);
   assert.equal(outputReview.generatedReply, "A safe fictional outline.");
+  assert.equal(result.reports.length, 0);
 });
 
-test("unsafe generated chunks are withheld in full", async () => {
-  const result = await exercise({ verdicts: [true, false], reply: "UNSAFE_OUTPUT_MARKER" });
-  assert.match(result.text, /"blocked":true/);
-  assert.doesNotMatch(result.text, /UNSAFE_OUTPUT_MARKER|"content"|"done"/);
+test("flagged output is recorded and returned for human review instead of blocked", async () => {
+  const result = await exercise({ verdicts: [true, false], reply: "FLAGGED_OUTPUT_MARKER" });
+  assert.match(result.text, /"flagged":true/);
+  assert.match(result.text, /FLAGGED_OUTPUT_MARKER/);
+  assert.match(result.text, /"done":true/);
+  assert.equal(result.reports[0].generatedContent, "FLAGGED_OUTPUT_MARKER");
+  assert.equal(result.reports[0].flags[0].phase, "output");
+});
+
+test("a flagged input remains recorded if generation fails", async () => {
+  const result = await exercise({ verdicts: [false], generationError: true });
+  assert.match(result.text, /COACH_GENERATION_FAILED/);
+  assert.equal(result.reports.length, 1);
+});
+
+test("input and output concerns each reach the review queue", async () => {
+  const result = await exercise({ verdicts: [false, false] });
+  assert.deepEqual(result.reports.map(report => report.flags[0].phase), ["input", "output"]);
+  assert.match(result.text, /"done":true/);
+});
+
+test("a flagged request does not proceed unrecorded when review storage fails", async () => {
+  const result = await exercise({ verdicts: [false], recordError: true });
+  assert.equal(result.calls.length, 1);
+  assert.doesNotMatch(result.text, /"done":true|"content"/);
+  assert.match(result.text, /"error"/);
 });
 
 for (const stage of ["input", "output"]) {

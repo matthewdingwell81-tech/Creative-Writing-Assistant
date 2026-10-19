@@ -32,6 +32,7 @@ async function requestEndpoint({
   body,
 } = {}) {
   const calls = [];
+  const reports = [];
   let reviewCount = 0;
   const client = { chat: { completions: { create: async (params) => {
     calls.push(params);
@@ -50,9 +51,10 @@ async function requestEndpoint({
   } } } };
   const app = express();
   app.use(express.json({ limit: "2mb" }));
-  app.use((req, _res, next) => { req.log = { error() {} }; next(); });
-  app.post("/suggestions", createSuggestionsHandler(client));
-  app.post("/ideas", createIdeasHandler(client));
+  app.use((req, _res, next) => { req.log = { error() {} }; req.session = { userId: "writer-account" }; next(); });
+  const recordFlag = async (userId, feature, record) => reports.push({ userId, feature, ...record });
+  app.post("/suggestions", createSuggestionsHandler(client, recordFlag));
+  app.post("/ideas", createIdeasHandler(client, recordFlag));
   const server = app.listen(0, "127.0.0.1");
   await new Promise(resolve => server.once("listening", resolve));
   try {
@@ -63,7 +65,7 @@ async function requestEndpoint({
         ? { text: writingText, prompt: "Help outline a fictional mystery.", documentType: "fiction" }
         : { text: writingText, documentType: "fiction" })),
     });
-    return { status: response.status, text: await response.text(), calls };
+    return { status: response.status, text: await response.text(), calls, reports };
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
@@ -86,19 +88,24 @@ for (const path of ["/ideas", "/suggestions"]) {
     assert.match(JSON.stringify(outputReview), path === "/ideas" ? /A safe fictional idea/ : /Strengthen the image/);
   });
 
-  test(`${label} blocks prohibited input before generation`, async () => {
-    const result = await requestEndpoint({ path, verdicts: [false] });
-    assert.match(result.text, path === "/ideas" ? /"blocked":true/ : /"code":"AI_REQUEST_BLOCKED"/);
-    assert.match(result.text, /User Agreement/);
-    assert.equal(result.calls.length, 1);
-    assert.doesNotMatch(result.text, /"content"|"suggestions"/);
+  test(`${label} flags input for the administrator and continues generation`, async () => {
+    const result = await requestEndpoint({ path, verdicts: [false, true], reply: path === "/ideas" ? "An idea." : generatedSuggestions });
+    assert.match(result.text, /"flagged":true/);
+    assert.equal(result.calls.length, 3);
+    assert.match(result.text, path === "/ideas" ? /"content"/ : /"suggestions"/);
+    assert.equal(result.reports.length, 1);
+    assert.equal(result.reports[0].feature, label);
+    assert.equal(result.reports[0].userId, "writer-account");
+    assert.equal(result.reports[0].flags[0].phase, "input");
   });
 
-  test(`${label} withholds unsafe generated output`, async () => {
-    const unsafe = "UNSAFE_GENERATED_TEXT_MARKER";
-    const result = await requestEndpoint({ path, verdicts: [true, false], reply: path === "/ideas" ? unsafe : JSON.stringify([{ title: unsafe }]) });
-    assert.match(result.text, path === "/ideas" ? /"blocked":true/ : /"code":"AI_REQUEST_BLOCKED"/);
-    assert.doesNotMatch(result.text, /UNSAFE_GENERATED_TEXT_MARKER|"done"/);
+  test(`${label} records and returns flagged output`, async () => {
+    const marker = "FLAGGED_GENERATED_TEXT_MARKER";
+    const result = await requestEndpoint({ path, verdicts: [true, false], reply: path === "/ideas" ? marker : JSON.stringify([{ title: marker }]) });
+    assert.match(result.text, /"flagged":true/);
+    assert.match(result.text, /FLAGGED_GENERATED_TEXT_MARKER/);
+    assert.equal(result.reports[0].flags[0].phase, "output");
+    assert.match(result.reports[0].generatedContent, /FLAGGED_GENERATED_TEXT_MARKER/);
   });
 
   test(`${label} fails closed when the safety service is unavailable`, async () => {

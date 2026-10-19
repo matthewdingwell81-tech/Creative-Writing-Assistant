@@ -237,6 +237,52 @@ paths:
       responses:
         "204":
           description: Deleted
+  /admin/safety-flags:
+    get:
+      operationId: listSafetyFlags
+      summary: List potential User Agreement violations for developer administrators
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [open, all, confirmed_violation, no_violation]
+            default: open
+      responses:
+        "200":
+          description: The newest 100 matching safety flags; private writing is removed after review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SafetyFlagList"
+        "403":
+          description: Developer administrator access required
+  /admin/safety-flags/{id}/review:
+    post:
+      operationId: reviewSafetyFlag
+      summary: Record an administrator decision without taking automatic account action
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SafetyFlagReviewInput"
+      responses:
+        "200":
+          description: Decision saved and private writing removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SafetyFlagReviewResult"
+        "403":
+          description: Developer administrator access required
+        "409":
+          description: The flag has already been reviewed or no longer exists
   /healthz:
     get:
       operationId: healthCheck
@@ -275,6 +321,50 @@ components:
             items:
               $ref: "#/components/schemas/PlanningRecord"
   schemas:
+    SafetyFlagPhase:
+      type: object
+      required: [phase, category, reason]
+      properties:
+        phase: { type: string, enum: [input, output] }
+        category: { type: string }
+        reason: { type: string }
+    SafetyFlagRecord:
+      type: object
+      required: [id, userId, username, feature, phases, requestContext, generatedContent, status, createdAt, reviewedAt, reviewerNote]
+      properties:
+        id: { type: integer }
+        userId: { type: string }
+        username: { type: string }
+        feature: { type: string }
+        phases:
+          type: array
+          items: { $ref: "#/components/schemas/SafetyFlagPhase" }
+        requestContext: { type: [string, "null"] }
+        generatedContent: { type: [string, "null"] }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+        reviewedAt: { type: [string, "null"], format: date-time }
+        reviewerNote: { type: [string, "null"] }
+    SafetyFlagList:
+      type: object
+      required: [flags]
+      properties:
+        flags:
+          type: array
+          items: { $ref: "#/components/schemas/SafetyFlagRecord" }
+    SafetyFlagReviewInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [confirmed_violation, no_violation] }
+        note: { type: string, maxLength: 2000 }
+    SafetyFlagReviewResult:
+      type: object
+      required: [id, status, reviewedAt]
+      properties:
+        id: { type: integer }
+        status: { type: string }
+        reviewedAt: { type: string, format: date-time }
     AuthSessionUser:
       type: object
       required: [id, username, email, firebaseUid, createdAt, premium]

@@ -1,12 +1,5 @@
 import { db, safetyFlags } from "@workspace/db";
-import type { CoachSafetyResult } from "./coachSafety";
-
-export class SafetyFlagPersistenceError extends Error {
-  constructor() {
-    super("Safety flag persistence failed");
-    this.name = "SafetyFlagPersistenceError";
-  }
-}
+import { SafetyFlagPersistenceError, type SafetyFlagRecord } from "./coachSafety";
 
 /**
  * Keep writing private content only for an actual safety flag. The API sends
@@ -15,7 +8,7 @@ export class SafetyFlagPersistenceError extends Error {
 export async function saveSafetyFlag(
   userId: string,
   feature: string,
-  result: CoachSafetyResult,
+  result: SafetyFlagRecord,
 ): Promise<void> {
   if (result.flags.length === 0) return;
   try {
