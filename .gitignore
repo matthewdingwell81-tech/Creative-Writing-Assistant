@@ -47,3 +47,5 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+# Historical source must never acquire a second, unsupported dependency graph.
+/.migration-backup/package-lock.json
