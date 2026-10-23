@@ -14,6 +14,9 @@ export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
   fullyParallel: false,
+  // Projects share saved account state; fullyParallel:false only serializes
+  // tests inside each file, not concurrent projects changing that account.
+  workers: 1,
   retries: 1,
   timeout: 30_000,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],

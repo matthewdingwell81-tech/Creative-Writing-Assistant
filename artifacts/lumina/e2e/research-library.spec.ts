@@ -107,7 +107,7 @@ test('completes the Research Library workflow', async ({ page }, testInfo) => {
     await expect(page.getByTestId(`title-${item.id}`)).toContainText(editedTitle);
     await expect(page.getByTestId(`favorite-${item.id}`)).toBeVisible();
     await page.screenshot({
-      path: `../../screenshots/research-library-${testInfo.project.name}.png`,
+      path: testInfo.outputPath('research-library.png'),
       fullPage: true,
     });
 
@@ -126,7 +126,7 @@ test('completes the Research Library workflow', async ({ page }, testInfo) => {
     await page.getByTestId('tab-all').click();
     await expect(page.getByTestId(`floating-item-${item.id}`)).toBeVisible();
     await page.screenshot({
-      path: `../../screenshots/research-floating-${testInfo.project.name}.png`,
+      path: testInfo.outputPath('research-floating.png'),
       fullPage: true,
     });
     await page.getByTestId(`btn-toggle-attach-${item.id}`).click();

@@ -3,11 +3,11 @@ name: Shared E2E execution
 description: Why overlapping full browser regression suites can fail unreliably in this workspace.
 ---
 
-Do not run two full browser regression suites concurrently against the same workspace. Check whether a configured test workflow is already executing before starting a shell run or completion validation.
+Do not run two full browser regression suites concurrently against the same workspace. Check whether a configured test workflow is already executing before starting a shell run or completion validation. Serialize projects within each suite as well while they share saved account state.
 
 **Why:** Overlapping full-suite invocations caused intermittent document/chapter setup failures and mobile navigation timeouts even though the focused changed flows passed. Each invocation can open and update writing documents on the shared test account.
 
-**How to apply:** Let an existing suite finish or stop its duplicate before validating. Do not interpret a shared-fixture setup failure as a feature defect without checking concurrent test activity.
+**How to apply:** Let an existing suite finish or stop its duplicate before validating. Keep a single Playwright worker for shared-account projects: disabling fully-parallel mode does not serialize separate projects. Do not interpret a shared-fixture setup failure as a feature defect without checking concurrent test activity. Wait for dismissed mobile dialogs to unmount before immediately reopening a drawer.
 
 Empty-workspace tests must use a dedicated account, never delete all documents from a shared account.
 

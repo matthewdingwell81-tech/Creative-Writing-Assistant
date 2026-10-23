@@ -3,6 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 async function selectDocument(page: Page, documentId: number, title: string) {
   const currentTitle = await page.getByTestId('input-title').inputValue().catch(() => '');
   if (currentTitle === title) return;
+  await expect(page.locator('[role="dialog"][data-state="closed"]')).toHaveCount(0);
   await page.getByTestId('toggle-doc-list').click();
   await expect(page.getByTestId(`doc-item-${documentId}`)).toBeVisible();
   const chaptersLoaded = page.waitForResponse(response =>
@@ -13,6 +14,7 @@ async function selectDocument(page: Page, documentId: number, title: string) {
   await page.getByTestId(`doc-item-${documentId}`).click();
   await chaptersLoaded;
   await expect(page.getByTestId('input-title')).toHaveValue(title);
+  await expect(page.getByRole('dialog', { name: 'Documents', exact: true })).toHaveCount(0);
 }
 
 async function openBoard(page: Page, isMobile: boolean) {

@@ -10,8 +10,12 @@ async function openBoard(page: Page, mobile: boolean) {
   await expect(page.getByTestId('board')).toBeVisible();
 }
 async function selectDoc(page: Page, id: number) {
+  // A dismissed mobile drawer can still be mounted during its exit animation.
+  await expect(page.locator('[role="dialog"][data-state="closed"]')).toHaveCount(0);
   await page.getByTestId('toggle-doc-list').click();
+  await expect(page.getByTestId(`doc-item-${id}`)).toBeVisible();
   await page.getByTestId(`doc-item-${id}`).click();
+  await expect(page.getByRole('dialog', { name: 'Documents', exact: true })).toHaveCount(0);
 }
 const visibleForm = (page: Page) => page.locator('[data-testid="planning-form"]:visible');
 async function save(page: Page, form: Locator) {
