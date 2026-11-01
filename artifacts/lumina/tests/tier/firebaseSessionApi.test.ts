@@ -4,14 +4,17 @@ import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import { users } from "../../../../lib/db/src/schema/users";
-import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
+import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify, SignJWT } from "jose";
 import type {} from "../../../api-server/src/types/session";
 import { createFirebaseSessionRouter } from "../../../api-server/src/routes/firebase-session";
 import { createBillingRouter } from "../../../api-server/src/routes/billing";
-import { verifyFirebaseIdToken } from "../../../api-server/src/lib/firebaseAuth";
+import { verifyFirebaseIdToken, type VerifiedFirebaseUser } from "../../../api-server/src/lib/firebaseAuth";
 import type { AuthRepository } from "../../../api-server/src/lib/firebaseSession";
 import { DatabaseStorage } from "../../../api-server/src/storage";
-import { developerSubscription } from "../../../api-server/src/lib/subscriptions";
+import {
+  developerSubscription, receiptPublicKey, signVerificationReceipt,
+  type VerifiedSubscription,
+} from "../../../api-server/src/lib/subscriptions";
 
 // Exercise the real HTTP router/session middleware and signature verifier with
 // a test-only key/repository. No live Firebase identity or database is changed.
@@ -32,6 +35,7 @@ beforeAll(async () => {
   jwks = createLocalJWKSet({ keys: [await exportJWK(keys.publicKey)] });
 });
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(servers.splice(0).map(server => new Promise<void>((resolve, reject) => {
     server.close(error => error ? reject(error) : resolve()); server.closeAllConnections();
   })));
@@ -187,6 +191,125 @@ describe("Firebase /auth/me restoration", () => {
     expect(records.get("other-firebase-account")?.firebaseUid).toBe("another-firebase-uid");
     expect([...records.values()].filter(user => user.firebaseUid === uid)).toHaveLength(1);
     expect(records.size).toBe(3);
+  });
+});
+
+describe("verified developer Premium sign-in and billing receipt", () => {
+  it("links an allowlisted Google identity, signs Premium, and keeps another account Free across switches", async () => {
+    vi.stubEnv("SESSION_SECRET", "isolated-developer-premium-integration-secret");
+    const developerAccount: User = {
+      id: "developer-account", username: "developer@example.test", password: "unusable-test-password",
+      firebaseUid: null, tutorialsEnabled: true, createdAt: new Date("2020-01-01T00:00:00Z"),
+    };
+    const records = new Map<string, User>([[developerAccount.id, developerAccount]]);
+    const repository: AuthRepository = {
+      getUserById: async id => records.get(id),
+      getUserByFirebaseUid: async firebaseUid =>
+        [...records.values()].find(user => user.firebaseUid === firebaseUid),
+      resolveFirebaseUser: async (firebaseUid, email, password) => {
+        const alreadyLinked = [...records.values()].find(user => user.firebaseUid === firebaseUid);
+        if (alreadyLinked) return alreadyLinked;
+        const existing = [...records.values()].find(user => user.username.toLowerCase() === email.toLowerCase());
+        const user: User = existing ?? {
+          id: "unrelated-account", username: email, password, firebaseUid: null,
+          tutorialsEnabled: true, createdAt: new Date("2024-01-01T00:00:00Z"),
+        };
+        if (user.firebaseUid && user.firebaseUid !== firebaseUid) return undefined;
+        const linked = { ...user, firebaseUid };
+        records.set(linked.id, linked);
+        return linked;
+      },
+    };
+    const verifyFixtureToken = (value: string): Promise<VerifiedFirebaseUser> =>
+      verifyFirebaseIdToken(value, jwks);
+    const app = express();
+    app.use(session({ secret: "isolated-session-test-secret", resave: false, saveUninitialized: false }));
+    app.use(express.json());
+    app.use(createFirebaseSessionRouter(repository, verifyFixtureToken));
+    app.use(createBillingRouter({
+      getUserById: async id => records.get(id),
+      linkFirebaseUser: async (id, firebaseUid) => {
+        const existing = records.get(id);
+        if (!existing || (existing.firebaseUid && existing.firebaseUid !== firebaseUid) ||
+            [...records.values()].some(user => user.firebaseUid === firebaseUid && user.id !== id)) return undefined;
+        const linked = { ...existing, firebaseUid };
+        records.set(id, linked);
+        return linked;
+      },
+      verifyFirebaseIdToken: verifyFixtureToken,
+      verifiedState: async (accountId) => {
+        const user = records.get(accountId);
+        if (!user) throw new Error("Account not found.");
+        const state: VerifiedSubscription = developerSubscription(accountId, user.firebaseUid) ?? {
+          accountId, tier: "free", status: "none", subscriptionId: null,
+          expiresAt: null, verifiedAt: Date.now(),
+        };
+        return {
+          ...state, receipt: await signVerificationReceipt(state), firebaseSync: "not-linked",
+        };
+      },
+    }));
+    const server: Server = await new Promise(resolve => {
+      const value = app.listen(0, "127.0.0.1", () => resolve(value));
+    });
+    servers.push(server);
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Test server did not open a port");
+    const url = `http://127.0.0.1:${address.port}`;
+    const publicKeys = createLocalJWKSet({ keys: [await receiptPublicKey()] });
+
+    const signIn = async (tokenValue: string) => fetch(`${url}/auth/firebase-session`, {
+      method: "POST", headers: { Authorization: `Bearer ${tokenValue}` },
+    });
+    const refresh = async (cookie: string) => fetch(`${url}/billing/subscription`, {
+      headers: { Cookie: cookie },
+    });
+    const assertSignedState = async (response: Response, expected: "premium" | "free", accountId: string) => {
+      expect(response.status).toBe(200);
+      const state = await response.json();
+      expect(state).toMatchObject({ accountId, tier: expected });
+      const { payload } = await jwtVerify(state.receipt, publicKeys, {
+        issuer: "lumina-billing", audience: "lumina-premium",
+      });
+      expect(payload.sub).toBe(accountId);
+      expect(payload.subscription).toMatchObject({ accountId, tier: expected });
+    };
+
+    const developerSignIn = await signIn(await token());
+    expect(developerSignIn.status).toBe(200);
+    const developerSession = await developerSignIn.json();
+    expect(developerSession).toMatchObject({
+      id: "developer-account", firebaseUid: uid, premium: true,
+    });
+    expect(records.get("developer-account")?.firebaseUid).toBe(uid);
+    const developerCookie = developerSignIn.headers.get("set-cookie")!.split(";")[0];
+    await assertSignedState(await refresh(developerCookie), "premium", "developer-account");
+
+    const unrelatedSignIn = await signIn(await token({
+      email: "writer@example.test", email_verified: true,
+    }, "unrelated-google-uid"));
+    expect(unrelatedSignIn.status).toBe(200);
+    const unrelatedSession = await unrelatedSignIn.json();
+    expect(unrelatedSession).toMatchObject({
+      id: "unrelated-account", firebaseUid: "unrelated-google-uid", premium: null,
+    });
+    const unrelatedCookie = unrelatedSignIn.headers.get("set-cookie")!.split(";")[0];
+    await assertSignedState(await refresh(unrelatedCookie), "free", "unrelated-account");
+    const reloadedUnrelated = await fetch(`${url}/auth/me`, { headers: { Cookie: unrelatedCookie } });
+    expect(await reloadedUnrelated.json()).toMatchObject({
+      id: "unrelated-account", firebaseUid: "unrelated-google-uid", premium: null,
+    });
+
+    const freshDeveloperSignIn = await signIn(await token());
+    expect(await freshDeveloperSignIn.json()).toMatchObject({
+      id: "developer-account", firebaseUid: uid, premium: true,
+    });
+    const freshDeveloperCookie = freshDeveloperSignIn.headers.get("set-cookie")!.split(";")[0];
+    const reloadedDeveloper = await fetch(`${url}/auth/me`, { headers: { Cookie: freshDeveloperCookie } });
+    expect(await reloadedDeveloper.json()).toMatchObject({
+      id: "developer-account", firebaseUid: uid, premium: true,
+    });
+    await assertSignedState(await refresh(freshDeveloperCookie), "premium", "developer-account");
   });
 });
 

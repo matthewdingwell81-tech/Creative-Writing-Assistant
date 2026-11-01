@@ -30,6 +30,16 @@ export default defineConfig({
 
   projects: [
     {
+      name: 'android-developer-premium',
+      testMatch: '**/developer-premium.spec.ts',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 412, height: 915 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+    {
       name: 'coach-history-storage',
       testMatch: '**/coach-history-storage.spec.ts',
     },
