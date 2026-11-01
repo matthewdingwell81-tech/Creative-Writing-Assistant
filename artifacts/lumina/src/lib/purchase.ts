@@ -78,7 +78,7 @@ export async function verifyPurchase(signal?: AbortSignal): Promise<Subscription
   assertVerificationAccount();
   const firebaseUser = auth.currentUser;
   // Never attach a leftover Google login to a username/password account.
-  const matched = firebaseUser?.email?.toLowerCase() ===
+  const matched = firebaseUser?.emailVerified !== false && firebaseUser?.email?.trim().toLowerCase() ===
     (session?.email ?? session?.username)?.toLowerCase();
   const firebaseIdToken = matched && firebaseUser ? await firebaseUser.getIdToken() : undefined;
   assertVerificationAccount();

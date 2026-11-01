@@ -2,11 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({
   configure: vi.fn(), logIn: vi.fn(), getOfferings: vi.fn(), purchasePackage: vi.fn(), restorePurchases: vi.fn(),
   verify: vi.fn(), config: vi.fn(), save: vi.fn(), record: vi.fn(), receipt: vi.fn(),
+  auth: { authStateReady: vi.fn(), currentUser: null as any },
 }));
 vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => true, getPlatform: () => "android" } }));
 vi.mock("@revenuecat/purchases-capacitor", () => ({ Purchases: mock }));
 vi.mock("@workspace/api-client-react", () => ({ getBillingConfiguration: mock.config, refreshSubscription: mock.verify }));
-vi.mock("@/lib/firebase", () => ({ auth: { authStateReady: async () => {}, currentUser: null } }));
+vi.mock("@/lib/firebase", () => ({ auth: mock.auth }));
 vi.mock("@/lib/subscriptionCache", () => ({ readSubscription: mock.receipt, recordSubscription: mock.record, saveSubscription: mock.save }));
 import { setCurrentTierUser } from "@/lib/tierAccount";
 import { hasPendingPurchase, manageSubscription, purchasePremium, restorePurchase, retryVerification, verifyPurchase } from "@/lib/purchase";
@@ -15,7 +16,12 @@ describe("native purchase safety", () => {
   afterEach(() => { vi.unstubAllGlobals(); });
   beforeEach(() => {
     localStorage.clear(); vi.clearAllMocks();
-    setCurrentTierUser({ id: "buyer", createdAt: new Date().toISOString() });
+    mock.auth.currentUser = null;
+    mock.auth.authStateReady.mockResolvedValue(undefined);
+    setCurrentTierUser({
+      id: "buyer", email: "buyer@example.test", username: "buyer@example.test",
+      createdAt: new Date().toISOString(),
+    });
     mock.config.mockResolvedValue({ androidApiKey: "goog_test_public", receiptPublicKey: {} });
     mock.verify.mockResolvedValue(state());
     mock.getOfferings.mockResolvedValue({ current: { monthly: { identifier: "$rc_monthly", product: { priceString: "$4.99" } } } });
@@ -28,6 +34,33 @@ describe("native purchase safety", () => {
     expect(mock.purchasePackage).toHaveBeenCalledTimes(1);
     expect(mock.verify).toHaveBeenCalledTimes(2);
     expect(hasPendingPurchase("buyer")).toBe(false);
+  });
+  it("sends a verified matching Firebase identity for server-side UID linking", async () => {
+    const firebaseUser = {
+      uid: "verified-developer-uid",
+      email: "BUYER@example.test",
+      emailVerified: true,
+      getIdToken: vi.fn().mockResolvedValue("firebase-id-token"),
+    };
+    mock.auth.currentUser = firebaseUser;
+
+    await verifyPurchase();
+
+    expect(firebaseUser.getIdToken).toHaveBeenCalledOnce();
+    expect(mock.verify).toHaveBeenCalledWith({ firebaseIdToken: "firebase-id-token" });
+  });
+  it("does not use an unverified Firebase email to link an account", async () => {
+    mock.auth.currentUser = {
+      uid: "unverified-uid",
+      email: "buyer@example.test",
+      emailVerified: false,
+      getIdToken: vi.fn(),
+    };
+
+    await verifyPurchase();
+
+    expect(mock.auth.currentUser.getIdToken).not.toHaveBeenCalled();
+    expect(mock.verify).toHaveBeenCalledWith({});
   });
   it("retries a lost confirmation without opening another purchase", async () => {
     mock.verify.mockResolvedValueOnce(state()).mockRejectedValueOnce(new Error("Network failure"));

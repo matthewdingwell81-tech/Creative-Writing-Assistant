@@ -1,6 +1,8 @@
 import { createContext, createElement, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { onAuthStateChanged } from "firebase/auth";
 import type { SubscriptionState } from "@workspace/api-client-react";
 import { useAuth } from "./useAuth";
+import { auth } from "@/lib/firebase";
 import {
   getMonthlyPackage, hasPendingPurchase, loadOfflineSubscription, manageSubscription,
   nativePurchasesAvailable, purchasePremium, restorePurchase, retryVerification,
@@ -100,6 +102,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     setSettledAccount(null);
     if (!id) return;
     void refresh();
+    const stopAuth = onAuthStateChanged(auth, firebaseUser => {
+      if (!firebaseUser || firebaseUser.emailVerified === false) return;
+      const firebaseEmail = firebaseUser.email?.trim().toLowerCase();
+      const accountEmail = (user?.email ?? user?.username).trim().toLowerCase();
+      const matchesLinkedUid = Boolean(user?.firebaseUid && user.firebaseUid === firebaseUser.uid);
+      if (matchesLinkedUid || (firebaseEmail && firebaseEmail === accountEmail)) void refresh();
+    });
     if (nativePurchasesAvailable()) {
       void getMonthlyPackage().then(pkg => { if (!disposed) setPrice(pkg.product.priceString); }).catch(err => {
         if (!disposed) setMessage(err instanceof Error ? err.message : "Store pricing is unavailable.");
@@ -131,6 +140,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     return () => {
       generation.current++;
       refreshController.current?.abort();
+      stopAuth();
       disposed = true; stopNative?.(); forgetSubscription(id);
       clearInterval(timer);
       window.removeEventListener(SUBSCRIPTION_CHANGED, updated);

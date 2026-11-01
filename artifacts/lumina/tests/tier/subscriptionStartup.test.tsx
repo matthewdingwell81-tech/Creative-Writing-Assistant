@@ -5,8 +5,13 @@ const mock = vi.hoisted(() => ({
   user: { id: "developer", email: "developer@example.test", username: "developer", createdAt: "2020-01-01T00:00:00Z" } as {
     id: string; email: string; username: string; createdAt: string;
   } | null,
+  firebaseAuth: { currentUser: null as any },
+  authListeners: [] as { next: (user: any) => void; stop: ReturnType<typeof vi.fn> }[],
+  onAuthStateChanged: vi.fn(),
   verify: vi.fn(), offline: vi.fn(), logout: vi.fn(),
 }));
+vi.mock("@/lib/firebase", () => ({ auth: mock.firebaseAuth }));
+vi.mock("firebase/auth", () => ({ onAuthStateChanged: mock.onAuthStateChanged }));
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({
   user: mock.user, isLoading: false, logout: mock.logout,
 }) }));
@@ -60,6 +65,14 @@ function Harness() {
 }
 beforeEach(() => {
   vi.clearAllMocks(); localStorage.clear(); mounts.length = 0;
+  mock.firebaseAuth.currentUser = null;
+  mock.authListeners.length = 0;
+  mock.onAuthStateChanged.mockImplementation((_auth, next) => {
+    const listener = { next, stop: vi.fn() };
+    mock.authListeners.push(listener);
+    next(mock.firebaseAuth.currentUser);
+    return listener.stop;
+  });
   mock.user = { id: "developer", email: "developer@example.test", username: "developer", createdAt: "2020-01-01T00:00:00Z" };
   mock.offline.mockResolvedValue(null);
 });
@@ -86,6 +99,43 @@ describe("tier initialization before authenticated content", () => {
     render(<Harness />);
     await waitFor(() => expect(screen.getByTestId("account-content").textContent).toBe("free"));
     expect(localStorage.getItem(PREMIUM_COMPATIBILITY_KEY)).toBe("free");
+  });
+  it("refreshes the server entitlement when the matching Firebase identity signs in later", async () => {
+    mock.verify.mockResolvedValueOnce(granted("developer", "free")).mockResolvedValueOnce(granted());
+    render(<Harness />);
+    await waitFor(() => expect(screen.getByTestId("account-content").textContent).toBe("free"));
+    expect(mock.verify).toHaveBeenCalledTimes(1);
+
+    const firebaseUser = {
+      uid: "verified-developer-uid",
+      email: "DEVELOPER@example.test",
+      emailVerified: true,
+    };
+    act(() => {
+      mock.firebaseAuth.currentUser = firebaseUser;
+      mock.authListeners[0].next(firebaseUser);
+    });
+
+    await waitFor(() => expect(screen.getByTestId("account-content").textContent).toBe("premium"));
+    expect(mock.verify).toHaveBeenCalledTimes(2);
+  });
+  it("does not refresh or link an unrelated Firebase identity", async () => {
+    mock.verify.mockResolvedValue(granted("developer", "free"));
+    render(<Harness />);
+    await waitFor(() => expect(screen.getByTestId("account-content").textContent).toBe("free"));
+
+    const unrelatedUser = {
+      uid: "unrelated-uid",
+      email: "another-account@example.test",
+      emailVerified: true,
+    };
+    act(() => {
+      mock.firebaseAuth.currentUser = unrelatedUser;
+      mock.authListeners[0].next(unrelatedUser);
+    });
+
+    expect(mock.verify).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("account-content").textContent).toBe("free");
   });
   it("does not mount content on unverified access, and Retry can recover", async () => {
     mock.verify.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(granted());
