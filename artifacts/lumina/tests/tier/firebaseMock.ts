@@ -7,6 +7,7 @@ const firebase = vi.hoisted(() => {
   return {
     auth,
     firestore: {},
+    googleProvider: { setCustomParameters: vi.fn() },
     authListeners: [] as any[],
     documentListeners: [] as any[],
     onAuthStateChanged: vi.fn(),
@@ -35,7 +36,7 @@ export { firebase, nativeGoogleSignIn };
 vi.mock("@/lib/firebase", () => ({
   auth: firebase.auth,
   firestore: firebase.firestore,
-  googleProvider: {},
+  googleProvider: firebase.googleProvider,
   googleWebClientId: "test-google-web-client-id",
 }));
 vi.mock("@capacitor/core", () => ({

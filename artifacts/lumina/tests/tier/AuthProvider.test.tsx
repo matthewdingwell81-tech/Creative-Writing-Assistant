@@ -179,6 +179,7 @@ describe("AuthProvider tier lifecycle", () => {
     expect(currentAuth.user).toBeNull();
     await act(async () => { token.resolve("verified-popup-token"); await signingIn; });
     expect(firebase.signInWithPopup).toHaveBeenCalledOnce();
+    expect(firebase.googleProvider.setCustomParameters).toHaveBeenCalledWith({ prompt: "select_account" });
     expect(firebase.signInWithRedirect).not.toHaveBeenCalled();
     expect(nativeGoogleSignIn.signIn).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/firebase-session", {
@@ -372,8 +373,14 @@ describe("AuthProvider tier lifecycle", () => {
     const authListener = firebase.authListeners.at(-1);
     act(() => listener.next(snapshot({ tier: "premium" })));
     if (reason === "logout") {
+      localStorage.setItem("unrelated-browser-data", "keep");
       await act(async () => { await currentAuth.logout(); });
       expect(firebase.signOut).toHaveBeenCalledOnce();
+      expect(firebase.auth.currentUser).toBeNull();
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/logout", {
+        method: "POST", credentials: "include",
+      });
+      expect(localStorage.getItem("unrelated-browser-data")).toBe("keep");
     } else act(() => window.dispatchEvent(new Event("lumina:session-expired")));
     expect(screen.getByTestId("session").textContent).toBe("signed-out");
     expect(getCurrentTierUser()).toBeNull();

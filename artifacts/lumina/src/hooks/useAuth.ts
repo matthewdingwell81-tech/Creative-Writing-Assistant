@@ -299,6 +299,7 @@ function useAuthState(): UseAuthResult {
       if (!isNativeAndroid()) {
         // Popup auth avoids the cross-origin redirect storage dependency on
         // firebaseapp.com. Keep this directly inside the user's click gesture.
+        googleProvider.setCustomParameters({ prompt: "select_account" });
         const firebaseResult = await signInWithPopup(auth, googleProvider);
         setUser(await exchangeFirebaseSession(firebaseResult.user));
         return;

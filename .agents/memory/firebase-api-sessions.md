@@ -27,6 +27,12 @@ Use popup Google sign-in for the externally hosted web app rather than relying o
 
 **How to apply:** Exchange the popup's Firebase identity for the server session before granting app access. Keep pending legacy redirect recovery, but do not silently redirect when a popup is blocked; explain how to allow popups. Native Android retains its native Google flow.
 
+Each new web Google sign-in should explicitly show the account chooser. Signing out of Firebase does not sign the person out of their Google browser session.
+
+**Why:** The Firebase identity should be cleared on logout, while the browser may intentionally remain signed in to Google. Without an explicit account-selection prompt, a subsequent popup can silently reuse that same Google account.
+
+**How to apply:** Request Google account selection on each web sign-in. Keep logout scoped to the Lumina server session, Firebase session, and in-memory app state; do not clear unrelated cookies, browser storage, or account-scoped caches.
+
 Keep existing sign-in methods when extending tier tracking. Google accounts can mirror verified subscriptions through Firebase user documents; username/password accounts use their existing server accounts, not a forced Firebase migration.
 
 **Why:** The user explicitly chose to retain the two existing sign-in methods instead of migrating every account to Firebase.
