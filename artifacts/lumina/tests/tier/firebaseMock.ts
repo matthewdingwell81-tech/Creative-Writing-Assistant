@@ -17,20 +17,44 @@ const firebase = vi.hoisted(() => {
     transactionGet: vi.fn(),
     transactionSet: vi.fn(),
     getRedirectResult: vi.fn(),
+    googleCredential: vi.fn(),
+    signInWithCredential: vi.fn(),
     signOut: vi.fn(),
     signInWithRedirect: vi.fn(),
   };
 });
-export { firebase };
+const nativeGoogleSignIn = vi.hoisted(() => ({
+  platform: "web",
+  initialize: vi.fn(),
+  signIn: vi.fn(),
+  signOut: vi.fn(),
+}));
+export { firebase, nativeGoogleSignIn };
 
 vi.mock("@/lib/firebase", () => ({
   auth: firebase.auth,
   firestore: firebase.firestore,
   googleProvider: {},
+  googleWebClientId: "test-google-web-client-id",
+}));
+vi.mock("@capacitor/core", () => ({
+  Capacitor: {
+    isNativePlatform: () => nativeGoogleSignIn.platform === "android",
+    getPlatform: () => nativeGoogleSignIn.platform,
+  },
+}));
+vi.mock("@capawesome/capacitor-google-sign-in", () => ({
+  GoogleSignIn: {
+    initialize: nativeGoogleSignIn.initialize,
+    signIn: nativeGoogleSignIn.signIn,
+    signOut: nativeGoogleSignIn.signOut,
+  },
 }));
 vi.mock("firebase/auth", () => ({
+  GoogleAuthProvider: { credential: firebase.googleCredential },
   onAuthStateChanged: firebase.onAuthStateChanged,
   getRedirectResult: firebase.getRedirectResult,
+  signInWithCredential: firebase.signInWithCredential,
   signOut: firebase.signOut,
   signInWithRedirect: firebase.signInWithRedirect,
 }));
@@ -84,7 +108,17 @@ export function resetFirebase() {
   }));
   firebase.setDoc.mockResolvedValue(undefined);
   firebase.getRedirectResult.mockResolvedValue(null);
+  firebase.googleCredential.mockImplementation(idToken => ({ idToken }));
+  firebase.signInWithCredential.mockImplementation(async () => {
+    const user = googleUser();
+    firebase.auth.currentUser = user;
+    return { user };
+  });
   firebase.signOut.mockImplementation(async () => { firebase.auth.currentUser = null; });
+  nativeGoogleSignIn.platform = "web";
+  nativeGoogleSignIn.initialize.mockResolvedValue(undefined);
+  nativeGoogleSignIn.signIn.mockResolvedValue({ idToken: "mock-google-provider-id-token" });
+  nativeGoogleSignIn.signOut.mockResolvedValue(undefined);
   window.localStorage.clear();
 }
 

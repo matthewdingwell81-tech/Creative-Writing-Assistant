@@ -17,6 +17,7 @@
     "@capacitor/android": "^8.5.3",
     "@capacitor/cli": "^8.5.3",
     "@capacitor/core": "^8.5.3",
+    "@capawesome/capacitor-google-sign-in": "^0.1.4",
     "@replit/revenuecat-sdk": "^5.0.0",
     "@revenuecat/purchases-capacitor": "^13.7.4"
   }

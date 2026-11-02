@@ -7,13 +7,39 @@ import {
   type ReactNode,
 } from "react";
 import {
+  GoogleAuthProvider,
   signOut,
+  signInWithCredential,
   signInWithRedirect,
   getRedirectResult
 } from "firebase/auth";
-import { auth, googleProvider } from "@/lib/firebase";
+import { Capacitor } from "@capacitor/core";
+import { GoogleSignIn } from "@capawesome/capacitor-google-sign-in";
+import { auth, googleProvider, googleWebClientId } from "@/lib/firebase";
 import { setCurrentTierUser } from "@/services/userTierService";
 import { syncUserTier } from "@/lib/userTier";
+
+let nativeGoogleSignInInitialization: Promise<void> | null = null;
+
+function isNativeAndroid(): boolean {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+}
+
+async function initializeNativeGoogleSignIn(): Promise<void> {
+  if (!nativeGoogleSignInInitialization) {
+    const attempt = GoogleSignIn.initialize({ clientId: googleWebClientId });
+    nativeGoogleSignInInitialization = attempt;
+    try {
+      await attempt;
+    } catch (error) {
+      if (nativeGoogleSignInInitialization === attempt) nativeGoogleSignInInitialization = null;
+      throw error;
+    }
+    return;
+  }
+
+  await nativeGoogleSignInInitialization;
+}
 
 export interface AuthUser {
   id: string;
@@ -152,7 +178,7 @@ function useAuthState(): UseAuthResult {
 
     async function initializeSession() {
       try {
-        const redirectResult = await getRedirectResult(auth);
+        const redirectResult = isNativeAndroid() ? null : await getRedirectResult(auth);
         await auth.authStateReady();
         const restored = redirectResult?.user
           ? await exchangeFirebaseSession(redirectResult.user)
@@ -222,7 +248,20 @@ function useAuthState(): UseAuthResult {
   const loginWithGoogle = async () => {
     setGoogleError(null);
     try {
-      await signInWithRedirect(auth, googleProvider);
+      if (!isNativeAndroid()) {
+        await signInWithRedirect(auth, googleProvider);
+        return;
+      }
+
+      await initializeNativeGoogleSignIn();
+      const googleResult = await GoogleSignIn.signIn();
+      if (!googleResult.idToken) {
+        throw new Error("Google sign-in did not return an identity token. Please try again.");
+      }
+
+      const credential = GoogleAuthProvider.credential(googleResult.idToken);
+      const firebaseResult = await signInWithCredential(auth, credential);
+      setUser(await exchangeFirebaseSession(firebaseResult.user));
     } catch (error) {
       const googleSignInError = toGoogleSignInError(error);
       setGoogleError(googleSignInError);
@@ -231,6 +270,11 @@ function useAuthState(): UseAuthResult {
   };
 
   const logout = async () => {
+    if (isNativeAndroid()) {
+      await initializeNativeGoogleSignIn();
+      await GoogleSignIn.signOut();
+    }
+
     const response = await fetch("/api/auth/logout", {
       method: "POST",
       credentials: "include",

@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { deferred, emitAuth, firebase, googleUser, resetFirebase, snapshot } from "./firebaseMock";
+import {
+  deferred, emitAuth, firebase, googleUser, nativeGoogleSignIn, resetFirebase, snapshot,
+} from "./firebaseMock";
 import { AuthProvider, useAuth, type UseAuthResult } from "@/hooks/useAuth";
 import { getCurrentTierUser } from "@/lib/tierAccount";
 import { getUserTier, setUserTier } from "@/lib/userTier";
@@ -116,6 +118,69 @@ describe("AuthProvider tier lifecycle", () => {
     act(() => firebase.documentListeners[0].next(snapshot({ tier: "premium" })));
     expect(getUserTier()).toBe("premium");
   });
+
+  it("native Android Google sign-in verifies its Firebase credential with the server", async () => {
+    nativeGoogleSignIn.platform = "android";
+    session = null;
+    const user = googleUser("native-google-uid", accountA.email);
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === "/api/auth/me") return new Response(null, { status: 401 });
+      if (url === "/api/auth/firebase-session") {
+        return new Response(JSON.stringify({
+          ...accountA, firebaseUid: user.uid, premium: true,
+        }), { status: 200 });
+      }
+      throw new Error(`Unexpected network request: ${url}`);
+    });
+    firebase.signInWithCredential.mockImplementation(async (_auth, credential) => {
+      firebase.auth.currentUser = user;
+      return { user, credential };
+    });
+
+    await mount();
+    await act(async () => { await currentAuth.loginWithGoogle(); });
+
+    expect(nativeGoogleSignIn.initialize).toHaveBeenCalledWith({
+      clientId: "test-google-web-client-id",
+    });
+    expect(nativeGoogleSignIn.signIn).toHaveBeenCalledOnce();
+    expect(firebase.googleCredential).toHaveBeenCalledWith("mock-google-provider-id-token");
+    expect(firebase.signInWithCredential).toHaveBeenCalledWith(firebase.auth, {
+      idToken: "mock-google-provider-id-token",
+    });
+    expect(firebase.getRedirectResult).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/firebase-session", {
+      method: "POST", credentials: "include",
+      headers: { Authorization: "Bearer mock-id-token" },
+    });
+    expect(currentAuth.user).toMatchObject({
+      id: accountA.id, firebaseUid: user.uid, premium: true,
+    });
+  });
+
+  it("restores native Google authentication without processing a web redirect", async () => {
+    nativeGoogleSignIn.platform = "android";
+    const user = googleUser("native-google-uid", accountA.email);
+    firebase.auth.currentUser = user;
+    const apiUser = { ...accountA, firebaseUid: user.uid, premium: true };
+    fetchMock.mockImplementation(async (url: string) => new Response(JSON.stringify(apiUser), {
+      status: url === "/api/auth/me" ? 200 : 404,
+    }));
+
+    await mount();
+
+    expect(firebase.getRedirectResult).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/me", {
+      credentials: "include",
+      headers: {
+        Authorization: "Bearer mock-id-token",
+        "X-Lumina-Preserve-Password-Session": "true",
+      },
+    });
+    expect(currentAuth.user?.firebaseUid).toBe(user.uid);
+    expect(currentAuth.user?.premium).toBe(true);
+  });
+
   it("restores persisted Firebase sign-in via a bearer token without a redirect result", async () => {
     session = { ...accountA };
     const user = googleUser();
@@ -210,6 +275,17 @@ describe("AuthProvider tier lifecycle", () => {
     expect(listener.stop).toHaveBeenCalledOnce();
     act(() => listener.next(snapshot({ tier: "free" })));
     expect(localStorage.getItem(premiumStorageKey(accountA.id))).toBe("premium");
+  });
+
+  it("clears the native Google account selection when signing out of Android", async () => {
+    nativeGoogleSignIn.platform = "android";
+    await mount();
+
+    await act(async () => { await currentAuth.logout(); });
+
+    expect(nativeGoogleSignIn.signOut).toHaveBeenCalledOnce();
+    expect(firebase.signOut).toHaveBeenCalledOnce();
+    expect(screen.getByTestId("session").textContent).toBe("signed-out");
   });
 
   it.each(["login", "register"] as const)("keeps username/password %s local with an unrelated Firebase user", async method => {

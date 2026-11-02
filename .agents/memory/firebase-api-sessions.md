@@ -15,6 +15,12 @@ Treat Google redirect completion and persisted Firebase identity as separate cas
 
 **How to apply:** Wait for Firebase restoration and validate its token on the backend before mounting protected content. Passive recovery must preserve unrelated password sessions; explicit Google sign-in may intentionally switch accounts.
 
+The native Android wrapper must not rely on Firebase's web redirect for Google sign-in. Use native Google sign-in to obtain a Google ID token, exchange it for a Firebase JS credential, then keep the existing verified Firebase-to-server-session exchange. Persist the Firebase JS identity for app relaunch.
+
+**Why:** Google sign-in in Lumina's embedded Android WebView returned to the auth page instead of completing the app session. Native identity alone is not a Lumina session and must not grant access or Premium.
+
+**How to apply:** Keep browser redirect sign-in unchanged, branch only on native Android, and require the existing server verification/session exchange before showing authenticated app state.
+
 Keep existing sign-in methods when extending tier tracking. Google accounts can mirror verified subscriptions through Firebase user documents; username/password accounts use their existing server accounts, not a forced Firebase migration.
 
 **Why:** The user explicitly chose to retain the two existing sign-in methods instead of migrating every account to Firebase.

@@ -4,3 +4,6 @@
 # No need to store the pnpm store twice.
 .local
 .migration-backup
+/generated-artifacts/
+/Lumina-debug.apk
+/artifacts/lumina/public/Lumina-debug.apk
