@@ -197,6 +197,41 @@ describe("AuthProvider tier lifecycle", () => {
     expect(currentAuth.user?.firebaseUid).toBe("firebase-a");
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/auth/firebase-session")).toBe(false);
   });
+  it("keeps a valid password session when a persisted Firebase token cannot be read", async () => {
+    const user = googleUser();
+    user.getIdToken.mockRejectedValue(new Error("Firebase is temporarily unavailable"));
+    firebase.auth.currentUser = user;
+
+    await mount();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/me", { credentials: "include" });
+    expect(currentAuth.user?.id).toBe(accountA.id);
+    expect(currentAuth.googleError).toBeNull();
+  });
+  it("keeps a valid password session when Google redirect restoration errors", async () => {
+    firebase.getRedirectResult.mockRejectedValue(Object.assign(
+      new Error("Firebase is temporarily unavailable"),
+      { code: "auth/network-request-failed" },
+    ));
+
+    await mount();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/me", { credentials: "include" });
+    expect(currentAuth.user?.id).toBe(accountA.id);
+    expect(currentAuth.googleError).toBeNull();
+  });
+  it("shows the Google redirect error when no server session can be restored", async () => {
+    session = null;
+    firebase.getRedirectResult.mockRejectedValue(Object.assign(
+      new Error("Firebase is temporarily unavailable"),
+      { code: "auth/network-request-failed" },
+    ));
+
+    await mount();
+
+    expect(currentAuth.user).toBeNull();
+    expect(currentAuth.googleError?.message).toMatch(/could not connect/i);
+  });
   it("does not let an unrelated unverified Firebase login break password-session restoration", async () => {
     const user = googleUser("unrelated-uid", "unrelated@example.test");
     Object.assign(user, { emailVerified: false });
@@ -218,7 +253,7 @@ describe("AuthProvider tier lifecycle", () => {
   });
 
   it("a failed Google session exchange never exposes a Firebase-only premium account", async () => {
-    session = null;
+    session = accountB;
     const user = googleUser();
     firebase.auth.currentUser = user;
     firebase.getRedirectResult.mockResolvedValue({ user });

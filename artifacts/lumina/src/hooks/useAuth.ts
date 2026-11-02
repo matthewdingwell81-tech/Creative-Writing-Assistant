@@ -178,12 +178,58 @@ function useAuthState(): UseAuthResult {
 
     async function initializeSession() {
       try {
-        const redirectResult = isNativeAndroid() ? null : await getRedirectResult(auth);
         await auth.authStateReady();
-        const restored = redirectResult?.user
-          ? await exchangeFirebaseSession(redirectResult.user)
-          : await fetchServerSession(auth.currentUser);
-        if (mounted) setUser(restored);
+        let redirectUser: import("firebase/auth").User | null = null;
+        let redirectError: unknown = null;
+        if (!isNativeAndroid()) {
+          try {
+            redirectUser = (await getRedirectResult(auth))?.user ?? null;
+          } catch (error) {
+            redirectError = error;
+          }
+        }
+
+        if (redirectUser) {
+          // An explicit Google account switch must finish the verified server
+          // exchange; never fall back to a different account's cookie session.
+          const restored = await exchangeFirebaseSession(redirectUser);
+          if (mounted) {
+            setGoogleError(null);
+            setUser(restored);
+          }
+          return;
+        }
+
+        const firebaseUser = auth.currentUser;
+        let restored: AuthUser | null = null;
+        let recoveryError: unknown = redirectError;
+        try {
+          restored = await fetchServerSession(firebaseUser);
+        } catch (error) {
+          recoveryError ??= error;
+        }
+
+        // Firebase's persisted web identity can be stale or temporarily
+        // unavailable. Retry with the server cookie alone so an unrelated,
+        // valid username/password session is not discarded.
+        if (!restored && firebaseUser) {
+          try {
+            restored = await fetchServerSession(null);
+          } catch (error) {
+            recoveryError ??= error;
+          }
+          if (!restored && !recoveryError) {
+            recoveryError = new Error(
+              "Google sign-in could not be verified. Try again or sign in with your username and password.",
+            );
+          }
+        }
+
+        if (!restored && recoveryError) throw recoveryError;
+        if (mounted) {
+          setUser(restored);
+          if (restored) setGoogleError(null);
+        }
       } catch (error) {
         if (mounted) {
           setUser(null);
