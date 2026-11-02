@@ -5,6 +5,8 @@ import {
 } from "./firebaseMock";
 import { AuthProvider, useAuth, type UseAuthResult } from "@/hooks/useAuth";
 import { getCurrentTierUser } from "@/lib/tierAccount";
+import { documentsQueryKey } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 import { getUserTier, setUserTier } from "@/lib/userTier";
 import { premiumStorageKey } from "@/hooks/useAdRewards";
 import SuggestionsSidebar from "@/components/SuggestionsSidebar";
@@ -67,6 +69,7 @@ async function mount(showSidebar = false) {
 }
 
 beforeEach(() => {
+  queryClient.clear();
   resetFirebase();
   session = accountA;
   nextLogin = accountB;
@@ -373,10 +376,26 @@ describe("AuthProvider tier lifecycle", () => {
     const authListener = firebase.authListeners.at(-1);
     act(() => listener.next(snapshot({ tier: "premium" })));
     if (reason === "logout") {
+      const accountAKey = documentsQueryKey(accountA.id);
+      const accountBKey = documentsQueryKey(accountB.id);
+      expect(accountAKey).not.toEqual(accountBKey);
+      queryClient.setQueryData(accountAKey, [{
+        id: 1, title: "Private story title", content: "Private draft text",
+      }]);
+      queryClient.setQueryData(["/api/documents"], [{
+        id: 1, title: "Legacy shared-cache title", content: "Legacy private text",
+      }]);
+      queryClient.setQueryData(accountBKey, [{ id: 2, title: "Other account", content: "Other private draft" }]);
+      expect(queryClient.getQueryData(accountBKey)).toEqual([
+        { id: 2, title: "Other account", content: "Other private draft" },
+      ]);
       localStorage.setItem("unrelated-browser-data", "keep");
       await act(async () => { await currentAuth.logout(); });
       expect(firebase.signOut).toHaveBeenCalledOnce();
       expect(firebase.auth.currentUser).toBeNull();
+      expect(queryClient.getQueryData(accountAKey)).toBeUndefined();
+      expect(queryClient.getQueryData(["/api/documents"])).toBeUndefined();
+      expect(queryClient.getQueryData(accountBKey)).toBeUndefined();
       expect(fetchMock).toHaveBeenCalledWith("/api/auth/logout", {
         method: "POST", credentials: "include",
       });

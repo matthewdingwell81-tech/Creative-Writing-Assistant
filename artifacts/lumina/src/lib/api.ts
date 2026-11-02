@@ -63,6 +63,10 @@ export async function fetchDocuments() {
   return res.json();
 }
 
+export function documentsQueryKey(accountId: string) {
+  return ["/api/documents", accountId] as const;
+}
+
 export async function fetchDocument(id: number) {
   const res = await apiFetch(`/api/documents/${id}`);
   if (!res.ok) throw new Error("Failed to fetch document");

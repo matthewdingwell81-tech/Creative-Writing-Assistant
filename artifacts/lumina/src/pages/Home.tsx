@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSe
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { fetchDocuments, fetchDocument, createDocument, updateDocument, fetchChapters, createChapter, updateChapter as updateChapterApi, reorderChapters, SessionExpiredError } from '@/lib/api';
+import { fetchDocuments, documentsQueryKey, fetchDocument, createDocument, updateDocument, fetchChapters, createChapter, updateChapter as updateChapterApi, reorderChapters, SessionExpiredError } from '@/lib/api';
 import { useSuggestions } from '@/hooks/useSuggestions';
 import type { SuggestionAnalysisMode } from '@/hooks/useSuggestions';
 import { useAutoSave } from '@/hooks/useAutoSave';
@@ -309,8 +309,9 @@ export default function Home() {
   }, [activeChapterId, activeDocId, content, title, saveNow, setLocation, user?.id]);
 
   const { data: documents = [] } = useQuery<Document[]>({
-    queryKey: ['/api/documents'],
+    queryKey: documentsQueryKey(user?.id ?? "signed-out"),
     queryFn: fetchDocuments,
+    enabled: Boolean(user?.id),
   });
 
   const fetchChapterSet = useCallback(async (docId: number, docContent: string): Promise<Chapter[]> => {

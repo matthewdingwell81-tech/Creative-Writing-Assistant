@@ -18,6 +18,7 @@ import { GoogleSignIn } from "@capawesome/capacitor-google-sign-in";
 import { auth, googleProvider, googleWebClientId } from "@/lib/firebase";
 import { setCurrentTierUser } from "@/services/userTierService";
 import { syncUserTier } from "@/lib/userTier";
+import { queryClient } from "@/lib/queryClient";
 
 let nativeGoogleSignInInitialization: Promise<void> | null = null;
 
@@ -335,6 +336,7 @@ function useAuthState(): UseAuthResult {
       throw await parseApiError(response, "Sign out failed.");
     }
     await signOut(auth);
+    queryClient.clear();
     setUser(null);
   };
 
