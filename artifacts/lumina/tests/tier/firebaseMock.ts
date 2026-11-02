@@ -21,6 +21,7 @@ const firebase = vi.hoisted(() => {
     signInWithCredential: vi.fn(),
     signOut: vi.fn(),
     signInWithRedirect: vi.fn(),
+    signInWithPopup: vi.fn(),
   };
 });
 const nativeGoogleSignIn = vi.hoisted(() => ({
@@ -57,6 +58,7 @@ vi.mock("firebase/auth", () => ({
   signInWithCredential: firebase.signInWithCredential,
   signOut: firebase.signOut,
   signInWithRedirect: firebase.signInWithRedirect,
+  signInWithPopup: firebase.signInWithPopup,
 }));
 vi.mock("firebase/firestore", () => ({
   doc: firebase.doc,
@@ -108,6 +110,11 @@ export function resetFirebase() {
   }));
   firebase.setDoc.mockResolvedValue(undefined);
   firebase.getRedirectResult.mockResolvedValue(null);
+  firebase.signInWithPopup.mockImplementation(async () => {
+    const user = googleUser();
+    firebase.auth.currentUser = user;
+    return { user };
+  });
   firebase.googleCredential.mockImplementation(idToken => ({ idToken }));
   firebase.signInWithCredential.mockImplementation(async () => {
     const user = googleUser();

@@ -23,6 +23,7 @@ export default function AuthPage({ auth }: AuthPageProps) {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
 
   const {
     login,
@@ -33,7 +34,7 @@ export default function AuthPage({ auth }: AuthPageProps) {
     isRegistering,
   } = auth;
 
-  const isLoading = isLoggingIn || isRegistering;
+  const isLoading = isLoggingIn || isRegistering || isGoogleSigningIn;
 
   useEffect(() => {
     if (googleError) {
@@ -43,10 +44,13 @@ export default function AuthPage({ auth }: AuthPageProps) {
 
   async function handleGoogleSignIn() {
     setError(null);
+    setIsGoogleSigningIn(true);
     try {
       await loginWithGoogle();
     } catch (err: any) {
       setError(getGoogleSignInErrorMessage(err));
+    } finally {
+      setIsGoogleSigningIn(false);
     }
   }
 
@@ -127,7 +131,7 @@ export default function AuthPage({ auth }: AuthPageProps) {
             className="w-full bg-white hover:bg-slate-100 text-slate-800 font-medium py-2.5 flex items-center justify-center gap-2"
           >
             <FaGoogle className="w-4 h-4" />
-            Continue with Google
+            {isGoogleSigningIn ? "Signing in with Google..." : "Continue with Google"}
           </Button>
 
           <div className="relative my-6">

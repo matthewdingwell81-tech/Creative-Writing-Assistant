@@ -19,7 +19,13 @@ The native Android wrapper must not rely on Firebase's web redirect for Google s
 
 **Why:** Google sign-in in Lumina's embedded Android WebView returned to the auth page instead of completing the app session. Native identity alone is not a Lumina session and must not grant access or Premium.
 
-**How to apply:** Keep browser redirect sign-in unchanged, branch only on native Android, and require the existing server verification/session exchange before showing authenticated app state.
+**How to apply:** Keep the native credential flow separate from browser sign-in, and require server verification/session exchange before showing authenticated app state.
+
+Use popup Google sign-in for the externally hosted web app rather than relying on a cross-domain Firebase redirect round trip.
+
+**Why:** Firebase documents that redirect auth depends on cross-origin storage access when the app origin differs from its Firebase auth domain. Browser storage partitioning can prevent completion even when the initial Google page loads.
+
+**How to apply:** Exchange the popup's Firebase identity for the server session before granting app access. Keep pending legacy redirect recovery, but do not silently redirect when a popup is blocked; explain how to allow popups. Native Android retains its native Google flow.
 
 Keep existing sign-in methods when extending tier tracking. Google accounts can mirror verified subscriptions through Firebase user documents; username/password accounts use their existing server accounts, not a forced Firebase migration.
 

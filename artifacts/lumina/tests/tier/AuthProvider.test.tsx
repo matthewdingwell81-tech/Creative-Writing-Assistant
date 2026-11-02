@@ -8,6 +8,7 @@ import { getCurrentTierUser } from "@/lib/tierAccount";
 import { getUserTier, setUserTier } from "@/lib/userTier";
 import { premiumStorageKey } from "@/hooks/useAdRewards";
 import SuggestionsSidebar from "@/components/SuggestionsSidebar";
+import AuthPage from "@/pages/AuthPage";
 
 // Coach history and ads are unrelated to tier synchronization. Keep the real
 // sidebar, tier service, reward cache, and AuthProvider in the integration.
@@ -156,6 +157,77 @@ describe("AuthProvider tier lifecycle", () => {
     expect(currentAuth.user).toMatchObject({
       id: accountA.id, firebaseUid: user.uid, premium: true,
     });
+  });
+
+  it.each([true, null])("web popup signs in only through the server exchange (premium=%s)", async premium => {
+    session = null;
+    const token = deferred<string>();
+    const googleAccount = googleUser();
+    googleAccount.getIdToken.mockReturnValue(token.promise);
+    firebase.signInWithPopup.mockResolvedValue({ user: googleAccount });
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === "/api/auth/me") return new Response(null, { status: 401 });
+      if (url === "/api/auth/firebase-session") return new Response(JSON.stringify({
+        ...accountA, firebaseUid: googleAccount.uid, premium,
+      }));
+      throw new Error(`Unexpected network request: ${url}`);
+    });
+    await mount();
+    let signingIn!: Promise<void>;
+    act(() => { signingIn = currentAuth.loginWithGoogle(); });
+    await waitFor(() => expect(googleAccount.getIdToken).toHaveBeenCalledOnce());
+    expect(currentAuth.user).toBeNull();
+    await act(async () => { token.resolve("verified-popup-token"); await signingIn; });
+    expect(firebase.signInWithPopup).toHaveBeenCalledOnce();
+    expect(firebase.signInWithRedirect).not.toHaveBeenCalled();
+    expect(nativeGoogleSignIn.signIn).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/firebase-session", {
+      method: "POST", credentials: "include",
+      headers: { Authorization: "Bearer verified-popup-token" },
+    });
+    expect(currentAuth.user).toMatchObject({ id: accountA.id, premium });
+  });
+
+  it("web popup never grants access when the server exchange rejects it", async () => {
+    session = null;
+    await mount();
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: "Google account rejected" }), { status: 403 }));
+    await act(async () => {
+      await expect(currentAuth.loginWithGoogle()).rejects.toThrow("Google account rejected");
+    });
+    expect(currentAuth.user).toBeNull();
+    expect(getCurrentTierUser()).toBeNull();
+  });
+
+  it("explains blocked web popups without falling back to a redirect", async () => {
+    session = null;
+    await mount();
+    firebase.signInWithPopup.mockRejectedValue({ code: "auth/popup-blocked" });
+    await act(async () => {
+      await expect(currentAuth.loginWithGoogle()).rejects.toThrow("auth/popup-blocked");
+    });
+    expect(currentAuth.user).toBeNull();
+    expect(firebase.signInWithRedirect).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/auth/firebase-session")).toBe(false);
+  });
+
+  it("disables the sign-in form while Google is pending and recovers after cancellation", async () => {
+    session = null;
+    const popup = deferred<{ user: ReturnType<typeof googleUser> }>();
+    firebase.signInWithPopup.mockReturnValue(popup.promise);
+    await mount();
+    render(<AuthPage auth={currentAuth} />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+    expect(screen.getByRole("button", { name: "Signing in with Google..." }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId("input-username").hasAttribute("disabled")).toBe(true);
+
+    await act(async () => {
+      popup.reject(Object.assign(new Error("Cancelled"), { code: "auth/popup-closed-by-user" }));
+    });
+
+    await waitFor(() => expect(screen.getByTestId("text-auth-error").textContent).toContain("cancelled"));
+    expect(screen.getByRole("button", { name: "Continue with Google" }).hasAttribute("disabled")).toBe(false);
+    expect(screen.getByTestId("input-username").hasAttribute("disabled")).toBe(false);
   });
 
   it("restores native Google authentication without processing a web redirect", async () => {

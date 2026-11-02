@@ -10,7 +10,7 @@ import {
   GoogleAuthProvider,
   signOut,
   signInWithCredential,
-  signInWithRedirect,
+  signInWithPopup,
   getRedirectResult
 } from "firebase/auth";
 import { Capacitor } from "@capacitor/core";
@@ -77,6 +77,8 @@ function getFirebaseErrorCode(error: unknown): string | null {
 
 export function getGoogleSignInErrorMessage(error: unknown): string {
   switch (getFirebaseErrorCode(error)) {
+    case "popup-blocked":
+      return "Your browser blocked Google sign-in. Allow popups for this website, then try again (auth/popup-blocked).";
     case "popup-closed-by-user":
     case "cancelled-popup-request":
     case "redirect-cancelled-by-user":
@@ -84,9 +86,9 @@ export function getGoogleSignInErrorMessage(error: unknown): string {
     case "network-request-failed":
       return "Google sign-in could not connect. Check your internet connection and try again.";
     case "unauthorized-domain":
-      return "Google sign-in is not configured for this app. Please contact support.";
+      return "Google sign-in is not configured for this website (auth/unauthorized-domain).";
     case "operation-not-allowed":
-      return "Google sign-in is not enabled for this app. Please contact support.";
+      return "Google sign-in is not enabled for this app (auth/operation-not-allowed).";
     default:
       return error instanceof Error && error.message
         ? error.message
@@ -295,7 +297,10 @@ function useAuthState(): UseAuthResult {
     setGoogleError(null);
     try {
       if (!isNativeAndroid()) {
-        await signInWithRedirect(auth, googleProvider);
+        // Popup auth avoids the cross-origin redirect storage dependency on
+        // firebaseapp.com. Keep this directly inside the user's click gesture.
+        const firebaseResult = await signInWithPopup(auth, googleProvider);
+        setUser(await exchangeFirebaseSession(firebaseResult.user));
         return;
       }
 
