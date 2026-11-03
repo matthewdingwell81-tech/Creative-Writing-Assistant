@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   deferred, emitAuth, firebase, googleUser, nativeGoogleSignIn, resetFirebase, snapshot,
 } from "./firebaseMock";
-import { AuthProvider, useAuth, type UseAuthResult } from "@/hooks/useAuth";
+import { AuthProvider, getGoogleSignInErrorMessage, useAuth, type UseAuthResult } from "@/hooks/useAuth";
 import { getCurrentTierUser } from "@/lib/tierAccount";
 import { documentsQueryKey } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
@@ -147,6 +147,7 @@ describe("AuthProvider tier lifecycle", () => {
     expect(nativeGoogleSignIn.initialize).toHaveBeenCalledWith({
       clientId: "test-google-web-client-id",
     });
+    expect(nativeGoogleSignIn.isPluginAvailable).toHaveBeenCalledWith("GoogleSignIn");
     expect(nativeGoogleSignIn.signIn).toHaveBeenCalledOnce();
     expect(firebase.googleCredential).toHaveBeenCalledWith("mock-google-provider-id-token");
     expect(firebase.signInWithCredential).toHaveBeenCalledWith(firebase.auth, {
@@ -160,6 +161,28 @@ describe("AuthProvider tier lifecycle", () => {
     expect(currentAuth.user).toMatchObject({
       id: accountA.id, firebaseUid: user.uid, premium: true,
     });
+  });
+
+  it("reports a missing Android bridge before invoking native auth or creating a server session", async () => {
+    nativeGoogleSignIn.platform = "android";
+    nativeGoogleSignIn.isPluginAvailable.mockReturnValue(false);
+    session = null;
+    await mount();
+
+    await act(async () => {
+      await expect(currentAuth.loginWithGoogle()).rejects.toThrow("LUMINA_GOOGLE_BRIDGE_MISSING");
+    });
+
+    expect(currentAuth.googleError?.message).toContain("updating the website alone cannot add native plugins");
+    expect(nativeGoogleSignIn.initialize).not.toHaveBeenCalled();
+    expect(nativeGoogleSignIn.signIn).not.toHaveBeenCalled();
+    expect(firebase.signInWithCredential).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/auth/firebase-session")).toBe(false);
+    expect(currentAuth.user).toBeNull();
+  });
+
+  it("distinguishes an incompatible native method from Google credential errors", () => {
+    expect(getGoogleSignInErrorMessage({ code: "UNIMPLEMENTED" })).toContain("LUMINA_GOOGLE_BRIDGE_MISMATCH");
   });
 
   it.each([true, null])("web popup signs in only through the server exchange (premium=%s)", async premium => {

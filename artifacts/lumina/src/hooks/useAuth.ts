@@ -27,6 +27,13 @@ function isNativeAndroid(): boolean {
 }
 
 async function initializeNativeGoogleSignIn(): Promise<void> {
+  if (!Capacitor.isPluginAvailable("GoogleSignIn")) {
+    throw new Error(
+      "Google Sign-In is missing from this Android app's native bridge. " +
+      "Install the rebuilt Lumina APK; updating the website alone cannot add native plugins. " +
+      "(LUMINA_GOOGLE_BRIDGE_MISSING)",
+    );
+  }
   if (!nativeGoogleSignInInitialization) {
     const attempt = GoogleSignIn.initialize({ clientId: googleWebClientId });
     nativeGoogleSignInInitialization = attempt;
@@ -78,6 +85,9 @@ function getFirebaseErrorCode(error: unknown): string | null {
 
 export function getGoogleSignInErrorMessage(error: unknown): string {
   switch (getFirebaseErrorCode(error)) {
+    case "UNIMPLEMENTED":
+      return "This Android APK does not expose the GoogleSignIn method requested by the website. " +
+        "Install the rebuilt Lumina APK and verify its native bridge. (LUMINA_GOOGLE_BRIDGE_MISMATCH)";
     case "popup-blocked":
       return "Your browser blocked Google sign-in. Allow popups for this website, then try again (auth/popup-blocked).";
     case "popup-closed-by-user":

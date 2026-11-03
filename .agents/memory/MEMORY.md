@@ -6,6 +6,7 @@
 - [Firebase and API sessions](firebase-api-sessions.md) — Firebase Google redirect must exchange its ID token for the server session used by Lumina APIs
 - [Additive database migrations](additive-database-migrations.md) — noninteractive Drizzle reconciliation can conflict with externally managed session tables; use reviewed additive migrations.
 - [Native AdMob integration](native-admob-integration.md) — root tooling must discover plugins; Android reward dismissal needs its own completion handling; local entitlements are test-only.
+- [Native/web bridge compatibility](native-web-bridge-contract.md) — verify the actual APK and a device bridge call; successful source sync does not prove installed native plugin availability.
 - [Freemium rollout policy](freemium-policy.md) — existing accounts get a fresh seven-day rollout trial; live billing and server enforcement are deferred.
 - [Coach persistence boundary](coach-persistence-boundary.md) — completed replies and interrupted drafts are separate; restoring a conversation must never resend or consume another query.
 - [AI safety review policy](coach-safety-policy.md) — flag potential violations across AI writing tools for developer-administrator review, not automatic blocking or sanctions.

@@ -97,5 +97,6 @@ app/src/main/assets/public
 
 # Generated Config files
 app/src/main/assets/capacitor.config.json
-app/src/main/assets/capacitor.plugins.json
+# Keep capacitor.plugins.json tracked: it is the native API contract used by
+# the remotely loaded website. cap sync regenerates it; android:verify checks it.
 app/src/main/res/xml/config.xml

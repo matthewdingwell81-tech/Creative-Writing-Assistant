@@ -1,0 +1,14 @@
+[
+	{
+		"pkg": "@capacitor-community/admob",
+		"classpath": "com.getcapacitor.community.admob.AdMob"
+	},
+	{
+		"pkg": "@capawesome/capacitor-google-sign-in",
+		"classpath": "io.capawesome.capacitorjs.plugins.googlesignin.GoogleSignInPlugin"
+	},
+	{
+		"pkg": "@revenuecat/purchases-capacitor",
+		"classpath": "com.revenuecat.purchases.capacitor.PurchasesPlugin"
+	}
+]

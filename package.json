@@ -3,11 +3,15 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
+    "android:sync": "node scripts/android/sync.mjs",
+    "android:verify": "node scripts/android/verify.mjs",
+    "test:android-tooling": "node --test scripts/android/apk.test.mjs",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },
   "private": true,
+  "packageManager": "pnpm@10.26.1",
   "devDependencies": {
     "prettier": "^3.9.10",
     "typescript": "~5.9.3"
@@ -17,7 +21,7 @@
     "@capacitor/android": "^8.5.3",
     "@capacitor/cli": "^8.5.3",
     "@capacitor/core": "^8.5.3",
-    "@capawesome/capacitor-google-sign-in": "^0.1.4",
+    "@capawesome/capacitor-google-sign-in": "0.1.4",
     "@replit/revenuecat-sdk": "^5.0.0",
     "@revenuecat/purchases-capacitor": "^13.7.4"
   }

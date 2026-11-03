@@ -48,3 +48,22 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+// A successful Java build alone does not prove the WebView can call a plugin.
+// Refuse to package a missing/stale generated native registry.
+tasks.register('verifyGoogleSignInRegistry') {
+    doLast {
+        def registryFile = file('src/main/assets/capacitor.plugins.json')
+        if (!registryFile.exists()) {
+            throw new GradleException('Missing Capacitor registry. Run pnpm exec cap sync android from the repository root.')
+        }
+        def registry = new groovy.json.JsonSlurper().parse(registryFile)
+        if (!registry.any {
+            it.pkg == '@capawesome/capacitor-google-sign-in' &&
+            it.classpath == 'io.capawesome.capacitorjs.plugins.googlesignin.GoogleSignInPlugin'
+        }) {
+            throw new GradleException('GoogleSignIn is missing from the native registry. Run pnpm exec cap sync android from the repository root.')
+        }
+    }
+}
+tasks.named('preBuild').configure { dependsOn('verifyGoogleSignInRegistry') }

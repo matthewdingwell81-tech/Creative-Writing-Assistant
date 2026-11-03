@@ -27,6 +27,7 @@ const firebase = vi.hoisted(() => {
 });
 const nativeGoogleSignIn = vi.hoisted(() => ({
   platform: "web",
+  isPluginAvailable: vi.fn(),
   initialize: vi.fn(),
   signIn: vi.fn(),
   signOut: vi.fn(),
@@ -43,6 +44,7 @@ vi.mock("@capacitor/core", () => ({
   Capacitor: {
     isNativePlatform: () => nativeGoogleSignIn.platform === "android",
     getPlatform: () => nativeGoogleSignIn.platform,
+    isPluginAvailable: nativeGoogleSignIn.isPluginAvailable,
   },
 }));
 vi.mock("@capawesome/capacitor-google-sign-in", () => ({
@@ -124,6 +126,7 @@ export function resetFirebase() {
   });
   firebase.signOut.mockImplementation(async () => { firebase.auth.currentUser = null; });
   nativeGoogleSignIn.platform = "web";
+  nativeGoogleSignIn.isPluginAvailable.mockReturnValue(true);
   nativeGoogleSignIn.initialize.mockResolvedValue(undefined);
   nativeGoogleSignIn.signIn.mockResolvedValue({ idToken: "mock-google-provider-id-token" });
   nativeGoogleSignIn.signOut.mockResolvedValue(undefined);

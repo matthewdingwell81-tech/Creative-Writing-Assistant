@@ -24,24 +24,13 @@ This guide covers the manual steps to publish the Lumina Android app on the Goog
 
 ## Step 2 — Set the Production URL
 
-`capacitor.config.ts` reads `server.url` from the `LUMINA_PRODUCTION_URL` environment
-variable at build time, falling back to `https://lumina.replit.app`. This means you
-can change the domain in the future without editing source code — just set the env var
-before running `cap sync`.
+The root `capacitor.config.ts` sets `server.url` to
+`https://creative-writing-assistant.replit.app`. The Android WebView loads this
+published website remotely, **not** the copied web bundle. The optional
+`LUMINA_PREVIEW_URL` override is for development only.
 
-**If the default `https://lumina.replit.app` is correct**, no action is needed.
-
-**If you are using a custom domain**, set the variable before syncing:
-
-```bash
-export LUMINA_PRODUCTION_URL=https://your-custom-domain.com
-```
-
-or inline:
-
-```bash
-LUMINA_PRODUCTION_URL=https://your-custom-domain.com npx cap sync android
-```
+To change the production domain, update that config and rebuild the APK.
+Do not use `LUMINA_PRODUCTION_URL`: it is not read by the current Capacitor config.
 
 > **Important:** Always use the permanent production deployment URL, **not** the
 > ephemeral Replit dev domain. The dev domain changes whenever the dev environment
@@ -50,15 +39,9 @@ LUMINA_PRODUCTION_URL=https://your-custom-domain.com npx cap sync android
 After any URL change, re-run `cap sync android` so the Android project picks up the
 new config.
 
-> **Validation:** The **Sync Android** workflow automatically validates
-> `LUMINA_PRODUCTION_URL` before building. If the value is set but is not a
-> well-formed `https://` URL the sync is aborted with a clear error message so a
-> broken URL can never silently ship in a Play Store build.
->
-> You can also run the check independently:
-> ```bash
-> pnpm --filter @workspace/lumina run validate-url
-> ```
+The website can start calling a new native plugin immediately after publishing,
+but **publishing cannot add native code to an already installed APK**. Install a
+new APK whenever the native plugin contract changes.
 
 ---
 
@@ -66,18 +49,23 @@ new config.
 
 1. Make sure you have the latest web build synced:
    ```bash
-   pnpm --filter @workspace/lumina run validate-url
-   pnpm --filter @workspace/lumina run build
-   npx cap sync android
+   pnpm install --frozen-lockfile
+   pnpm android:sync
    ```
    *(Or use the **Sync Android** workflow in Replit)*
 
 2. Open Android Studio, then open the project at:
    ```
-   artifacts/lumina/android/
+   android/
    ```
 
-3. Wait for Gradle to finish syncing (first time may take a few minutes)
+   This is the directory directly inside the repository root. Do not open
+   `client/android`, `.migration-backup/client/android`, or
+   `artifacts/lumina/android` (the last path does not exist).
+
+3. Wait for Gradle to finish syncing (first time may take a few minutes).
+   Use pnpm, not `npm install`, for this pnpm workspace. The sync command resolves
+   the installed dependencies and rewrites native Gradle paths for your computer.
 
 ---
 
@@ -166,7 +154,7 @@ Play Console will guide you through:
 
 Whenever the Lumina web app changes significantly, you can update the Android app:
 
-1. Run the **Sync Android** workflow in Replit (or `npx cap sync android` locally)
+1. Run the **Sync Android** workflow in Replit (or `pnpm android:sync` locally)
 2. Since the app loads from the production URL (`server.url` in `capacitor.config.ts`), most changes to the web app appear automatically **without needing a new Play Store release**
 3. Only release a new version to the Play Store if you change native Android code, Capacitor plugins, or want to update the store listing
 
@@ -176,11 +164,112 @@ Whenever the Lumina web app changes significantly, you can update the Android ap
 
 ```bash
 # Sync latest web build to Android
-pnpm --filter @workspace/lumina run build && npx cap sync android
+pnpm android:sync
 
 # Open Android project in Android Studio
-cd artifacts/lumina && npx cap open android
+pnpm exec cap open android
 
 # Build a debug APK (for testing, not Play Store)
-cd artifacts/lumina/android && ./gradlew assembleDebug
+cd android && ./gradlew assembleDebug
 ```
+
+## Windows PowerShell: sync, rebuild, and verify Google Sign-In
+
+Prerequisites: Node 22+, pnpm 10.26.1, JDK 21, Android SDK Platform 36, and
+Android Studio. Use the **repository root** (the folder containing
+`pnpm-workspace.yaml` and `capacitor.config.ts`), not a nested app folder.
+
+```powershell
+git pull --ff-only
+npm install --global pnpm@10.26.1
+pnpm install --frozen-lockfile
+
+# Default Android Studio installation paths; change them if installed elsewhere.
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+
+# Builds with PORT/BASE_PATH set correctly on Windows, syncs root android/,
+# and checks the native package, Java/JS names, registry, and Gradle paths.
+pnpm android:sync
+if ($LASTEXITCODE -ne 0) { throw "Android sync/verification failed" }
+
+Push-Location android
+.\gradlew.bat clean :app:assembleDebug --no-build-cache --rerun-tasks
+Pop-Location
+if ($LASTEXITCODE -ne 0) { throw "Android build failed" }
+
+# Inspects the ACTUAL APK: registry entry AND defined native DEX class.
+pnpm android:verify --apk android/app/build/outputs/apk/debug/app-debug.apk
+if ($LASTEXITCODE -ne 0) { throw "Do not install: APK native verification failed" }
+
+# Connect an Android device with USB debugging enabled, or start an emulator.
+$adb = "$env:ANDROID_HOME\platform-tools\adb.exe"
+& $adb devices
+& $adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+if ($LASTEXITCODE -ne 0) { throw "APK install failed; do not uninstall or clear app data" }
+& $adb shell am force-stop com.lumina.app
+& $adb shell am start -n com.lumina.app/.MainActivity
+```
+
+`install -r` preserves app data. If Android reports a signing-key mismatch, stop;
+do not uninstall the app without first considering unsynced user data.
+Do not use an APK left in another directory or an old download.
+
+### Prove the bridge works on Android (not just that Gradle compiled)
+
+With an online device/emulator connected:
+
+```powershell
+Push-Location android
+.\gradlew.bat :app:connectedDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.class=com.lumina.app.GoogleSignInBridgeTest"
+Pop-Location
+```
+
+This test launches the APK, checks the real WebView's `GoogleSignIn` headers and
+methods, then calls native `initialize` through `window.Capacitor.nativePromise`.
+It does **not** sign in, open the Google account picker, or send an identity token.
+Only a passing device test proves that native initialization works. Separately
+tap **Continue with Google** to verify account selection and server-session
+exchange on the device.
+
+For load failures, collect native startup logs (no tokens are logged by this check):
+
+```powershell
+& "$env:ANDROID_HOME\platform-tools\adb.exe" logcat -d -s LuminaNative Capacitor
+```
+
+### Confirmed diagnosis of the uploaded failing APK
+
+The inspected APK had an **empty** `assets/capacitor.plugins.json` (`[]`) and
+did not define `GoogleSignInPlugin` in any of its seven DEX files. Its remote URL
+was the published Lumina website, whose JavaScript registers and calls
+`GoogleSignIn`. Its embedded `webDir` was `artifacts/lumina/dist`, unlike the
+current `artifacts/lumina/dist/public`. This proves a native/web contract mismatch
+in that APK, not a JavaScript/Java plugin-name mismatch. It does not prove which
+local command, source checkout, or old output produced the APK.
+
+The project now pins the same Google Sign-In package in native and web packages,
+tracks the generated registry, has a native startup registration fallback, and
+refuses to build a missing Google registry. APK and device checks remain separate:
+packaging checks do not establish that Google account sign-in completed.
+
+Exact call chain:
+
+- `artifacts/lumina/src/pages/AuthPage.tsx`: **Continue with Google** calls
+  `handleGoogleSignIn` → `loginWithGoogle`.
+- `artifacts/lumina/src/hooks/useAuth.ts`: native Android calls
+  `GoogleSignIn.initialize({ clientId: googleWebClientId })` and
+  `GoogleSignIn.signIn()` from `@capawesome/capacitor-google-sign-in@0.1.4`.
+  The returned Google ID token becomes a Firebase credential, and the Firebase
+  ID token is exchanged with `/api/auth/firebase-session`.
+- The npm package's `dist/esm/index.js` registers `GoogleSignIn`; its Android
+  `GoogleSignInPlugin.java` has `@CapacitorPlugin(name = "GoogleSignIn")`.
+  There is no name mismatch.
+- `android/capacitor.settings.gradle` includes the native module;
+  `android/app/capacitor.build.gradle` includes it as an app dependency;
+  `android/app/src/main/assets/capacitor.plugins.json` maps the package to
+  `io.capawesome.capacitorjs.plugins.googlesignin.GoogleSignInPlugin`.
+
+The package previously excluded Windows binaries for esbuild, Rollup,
+Lightning CSS, and Tailwind Oxide. These exclusions were removed so the documented
+Windows web-build-and-native-sync command can install its platform dependencies.
