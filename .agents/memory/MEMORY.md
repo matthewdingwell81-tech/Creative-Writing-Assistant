@@ -17,3 +17,5 @@
 - [Generator consumer compatibility](generator-consumer-compatibility.md) — pin generated APIs to consumer library versions; do not migrate runtime validation to satisfy generator defaults.
 - [Premium confirmation emails](premium-email-policy.md) — verified Firebase recipients only; links never grant access; send-only Resend permissions suffice.
 - [Cross-package test isolation](cross-package-test-isolation.md) — inject provider adapters; SDK mocks may miss another workspace package's dependency.
+- [Drizzle error causes](drizzle-error-causes.md) — PostgreSQL SQLSTATEs can be nested in Drizzle's cause chain; inspect wrapped errors in race handling.
+- [Neon suspend defaults](neon-suspend-defaults.md) — this account rejects custom compute suspend intervals; leave the provider default when creating projects.

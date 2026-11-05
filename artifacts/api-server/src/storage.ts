@@ -21,6 +21,18 @@ import {
 } from "@workspace/db";
 import { eq, desc, and, asc, sql, inArray, or, isNull } from "drizzle-orm";
 
+function isPostgresUniqueViolation(error: unknown): boolean {
+  const seen = new Set<object>();
+  let current = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const wrapped = current as { code?: unknown; cause?: unknown };
+    if (wrapped.code === "23505") return true;
+    current = wrapped.cause;
+  }
+  return false;
+}
+
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
   getTutorialsEnabled(userId: string): Promise<boolean | undefined>;
@@ -124,7 +136,7 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       // The unique index is the final guard if a writer that does not take our
       // advisory lock races this transaction. Restore the established account.
-      if ((error as { code?: unknown })?.code === "23505") {
+      if (isPostgresUniqueViolation(error)) {
         const [linked] = await this.database.select().from(users).where(eq(users.firebaseUid, uid)).limit(1);
         if (linked) return linked;
       }
@@ -147,7 +159,7 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       // Keep a raced link conflict on the billing path as a rejected link, not
       // an unhandled database error or an overwrite of the existing identity.
-      if ((error as { code?: unknown })?.code === "23505") {
+      if (isPostgresUniqueViolation(error)) {
         const [linked] = await this.database.select().from(users).where(eq(users.firebaseUid, uid)).limit(1);
         return linked?.id === id ? linked : undefined;
       }

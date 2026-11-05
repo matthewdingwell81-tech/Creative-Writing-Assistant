@@ -589,6 +589,7 @@ describeIdentityDatabase("PostgreSQL identity ownership across API storage insta
           username text NOT NULL UNIQUE,
           firebase_uid varchar(128),
           password text NOT NULL,
+          tutorials_enabled boolean NOT NULL DEFAULT true,
           created_at timestamptz NOT NULL DEFAULT now()
         )
       `);
@@ -760,6 +761,7 @@ describeIdentityDatabase("PostgreSQL identity ownership across API storage insta
           username text NOT NULL UNIQUE,
           firebase_uid varchar(128),
           password text NOT NULL,
+          tutorials_enabled boolean NOT NULL DEFAULT true,
           created_at timestamptz NOT NULL DEFAULT now()
         )
       `);
