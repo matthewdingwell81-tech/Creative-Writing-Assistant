@@ -10,6 +10,7 @@ const mock = vi.hoisted(() => ({
   onAuthStateChanged: vi.fn(),
   verify: vi.fn(), offline: vi.fn(), logout: vi.fn(),
 }));
+vi.mock("@replit/connectors-sdk", () => ({ ReplitConnectors: class {} }));
 vi.mock("@/lib/firebase", () => ({ auth: mock.firebaseAuth }));
 vi.mock("firebase/auth", () => ({ onAuthStateChanged: mock.onAuthStateChanged }));
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({
@@ -38,6 +39,27 @@ import { recordSubscription, saveSubscription, forgetSubscription } from "@/lib/
 import { setCurrentTierUser } from "@/lib/tierAccount";
 import { premiumStorageKey } from "@/hooks/useAdRewards";
 import { PREMIUM_COMPATIBILITY_KEY } from "@/lib/premiumMirror";
+import { developerSubscription, receiptPublicKey, signVerificationReceipt } from "../../../api-server/src/lib/subscriptions";
+import developerIds from "../../../api-server/src/lib/developerIds.json";
+import { readSubscription } from "@/lib/subscriptionCache";
+
+async function signedDeveloperSubscription(id: string): Promise<SubscriptionState> {
+  const verified = developerSubscription(id, developerIds[0])!;
+  return {
+    ...verified,
+    receipt: await signVerificationReceipt(verified),
+    firebaseSync: "synced",
+  };
+}
+
+async function receiptConfig() {
+  return {
+    androidApiKey: "goog_test",
+    entitlementIdentifier: "premium",
+    managementUrl: "https://play.google.com",
+    receiptPublicKey: await receiptPublicKey(),
+  };
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -65,6 +87,7 @@ function Harness() {
 }
 beforeEach(() => {
   vi.clearAllMocks(); localStorage.clear(); mounts.length = 0;
+  vi.stubEnv("SESSION_SECRET", "isolated-test-signing-secret");
   mock.firebaseAuth.currentUser = null;
   mock.authListeners.length = 0;
   mock.onAuthStateChanged.mockImplementation((_auth, next) => {
@@ -79,6 +102,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup(); setCurrentTierUser(null);
   forgetSubscription("developer"); forgetSubscription("other");
+  vi.unstubAllEnvs();
 });
 describe("tier initialization before authenticated content", () => {
   it.each(["fresh login", "reload"])("never mounts Free content during developer %s", async () => {
@@ -152,6 +176,41 @@ describe("tier initialization before authenticated content", () => {
     render(<Harness />);
     await waitFor(() => expect(screen.getByTestId("account-content").textContent).toBe("premium"));
     expect(mounts.every(value => value.scoped === "premium" && value.compatibility === "premium")).toBe(true);
+  });
+  it("restores signed Premium after an offline restart, then removes it after an online Free refresh", async () => {
+    const config = await receiptConfig();
+    const verified = await signedDeveloperSubscription("developer");
+    mock.verify.mockResolvedValue(verified);
+
+    const firstLaunch = render(<Harness />);
+    await waitFor(() => expect(screen.getByTestId("account-content").textContent).toBe("premium"));
+    expect(localStorage.getItem("lumina_verified_subscription:developer")).toBe(verified.receipt);
+    firstLaunch.unmount();
+
+    mock.verify.mockRejectedValue(new Error("offline"));
+    mock.offline.mockImplementation(async () => readSubscription("developer", config));
+    render(<Harness />);
+    await waitFor(() => expect(screen.getByTestId("account-content").textContent).toBe("premium"));
+    expect(mounts.every(value => value.tier === "premium" && value.scoped === "premium")).toBe(true);
+
+    mock.verify.mockResolvedValueOnce(granted("developer", "free"));
+    act(() => { window.dispatchEvent(new Event("online")); });
+    await waitFor(() => expect(screen.getByTestId("account-content").textContent).toBe("free"));
+    expect(localStorage.getItem(premiumStorageKey("developer"))).toBe("free");
+  });
+  it("does not restore another account's Premium receipt after an offline restart", async () => {
+    const config = await receiptConfig();
+    const ownerReceipt = await signedDeveloperSubscription("developer");
+    localStorage.setItem("lumina_verified_subscription:other", ownerReceipt.receipt);
+    mock.user = { ...mock.user!, id: "other" };
+    mock.verify.mockRejectedValue(new Error("offline"));
+    mock.offline.mockImplementation(async () => readSubscription("other", config));
+
+    render(<Harness />);
+    await screen.findByRole("alert");
+    expect(screen.queryByTestId("account-content")).toBeNull();
+    expect(localStorage.getItem(PREMIUM_COMPATIBILITY_KEY)).toBe("free");
+    expect(await readSubscription("other", config)).toBeNull();
   });
   it("hides the old account synchronously when switching and ignores its late response", async () => {
     const old = deferred<SubscriptionState>();
