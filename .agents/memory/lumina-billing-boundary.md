@@ -26,3 +26,9 @@ RevenueCat's webhook authorization header is write-only; its webhook configurati
 **Why:** The provider accepted the configuration, but comparing its readback to the configured authorization value incorrectly appeared to fail because that field is not returned.
 
 **How to apply:** Reapply the header when rotating the server secret. Verify the destination/app scope through readback and the authorization gate through safe HTTP probes; only a delivered event after publishing proves end-to-end delivery.
+
+Use the verified Firebase UID as the canonical RevenueCat identity for linked Google accounts, but retain server-side lookup of their legacy Lumina account identity.
+
+**Why:** The user requested Firebase-based purchase identity without losing existing accounts or purchases, while retaining password-only sign-in.
+
+**How to apply:** Do not remove legacy lookup merely because new SDK sessions use Firebase UID. Treat migration/restore behavior as requiring real-device verification, and keep manual tester access independent of paid expiry.

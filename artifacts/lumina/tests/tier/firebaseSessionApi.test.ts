@@ -227,6 +227,7 @@ describe("verified developer Premium sign-in and billing receipt", () => {
     app.use(express.json());
     app.use(createFirebaseSessionRouter(repository, verifyFixtureToken));
     app.use(createBillingRouter({
+      deliverPremiumAccessEmail: async () => "not-eligible",
       getUserById: async id => records.get(id),
       linkFirebaseUser: async (id, firebaseUid) => {
         const existing = records.get(id);
@@ -378,6 +379,7 @@ describe("subscription refresh racing Firebase account restoration", () => {
       throw new Error("The losing account must not have its subscription state checked.");
     });
     const billingRouter = createBillingRouter({
+      deliverPremiumAccessEmail: async () => "not-eligible",
       getUserById,
       linkFirebaseUser,
       verifyFirebaseIdToken: verifyBillingToken,
@@ -517,6 +519,7 @@ describe("subscription refresh racing Firebase account restoration", () => {
     });
     app.use(createFirebaseSessionRouter(repository, value => verifyFirebaseIdToken(value, jwks)));
     app.use(createBillingRouter({
+      deliverPremiumAccessEmail: async () => "not-eligible",
       getUserById,
       linkFirebaseUser,
       verifyFirebaseIdToken: verifyBillingToken,
@@ -640,6 +643,7 @@ describeIdentityDatabase("PostgreSQL identity ownership across API storage insta
         res.sendStatus(204);
       });
       billingApp.use(createBillingRouter({
+        deliverPremiumAccessEmail: async () => "not-eligible",
         getUserById: billingStorage.getUserById.bind(billingStorage),
         linkFirebaseUser: billingStorage.linkFirebaseUser.bind(billingStorage),
         verifyFirebaseIdToken: verifyBillingToken,

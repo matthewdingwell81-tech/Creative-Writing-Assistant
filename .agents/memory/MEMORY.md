@@ -15,3 +15,5 @@
 - [Developer Premium](developer-premium-policy.md) — allowlisted Firebase accounts get complimentary Premium with normal UI and server-verified identity.
 - [Tutorial opt-out](tutorial-opt-out-policy.md) — account-wide disabling suppresses all tours and prompts; progress resets never re-enable them.
 - [Generator consumer compatibility](generator-consumer-compatibility.md) — pin generated APIs to consumer library versions; do not migrate runtime validation to satisfy generator defaults.
+- [Premium confirmation emails](premium-email-policy.md) — verified Firebase recipients only; links never grant access; send-only Resend permissions suffice.
+- [Cross-package test isolation](cross-package-test-isolation.md) — inject provider adapters; SDK mocks may miss another workspace package's dependency.

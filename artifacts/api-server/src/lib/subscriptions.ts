@@ -63,11 +63,11 @@ export async function revenueCat(path: string): Promise<any> {
     })(), timeout]);
   } finally { clearTimeout(timer); }
 }
-async function list(path: string): Promise<any[]> {
+async function list(path: string, read: typeof revenueCat): Promise<any[]> {
   const result: any[] = [];
   let next: string | null = path;
   while (next) {
-    const page = await revenueCat(next);
+    const page = await read(next);
     if (!page) return [];
     result.push(...page.items);
     // Only provider-owned pagination can select the next resource.
@@ -78,7 +78,6 @@ async function list(path: string): Promise<any[]> {
   return result;
 }
 
-const inFlight = new Map<string, Promise<VerifiedSubscription>>();
 export function revenueCatCustomerId(accountId: string, firebaseUid?: string | null): string {
   return `lumina:${firebaseUid || accountId}`;
 }
@@ -90,32 +89,37 @@ export function revenueCatCustomerIds(accountId: string, firebaseUid?: string | 
   return current === legacy ? [current] : [current, legacy];
 }
 
-export function verifyRevenueCatSubscription(
-  accountId: string, firebaseUid?: string | null,
-): Promise<VerifiedSubscription> {
-  const customerIds = revenueCatCustomerIds(accountId, firebaseUid);
-  const cacheKey = `${accountId}\0${customerIds.join("\0")}`;
-  const existing = inFlight.get(cacheKey);
-  if (existing) return existing;
-  const now = Date.now();
-  const task = (async () => {
-    const states = await Promise.all(customerIds.map(async customerId => {
-      const path = `/v2/projects/${RC_PROJECT_ID}/customers/${encodeURIComponent(customerId)}`;
-      const [subscriptions, entitlements] = await Promise.all([
-        list(`${path}/subscriptions`), list(`${path}/active_entitlements`),
-      ]);
-      return subscriptionFromRevenueCat(accountId, subscriptions, entitlements, now);
-    }));
-    // Prefer any currently verified entitlement; otherwise retain the most
-    // informative legacy status while the customer identity rolls forward.
-    return states.sort((a, b) =>
-      Number(b.tier === "premium") - Number(a.tier === "premium") ||
-      (b.expiresAt ?? 0) - (a.expiresAt ?? 0) ||
-      Number(Boolean(b.subscriptionId)) - Number(Boolean(a.subscriptionId)))[0];
-  })().finally(() => inFlight.delete(cacheKey));
-  inFlight.set(cacheKey, task);
-  return task;
+export function createRevenueCatSubscriptionVerifier(read: typeof revenueCat) {
+  const inFlight = new Map<string, Promise<VerifiedSubscription>>();
+  return function verifyRevenueCatSubscription(
+    accountId: string, firebaseUid?: string | null,
+  ): Promise<VerifiedSubscription> {
+    const customerIds = revenueCatCustomerIds(accountId, firebaseUid);
+    const cacheKey = `${accountId}\0${customerIds.join("\0")}`;
+    const existing = inFlight.get(cacheKey);
+    if (existing) return existing;
+    const now = Date.now();
+    const task = (async () => {
+      const states = await Promise.all(customerIds.map(async customerId => {
+        const path = `/v2/projects/${RC_PROJECT_ID}/customers/${encodeURIComponent(customerId)}`;
+        const [subscriptions, entitlements] = await Promise.all([
+          list(`${path}/subscriptions`, read), list(`${path}/active_entitlements`, read),
+        ]);
+        return subscriptionFromRevenueCat(accountId, subscriptions, entitlements, now);
+      }));
+      // Prefer any currently verified entitlement; otherwise retain the most
+      // informative legacy status while the customer identity rolls forward.
+      return states.sort((a, b) =>
+        Number(b.tier === "premium") - Number(a.tier === "premium") ||
+        (b.expiresAt ?? 0) - (a.expiresAt ?? 0) ||
+        Number(Boolean(b.subscriptionId)) - Number(Boolean(a.subscriptionId)))[0];
+    })().finally(() => inFlight.delete(cacheKey));
+    inFlight.set(cacheKey, task);
+    return task;
+  };
 }
+
+export const verifyRevenueCatSubscription = createRevenueCatSubscriptionVerifier(revenueCat);
 
 function signingKey() {
   const secret = process.env.SESSION_SECRET;

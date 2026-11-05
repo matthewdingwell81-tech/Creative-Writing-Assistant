@@ -8,6 +8,7 @@
 import type { BillingConfigurationReceiptPublicKey } from './billingConfigurationReceiptPublicKey';
 
 export interface BillingConfiguration {
+  accountId: string;
   androidApiKey: string;
   entitlementIdentifier: string;
   receiptPublicKey: BillingConfigurationReceiptPublicKey;

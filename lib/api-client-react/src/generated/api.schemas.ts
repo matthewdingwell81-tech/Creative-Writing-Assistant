@@ -96,6 +96,7 @@ export interface TutorialPreferencesUpdate {
 export type BillingConfigurationReceiptPublicKey = { [key: string]: unknown };
 
 export interface BillingConfiguration {
+  accountId: string;
   androidApiKey: string;
   entitlementIdentifier: string;
   receiptPublicKey: BillingConfigurationReceiptPublicKey;

@@ -15,6 +15,7 @@ const commands = [
   "--filter @workspace/db run migrate:coach",
   "--filter @workspace/db run migrate:safety-flags",
   "--filter @workspace/db run migrate:subscriptions",
+  "--filter @workspace/db run migrate:billing-emails",
   "--filter @workspace/db run migrate:tutorial-preferences",
 ];
 
@@ -75,6 +76,7 @@ const stages = [
   "Coach migration",
   "safety flags migration",
   "subscription account-link migration",
+  "billing email delivery migration",
   "tutorial preferences migration",
 ];
 

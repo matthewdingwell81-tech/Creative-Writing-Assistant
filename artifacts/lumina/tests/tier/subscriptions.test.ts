@@ -5,6 +5,7 @@ vi.mock("@replit/connectors-sdk", () => ({ ReplitConnectors: class {} }));
 import {
   RC_ENTITLEMENT_ID, subscriptionFromRevenueCat, receiptPublicKey, signVerificationReceipt,
   developerSubscription,
+  revenueCatCustomerIds, createRevenueCatSubscriptionVerifier,
 } from "../../../api-server/src/lib/subscriptions";
 import developerIds from "../../../api-server/src/lib/developerIds.json";
 
@@ -52,6 +53,25 @@ describe("authoritative subscription lifecycle", () => {
     expect(subscriptionFromRevenueCat("a", [paid({ gives_access: false })], active, now).tier).toBe("free");
     expect(subscriptionFromRevenueCat("a", [paid()], [], now).tier).toBe("free");
     expect(subscriptionFromRevenueCat("a", [paid({ entitlements: { items: [{ id: "another" }] } })], active, now).tier).toBe("free");
+  });
+  it("revokes refunded access even with a future paid-through timestamp", () => {
+    expect(subscriptionFromRevenueCat("a", [paid({ gives_access: false })], [], now))
+      .toMatchObject({ tier: "free", status: "expired" });
+  });
+  it("uses Firebase UID for linked customers without losing legacy subscriptions", async () => {
+    expect(revenueCatCustomerIds("legacy-account", "verified-uid"))
+      .toEqual(["lumina:verified-uid", "lumina:legacy-account"]);
+    expect(revenueCatCustomerIds("password-account")).toEqual(["lumina:password-account"]);
+    const future = Date.now() + 86400000;
+    const read = vi.fn(async (path: string) => {
+      if (path.includes(encodeURIComponent("lumina:verified-uid"))) return null;
+      return { items: path.endsWith("/subscriptions")
+          ? [paid({ ends_at: future, current_period_ends_at: future })]
+          : [{ entitlement_id: RC_ENTITLEMENT_ID, expires_at: future }] };
+    });
+    expect(await createRevenueCatSubscriptionVerifier(read)("legacy-account", "verified-uid"))
+      .toMatchObject({ accountId: "legacy-account", tier: "premium", subscriptionId: "subscription-1" });
+    expect(read).toHaveBeenCalledTimes(4);
   });
   it("never grants an indefinite monthly subscription", () => {
     expect(subscriptionFromRevenueCat("a", [paid({ ends_at: null, current_period_ends_at: null })],

@@ -1,4 +1,5 @@
-import { integer, pgTable, primaryKey, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { check, integer, pgTable, primaryKey, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { users } from "./users";
 
@@ -6,7 +7,7 @@ export const billingEmailDeliveries = pgTable("billing_email_deliveries", {
   accountId: varchar("account_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   accessKey: text("access_key").notNull(),
   recipientEmail: text("recipient_email").notNull(),
-  status: text("status", { enum: ["sending", "pending", "sent"] }).notNull().default("pending"),
+  status: varchar("status", { length: 16, enum: ["sending", "pending", "sent"] }).notNull().default("pending"),
   attempts: integer("attempts").notNull().default(0),
   providerEmailId: text("provider_email_id"),
   lastError: text("last_error"),
@@ -15,6 +16,7 @@ export const billingEmailDeliveries = pgTable("billing_email_deliveries", {
   sentAt: timestamp("sent_at", { withTimezone: true }),
 }, table => [
   primaryKey({ columns: [table.accountId, table.accessKey] }),
+  check("billing_email_deliveries_status_check", sql`${table.status} IN ('sending', 'pending', 'sent')`),
 ]);
 
 export const insertBillingEmailDeliverySchema = z.object({

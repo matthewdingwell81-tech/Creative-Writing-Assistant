@@ -9,9 +9,11 @@ import { getCurrentTierUser, getTierAccountGeneration, isCurrentTierUser } from 
 import { readSubscription, recordSubscription, saveSubscription } from "./subscriptionCache";
 
 let configuration: BillingConfiguration | null = null;
+let configurationGeneration = -1;
 let configuredAccount: string | null = null;
 let configuredRevenueCatAppUserId: string | null = null;
 let configurationTask: Promise<BillingConfiguration> | null = null;
+let configurationTaskIdentity = "";
 let nativeTask: Promise<void> | null = null;
 let operation: Promise<SubscriptionState> | null = null;
 const pendingKey = (id: string) => `lumina_purchase_pending:${encodeURIComponent(id)}`;
@@ -19,13 +21,22 @@ export const nativePurchasesAvailable = () => Capacitor.isNativePlatform() && Ca
 export const hasPendingPurchase = (id: string) => localStorage.getItem(pendingKey(id)) === "true";
 
 export async function getPurchaseConfiguration(refresh = false): Promise<BillingConfiguration> {
-  if (!refresh && configuration) return configuration;
-  if (!configurationTask) {
-    configurationTask = getBillingConfiguration().then(value => {
+  const id = accountId();
+  const generation = getTierAccountGeneration();
+  const identity = `${id}:${generation}`;
+  if (!refresh && configuration?.accountId === id && configurationGeneration === generation) return configuration;
+  if (!configurationTask || configurationTaskIdentity !== identity) {
+    const task = getBillingConfiguration().then(value => {
+      assertAccount(id);
+      if (getTierAccountGeneration() !== generation) throw new Error("Your account changed. Please try again.");
+      if (value.accountId !== id) throw new Error("Billing configuration returned a different account.");
       configuration = value;
+      configurationGeneration = generation;
       try { localStorage.setItem("lumina_billing_configuration", JSON.stringify(value)); } catch { /* Optional offline cache. */ }
       return value;
-    }).finally(() => { configurationTask = null; });
+    }).finally(() => { if (configurationTask === task) configurationTask = null; });
+    configurationTask = task;
+    configurationTaskIdentity = identity;
   }
   return configurationTask;
 }
@@ -41,12 +52,17 @@ function accountId(): string {
 
 export async function initializePurchases(id = accountId()): Promise<void> {
   if (!nativePurchasesAvailable()) throw new Error("Purchase and restore are available in the Lumina Android app.");
+  const generation = getTierAccountGeneration();
+  const assertNativeAccount = () => {
+    assertAccount(id);
+    if (getTierAccountGeneration() !== generation) throw new Error("Your account changed. Please try again.");
+  };
   if (nativeTask) await nativeTask;
-  assertAccount(id);
+  assertNativeAccount();
   const config = await getPurchaseConfiguration(true);
-  assertAccount(id);
+  assertNativeAccount();
   if (nativeTask) await nativeTask;
-  assertAccount(id);
+  assertNativeAccount();
   const appUserID = config.revenueCatAppUserId;
   if (configuredAccount === id && configuredRevenueCatAppUserId === appUserID) return;
   nativeTask = (async () => {
@@ -55,7 +71,7 @@ export async function initializePurchases(id = accountId()): Promise<void> {
     // Set before the account check: a changed session must still logIn on its next use.
     configuredAccount = id;
     configuredRevenueCatAppUserId = appUserID;
-    assertAccount(id);
+    assertNativeAccount();
   })();
   try { await nativeTask; } finally { nativeTask = null; }
 }

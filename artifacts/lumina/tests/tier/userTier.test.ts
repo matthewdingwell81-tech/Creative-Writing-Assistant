@@ -27,6 +27,17 @@ afterEach(() => {
 });
 
 describe("Firebase tier documents", () => {
+  it("keeps a server-owned manual grant when the paid subscription has expired", () => {
+    const listener = bind();
+    listener.next(snapshot({
+      tier: "premium", manualPremiumAccess: true, expiresAt: Date.now() - 1000,
+      subscriptionStatus: "expired",
+    }));
+    expect(isPremium()).toBe(true);
+    listener.next(snapshot({ tier: "free", manualPremiumAccess: false, expiresAt: Date.now() - 1000 }));
+    expect(isPremium()).toBe(false);
+    expect(firebase.setDoc).not.toHaveBeenCalled();
+  });
   it("requires a server grant before the allowlisted Firebase identity gets Premium", () => {
     bind(accountA, googleUser(DEVELOPER_IDS[0], accountA.email));
     expect(isPremium()).toBe(false);

@@ -5,7 +5,8 @@
 - Android uses the official `@revenuecat/purchases-capacitor` plugin, installed in both the web artifact and root native project.
 - RevenueCat project `projc174b989`, Android app `appd4e4b7a907`, package name `com.lumina.app`.
 - Subscription `lumina_premium:monthly`, entitlement `premium`, default offering and `$rc_monthly` package.
-- The backend reads RevenueCat for the authenticated session's `lumina:<account ID>`. It does not trust a tier, receipt claim, customer ID, expiry, or price submitted by the browser.
+- Linked Google accounts use `lumina:<verified Firebase UID>` as their canonical RevenueCat identity. The server also reads the existing `lumina:<Lumina account ID>` customer to preserve earlier purchases. Password-only accounts keep that account-ID identity. The SDK receives its identity from account-bound `/api/billing/config`, not browser-supplied claims.
+- The backend does not trust a tier, receipt claim, customer ID, expiry, or price submitted by the browser.
 - The SDK submits and retains the original store receipt. The app caches a backend-signed, account-bound verification receipt, valid offline for at most 24 hours and never beyond paid expiry.
 - Cancellation stops renewal but retains access until expiry. Changed store prices do not invalidate a purchased subscription.
 - An uncertain purchase sets a persistent pending marker before opening checkout. Retry verifies only; it never invokes another store purchase. Restore queries the store and re-verifies with the backend.
@@ -20,8 +21,36 @@
 4. Set `FIREBASE_SERVICE_ACCOUNT_JSON` through Replit Secrets to a service-account JSON credential authorized for **lumina-app-22fd7** Firestore. Only server code reads it. Missing credentials leave verified device access working but show a cloud-sync warning; they do not result in client-authorized Premium writes.
 5. Review and deploy `firestore.rules` to the existing Firebase project. Merge with any other required collections/rules rather than overwriting unrelated access policies. Subscription metadata and Premium grants must be writable only by the backend.
 6. Set `REVENUECAT_WEBHOOK_AUTHORIZATION` through Secrets to a long random authorization value (for example a Bearer value). Configure RevenueCat's webhook at the published backend's `/api/billing/webhook`, with that exact Authorization header. Do not put the value in frontend code or this document. Initial purchase, renewal, cancellation, expiration, billing issues and transfers all re-read current provider state; duplicate or reordered events cannot apply stale entitlement claims.
-7. Ensure the development database has the additive subscription migration (`pnpm --filter @workspace/db run migrate:subscriptions`). For Replit-managed production PostgreSQL, Publish reviews and applies the development-to-production schema diff; review that change in the Publish UI rather than manually running this script against production. The new nullable account link does not replace the database or add a second product catalog.
+7. Ensure the development database has the additive subscription and confirmation-email migrations (`pnpm --filter @workspace/db run migrate:subscriptions` and `pnpm --filter @workspace/db run migrate:billing-emails`). Both are included in post-merge setup. For Replit-managed production PostgreSQL, review the development-to-production schema diff in Publish rather than manually running development migration scripts against production.
 8. Publish the updated backend/web app, then build/sync the Android app. Verify the native server URL points to that published app, not an outdated release. Preserve the existing seven-day app trial independently of store billing.
+9. Configure the non-secret `LUMINA_BILLING_EMAIL_FROM` with a sender authorized by the connected Resend account. The connection is send-only; it cannot list verified domains. Do not substitute an unverified sender or request a broader API key just to send mail.
+
+## Firestore fields and independent manual access
+
+Existing fields are retained, without renames:
+
+| Field | Meaning |
+| --- | --- |
+| `tier` | Effective server-verified `premium` or `free`, including complimentary access |
+| `subscriptionId` | RevenueCat paid subscription ID, or null if no paid subscription |
+| `expiresAt` | Paid-through expiry in milliseconds, or null |
+| `subscriptionStatus` | Current provider-derived paid subscription status |
+| `subscriptionVerifiedAt` | Effective entitlement verification timestamp in milliseconds |
+| `manualPremiumAccess` | New server-owned boolean reflecting the owner-maintained Firebase UID allowlist |
+
+Paid expiry, cancellation, and refunds do not remove an allowlisted account's independent grant. Removing the UID from the owner-maintained allowlist removes that grant at the next successful online verification. If RevenueCat is unavailable for an allowlisted account, complimentary access can still be verified; existing paid metadata is left unchanged rather than inventing provider state.
+
+Writes merge into `users/<verified Firebase UID>` without replacing unrelated profile data. A transaction rejects an older verification timestamp. The rules source permits owner-only single-document reads and denies all client creates, updates, deletes, and collection listing. No Firebase deployment configuration is present, so these source rules have **not** been confirmed as the project's deployed rules.
+
+## Confirmation email and retry behavior
+
+Premium confirmation goes only to the linked Firebase Authentication user's current `email` when Firebase Admin confirms `emailVerified`. A Lumina username, client-provided address, or webhook payload is not accepted as the recipient. Password-only and unverified identities are skipped.
+
+The email says Premium is active, asks the user to sign in with the associated Google account (and the purchase account for a paid subscription), and links to the published app. The link contains no entitlement token or unlock parameter. Opening it grants nothing; normal authentication and server verification still apply.
+
+Delivery uses the existing Resend connection and a persistent database record keyed by account plus paid subscription ID, with a separate key for complimentary access. Concurrent attempts share a delivery claim, successful records suppress later sends, and retries reuse the same provider idempotency key. A failed or abandoned attempt can be retried by the next subscription verification or RevenueCat webhook. There is no independent background email worker. Resend's idempotency-retention window still bounds protection in the rare case of provider acceptance followed by a database-commit failure.
+
+Normal subscription responses do not revoke Premium because email delivery failed. An authenticated webhook returns 503 when required cloud synchronization or eligible email delivery cannot finish, so RevenueCat can retry; Free or unverified-email accounts do not receive a confirmation. Sender configuration is required before live email testing. `LUMINA_WEB_APP_URL` may override the published URL if the domain changes; it must be HTTPS.
 
 ## Verification
 
@@ -30,6 +59,8 @@
 - Existing `Sync Android` workflow builds and registers the native purchases plugin.
 
 Logic tests use isolated fixtures/mocks and never charge a real customer. Browser status rendering tests do not prove store billing or live Firestore rules. Real billing cannot be declared ready until the device/store and Firebase configuration above has been checked.
+
+The tier suite covers paid renewal/cancellation/expiry/refund interpretation, wrong entitlements, restore and uncertain-purchase retries, Firebase/legacy customer mapping, account switches, independent manual grants, duplicate/reordered authenticated webhooks, email deduplication/retry, and the Firestore rules **source contract**. It does not replace a Google Play internal-release purchase/restore test, a real Resend delivery, a Firebase Rules emulator/deployment check, or a delivered production webhook.
 
 ## Offline trust and key rotation
 

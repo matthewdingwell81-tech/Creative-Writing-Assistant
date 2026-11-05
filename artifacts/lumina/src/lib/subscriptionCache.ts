@@ -24,7 +24,9 @@ export function saveSubscription(state: SubscriptionState): void {
   applySubscription(state);
 }
 
-export async function readSubscription(id: string, config: BillingConfiguration): Promise<SubscriptionState | null> {
+export async function readSubscription(
+  id: string, config: Pick<BillingConfiguration, "receiptPublicKey">,
+): Promise<SubscriptionState | null> {
   try {
     const receipt = localStorage.getItem(key(id));
     if (!receipt) return null;

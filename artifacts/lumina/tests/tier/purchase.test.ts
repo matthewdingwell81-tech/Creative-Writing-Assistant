@@ -10,7 +10,7 @@ vi.mock("@workspace/api-client-react", () => ({ getBillingConfiguration: mock.co
 vi.mock("@/lib/firebase", () => ({ auth: mock.auth }));
 vi.mock("@/lib/subscriptionCache", () => ({ readSubscription: mock.receipt, recordSubscription: mock.record, saveSubscription: mock.save }));
 import { setCurrentTierUser } from "@/lib/tierAccount";
-import { hasPendingPurchase, manageSubscription, purchasePremium, restorePurchase, retryVerification, verifyPurchase } from "@/lib/purchase";
+import { hasPendingPurchase, initializePurchases, manageSubscription, purchasePremium, restorePurchase, retryVerification, verifyPurchase } from "@/lib/purchase";
 const state = (tier = "free") => ({ accountId: "buyer", tier, status: tier === "premium" ? "active" : "none", expiresAt: Date.now() + 86400000 });
 describe("native purchase safety", () => {
   afterEach(() => { vi.unstubAllGlobals(); });
@@ -23,7 +23,7 @@ describe("native purchase safety", () => {
       createdAt: new Date().toISOString(),
     });
     mock.config.mockResolvedValue({
-      androidApiKey: "goog_test_public", receiptPublicKey: {}, revenueCatAppUserId: "lumina:verified-firebase-uid",
+      accountId: "buyer", androidApiKey: "goog_test_public", receiptPublicKey: {}, revenueCatAppUserId: "lumina:verified-firebase-uid",
     });
     mock.verify.mockResolvedValue(state());
     mock.getOfferings.mockResolvedValue({ current: { monthly: { identifier: "$rc_monthly", product: { priceString: "$4.99" } } } });
@@ -53,6 +53,15 @@ describe("native purchase safety", () => {
 
     expect(firebaseUser.getIdToken).toHaveBeenCalledOnce();
     expect(mock.verify).toHaveBeenCalledWith({ firebaseIdToken: "firebase-id-token" });
+  });
+  it("rejects a configuration belonging to another account before changing SDK identity", async () => {
+    mock.config.mockResolvedValueOnce({
+      accountId: "foreign-account", androidApiKey: "goog_test_public",
+      revenueCatAppUserId: "lumina:foreign-uid",
+    });
+    await expect(initializePurchases()).rejects.toThrow("different account");
+    expect(mock.configure).not.toHaveBeenCalled();
+    expect(mock.logIn).not.toHaveBeenCalled();
   });
   it("does not use an unverified Firebase email to link an account", async () => {
     mock.auth.currentUser = {

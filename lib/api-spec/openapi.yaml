@@ -463,8 +463,9 @@ components:
           type: boolean
     BillingConfiguration:
       type: object
-      required: [androidApiKey, entitlementIdentifier, receiptPublicKey, managementUrl, revenueCatAppUserId]
+      required: [accountId, androidApiKey, entitlementIdentifier, receiptPublicKey, managementUrl, revenueCatAppUserId]
       properties:
+        accountId: { type: string }
         androidApiKey: { type: string }
         entitlementIdentifier: { type: string }
         receiptPublicKey: { type: object, additionalProperties: true }

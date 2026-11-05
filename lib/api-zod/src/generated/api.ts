@@ -61,6 +61,7 @@ export const UpdateTutorialPreferencesResponse = zod.object({
 
 
 export const GetBillingConfigurationResponse = zod.object({
+  "accountId": zod.string(),
   "androidApiKey": zod.string(),
   "entitlementIdentifier": zod.string(),
   "receiptPublicKey": zod.record(zod.string(), zod.unknown()),

@@ -77,9 +77,9 @@ export function createBillingRouter(overrides: Partial<BillingRouterDependencies
       if (webhook && (result === "not-configured" || result === "in-progress")) {
         throw new Error(`Premium email delivery is ${result}.`);
       }
-    } catch (error) {
-      req.log.warn({ err: error, accountId: user.id }, "Premium access email delivery must be retried");
-      if (webhook) throw error;
+    } catch {
+      req.log.warn({ accountId: user.id }, "Premium access email delivery must be retried");
+      if (webhook) throw new Error("Premium access email delivery is unavailable.");
     }
   }
 
@@ -94,6 +94,7 @@ export function createBillingRouter(overrides: Partial<BillingRouterDependencies
         if (!publicApiKey) throw new Error("Google Play public SDK key unavailable.");
       }
       res.json(GetBillingConfigurationResponse.parse({
+        accountId: user.id,
         androidApiKey: publicApiKey, entitlementIdentifier: "premium",
         receiptPublicKey: await receiptPublicKey(), managementUrl: MANAGEMENT_URL,
         revenueCatAppUserId: revenueCatCustomerId(user.id, user.firebaseUid),
