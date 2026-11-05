@@ -22,7 +22,9 @@ describe("native purchase safety", () => {
       id: "buyer", email: "buyer@example.test", username: "buyer@example.test",
       createdAt: new Date().toISOString(),
     });
-    mock.config.mockResolvedValue({ androidApiKey: "goog_test_public", receiptPublicKey: {} });
+    mock.config.mockResolvedValue({
+      androidApiKey: "goog_test_public", receiptPublicKey: {}, revenueCatAppUserId: "lumina:verified-firebase-uid",
+    });
     mock.verify.mockResolvedValue(state());
     mock.getOfferings.mockResolvedValue({ current: { monthly: { identifier: "$rc_monthly", product: { priceString: "$4.99" } } } });
     mock.purchasePackage.mockResolvedValue({});
@@ -32,6 +34,9 @@ describe("native purchase safety", () => {
     mock.verify.mockResolvedValueOnce(state()).mockResolvedValueOnce(state("premium"));
     expect((await purchasePremium()).tier).toBe("premium");
     expect(mock.purchasePackage).toHaveBeenCalledTimes(1);
+    expect(mock.configure).toHaveBeenCalledWith({
+      apiKey: "goog_test_public", appUserID: "lumina:verified-firebase-uid",
+    });
     expect(mock.verify).toHaveBeenCalledTimes(2);
     expect(hasPendingPurchase("buyer")).toBe(false);
   });

@@ -10,6 +10,7 @@ import { readSubscription, recordSubscription, saveSubscription } from "./subscr
 
 let configuration: BillingConfiguration | null = null;
 let configuredAccount: string | null = null;
+let configuredRevenueCatAppUserId: string | null = null;
 let configurationTask: Promise<BillingConfiguration> | null = null;
 let nativeTask: Promise<void> | null = null;
 let operation: Promise<SubscriptionState> | null = null;
@@ -17,8 +18,8 @@ const pendingKey = (id: string) => `lumina_purchase_pending:${encodeURIComponent
 export const nativePurchasesAvailable = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
 export const hasPendingPurchase = (id: string) => localStorage.getItem(pendingKey(id)) === "true";
 
-export async function getPurchaseConfiguration(): Promise<BillingConfiguration> {
-  if (configuration) return configuration;
+export async function getPurchaseConfiguration(refresh = false): Promise<BillingConfiguration> {
+  if (!refresh && configuration) return configuration;
   if (!configurationTask) {
     configurationTask = getBillingConfiguration().then(value => {
       configuration = value;
@@ -42,14 +43,18 @@ export async function initializePurchases(id = accountId()): Promise<void> {
   if (!nativePurchasesAvailable()) throw new Error("Purchase and restore are available in the Lumina Android app.");
   if (nativeTask) await nativeTask;
   assertAccount(id);
-  if (configuredAccount === id) return;
+  const config = await getPurchaseConfiguration(true);
+  assertAccount(id);
+  if (nativeTask) await nativeTask;
+  assertAccount(id);
+  const appUserID = config.revenueCatAppUserId;
+  if (configuredAccount === id && configuredRevenueCatAppUserId === appUserID) return;
   nativeTask = (async () => {
-    const config = await getPurchaseConfiguration();
-    assertAccount(id);
-    if (configuredAccount) await Purchases.logIn({ appUserID: `lumina:${id}` });
-    else await Purchases.configure({ apiKey: config.androidApiKey, appUserID: `lumina:${id}` });
+    if (configuredAccount || configuredRevenueCatAppUserId) await Purchases.logIn({ appUserID });
+    else await Purchases.configure({ apiKey: config.androidApiKey, appUserID });
     // Set before the account check: a changed session must still logIn on its next use.
     configuredAccount = id;
+    configuredRevenueCatAppUserId = appUserID;
     assertAccount(id);
   })();
   try { await nativeTask; } finally { nativeTask = null; }

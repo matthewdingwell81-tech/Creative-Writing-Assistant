@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { Router } from "express";
+import { Router, type Request } from "express";
 import type {} from "pino-http";
 import { eq } from "drizzle-orm";
 import { db, users, type User } from "@workspace/db";
@@ -9,20 +9,34 @@ import {
 import { verifyFirebaseIdToken } from "../lib/firebaseAuth";
 import {
   RC_PROJECT_ID, RC_ANDROID_APP_ID, MANAGEMENT_URL, receiptPublicKey, revenueCat,
-  signVerificationReceipt, verifyRevenueCatSubscription,
+  revenueCatCustomerId, signVerificationReceipt, verifyRevenueCatSubscription,
+  type VerifiedSubscription,
   developerSubscription,
 } from "../lib/subscriptions";
 import { syncSubscriptionToFirebase } from "../lib/subscriptionFirebase";
 import { storage } from "../storage";
+import { deliverPremiumAccessEmail, type PremiumEmailResult } from "../lib/billingEmail";
 
 let publicApiKey: string | null = null;
 async function verifiedState(id: string) {
   const [user] = await db.select().from(users).where(eq(users.id, id));
   if (!user) throw new Error("Account not found.");
-  const subscription = developerSubscription(id, user.firebaseUid) ?? await verifyRevenueCatSubscription(id);
+  const manual = developerSubscription(id, user.firebaseUid);
+  let paidSubscription: VerifiedSubscription | undefined;
+  try {
+    paidSubscription = await verifyRevenueCatSubscription(id, user.firebaseUid);
+  } catch (error) {
+    if (!manual) throw error;
+  }
+  const subscription = manual ?? paidSubscription;
+  if (!subscription) throw new Error("Subscription verification unavailable.");
   let firebaseSync: "not-linked" | "synced" | "unavailable" = "not-linked";
   if (user.firebaseUid) {
-    try { firebaseSync = await syncSubscriptionToFirebase(user.firebaseUid, subscription) ? "synced" : "unavailable"; }
+    try {
+      firebaseSync = await syncSubscriptionToFirebase(
+        user.firebaseUid, subscription, paidSubscription, Boolean(manual),
+      ) ? "synced" : "unavailable";
+    }
     catch { firebaseSync = "unavailable"; }
   }
   return GetSubscriptionResponse.parse({
@@ -32,9 +46,11 @@ async function verifiedState(id: string) {
 
 type BillingRouterDependencies = {
   getUserById: (id: string) => Promise<User | undefined>;
+  getUserByFirebaseUid: (uid: string) => Promise<User | undefined>;
   linkFirebaseUser: typeof storage.linkFirebaseUser;
   verifyFirebaseIdToken: typeof verifyFirebaseIdToken;
   verifiedState: typeof verifiedState;
+  deliverPremiumAccessEmail: (user: User, state: VerifiedSubscription) => Promise<PremiumEmailResult>;
 };
 
 export function createBillingRouter(overrides: Partial<BillingRouterDependencies> = {}) {
@@ -42,14 +58,36 @@ export function createBillingRouter(overrides: Partial<BillingRouterDependencies
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   });
+  const getUserByFirebaseUid = overrides.getUserByFirebaseUid ?? storage.getUserByFirebaseUid.bind(storage);
   const linkFirebaseUser = overrides.linkFirebaseUser ?? storage.linkFirebaseUser.bind(storage);
   const verifyFirebaseToken = overrides.verifyFirebaseIdToken ?? verifyFirebaseIdToken;
   const getVerifiedState = overrides.verifiedState ?? verifiedState;
+  const deliverAccessEmail = overrides.deliverPremiumAccessEmail ?? deliverPremiumAccessEmail;
   const router = Router();
+
+  async function notifyPremiumEmail(
+    req: Request,
+    user: User,
+    state: VerifiedSubscription,
+    webhook: boolean,
+  ): Promise<void> {
+    if (state.tier !== "premium") return;
+    try {
+      const result = await deliverAccessEmail(user, state);
+      if (webhook && (result === "not-configured" || result === "in-progress")) {
+        throw new Error(`Premium email delivery is ${result}.`);
+      }
+    } catch (error) {
+      req.log.warn({ err: error, accountId: user.id }, "Premium access email delivery must be retried");
+      if (webhook) throw error;
+    }
+  }
 
   router.get("/billing/config", async (req, res) => {
     if (!req.session.userId) { res.status(401).json({ error: "Sign in required." }); return; }
     try {
+      const user = await getUserById(req.session.userId);
+      if (!user) { res.status(404).json({ error: "Account not found." }); return; }
       if (!publicApiKey) {
         const keys = await revenueCat(`/v2/projects/${RC_PROJECT_ID}/apps/${RC_ANDROID_APP_ID}/public_api_keys`);
         publicApiKey = keys?.items?.find((key: { key: string }) => key.key.startsWith("goog_"))?.key ?? null;
@@ -58,6 +96,7 @@ export function createBillingRouter(overrides: Partial<BillingRouterDependencies
       res.json(GetBillingConfigurationResponse.parse({
         androidApiKey: publicApiKey, entitlementIdentifier: "premium",
         receiptPublicKey: await receiptPublicKey(), managementUrl: MANAGEMENT_URL,
+        revenueCatAppUserId: revenueCatCustomerId(user.id, user.firebaseUid),
       }));
     } catch (error) {
       req.log.warn({ err: error }, "Billing configuration unavailable");
@@ -67,7 +106,12 @@ export function createBillingRouter(overrides: Partial<BillingRouterDependencies
 
   router.get("/billing/subscription", async (req, res) => {
     if (!req.session.userId) { res.status(401).json({ error: "Sign in required." }); return; }
-    try { res.json(await getVerifiedState(req.session.userId)); }
+    try {
+      const state = await getVerifiedState(req.session.userId);
+      const user = await getUserById(req.session.userId);
+      if (user) await notifyPremiumEmail(req, user, state, false);
+      res.json(state);
+    }
     catch (error) {
       req.log.warn({ err: error }, "Subscription verification unavailable");
       res.status(503).json({ error: "Unable to verify your subscription. Retry verification; do not purchase again." });
@@ -92,7 +136,10 @@ export function createBillingRouter(overrides: Partial<BillingRouterDependencies
           res.status(403).json({ error: "Account is already linked to a different Firebase identity." }); return;
         }
       }
-      res.json(await getVerifiedState(req.session.userId));
+      const state = await getVerifiedState(req.session.userId);
+      const user = await getUserById(req.session.userId);
+      if (user) await notifyPremiumEmail(req, user, state, false);
+      res.json(state);
     } catch (error) {
       req.log.warn({ err: error }, "Subscription verification unavailable");
       res.status(503).json({ error: "Unable to verify your subscription. Retry verification; do not purchase again." });
@@ -116,12 +163,16 @@ export function createBillingRouter(overrides: Partial<BillingRouterDependencies
     try {
       // Read current state, never apply event-supplied tier/expiry. Old, duplicated
       // or reordered cancellation/renewal/expiration events cannot roll it back.
+      const affectedUsers = new Map<string, User>();
       for (const customerId of customerIds) {
-        const id = customerId.slice("lumina:".length);
-        const user = await getUserById(id);
-        if (!user) continue;
-        const state = await getVerifiedState(id);
+        const identity = customerId.slice("lumina:".length);
+        const user = await getUserByFirebaseUid(identity) ?? await getUserById(identity);
+        if (user) affectedUsers.set(user.id, user);
+      }
+      for (const user of affectedUsers.values()) {
+        const state = await getVerifiedState(user.id);
         if (state.firebaseSync === "unavailable") throw new Error("Firebase subscription sync is unavailable.");
+        await notifyPremiumEmail(req, user, state, true);
       }
       res.sendStatus(204);
     } catch (error) {

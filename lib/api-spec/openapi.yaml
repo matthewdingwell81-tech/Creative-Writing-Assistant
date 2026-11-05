@@ -120,6 +120,8 @@ paths:
                 $ref: "#/components/schemas/BillingConfiguration"
         "401":
           description: Sign in required
+        "404":
+          description: Account not found
         "503":
           description: Billing configuration unavailable
   /billing/subscription:
@@ -461,12 +463,15 @@ components:
           type: boolean
     BillingConfiguration:
       type: object
-      required: [androidApiKey, entitlementIdentifier, receiptPublicKey, managementUrl]
+      required: [androidApiKey, entitlementIdentifier, receiptPublicKey, managementUrl, revenueCatAppUserId]
       properties:
         androidApiKey: { type: string }
         entitlementIdentifier: { type: string }
         receiptPublicKey: { type: object, additionalProperties: true }
         managementUrl: { type: string }
+        revenueCatAppUserId:
+          type: string
+          description: Server-derived RevenueCat identity, using the linked Firebase UID when available
     SubscriptionVerification:
       type: object
       properties:

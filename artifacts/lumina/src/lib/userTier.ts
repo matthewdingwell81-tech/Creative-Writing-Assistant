@@ -80,15 +80,17 @@ export function syncUserTier(session: SessionUser | null): () => void {
       if (!isActiveDocument()) return;
       // A queued/offline write is not a confirmed cloud entitlement.
       if (snapshot.metadata.hasPendingWrites) return;
-      const tier = snapshot.data()?.tier;
+      const data = snapshot.data();
+      const tier = data?.tier;
+      const manualPremiumAccess = data?.manualPremiumAccess === true;
       // Paid subscriptions are owned by RevenueCat + backend verification.
       // A delayed Firestore profile snapshot cannot replace a newer purchase.
       if (getVerifiedSubscription(session.id)) return;
       if (tier === "free" || tier === "premium") {
         try {
-          const expiresAt = snapshot.data()?.expiresAt;
-          setPremiumAccountStatus(session.id, tier === "premium" &&
-            (typeof expiresAt !== "number" || expiresAt > Date.now()));
+          const expiresAt = data?.expiresAt;
+          setPremiumAccountStatus(session.id, tier === "premium" && (manualPremiumAccess ||
+            typeof expiresAt !== "number" || expiresAt > Date.now()));
         } catch { reportDocumentError(); }
       } else if (tier !== undefined) {
         reportDocumentError();

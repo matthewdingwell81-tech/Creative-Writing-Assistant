@@ -79,17 +79,41 @@ async function list(path: string): Promise<any[]> {
 }
 
 const inFlight = new Map<string, Promise<VerifiedSubscription>>();
-export function verifyRevenueCatSubscription(accountId: string): Promise<VerifiedSubscription> {
-  const existing = inFlight.get(accountId);
+export function revenueCatCustomerId(accountId: string, firebaseUid?: string | null): string {
+  return `lumina:${firebaseUid || accountId}`;
+}
+
+/** New Google-linked customers use Firebase UID; old account IDs remain readable during migration. */
+export function revenueCatCustomerIds(accountId: string, firebaseUid?: string | null): string[] {
+  const current = revenueCatCustomerId(accountId, firebaseUid);
+  const legacy = revenueCatCustomerId(accountId);
+  return current === legacy ? [current] : [current, legacy];
+}
+
+export function verifyRevenueCatSubscription(
+  accountId: string, firebaseUid?: string | null,
+): Promise<VerifiedSubscription> {
+  const customerIds = revenueCatCustomerIds(accountId, firebaseUid);
+  const cacheKey = `${accountId}\0${customerIds.join("\0")}`;
+  const existing = inFlight.get(cacheKey);
   if (existing) return existing;
-  const path = `/v2/projects/${RC_PROJECT_ID}/customers/${encodeURIComponent(`lumina:${accountId}`)}`;
+  const now = Date.now();
   const task = (async () => {
-    const [subscriptions, entitlements] = await Promise.all([
-      list(`${path}/subscriptions`), list(`${path}/active_entitlements`),
-    ]);
-    return subscriptionFromRevenueCat(accountId, subscriptions, entitlements);
-  })().finally(() => inFlight.delete(accountId));
-  inFlight.set(accountId, task);
+    const states = await Promise.all(customerIds.map(async customerId => {
+      const path = `/v2/projects/${RC_PROJECT_ID}/customers/${encodeURIComponent(customerId)}`;
+      const [subscriptions, entitlements] = await Promise.all([
+        list(`${path}/subscriptions`), list(`${path}/active_entitlements`),
+      ]);
+      return subscriptionFromRevenueCat(accountId, subscriptions, entitlements, now);
+    }));
+    // Prefer any currently verified entitlement; otherwise retain the most
+    // informative legacy status while the customer identity rolls forward.
+    return states.sort((a, b) =>
+      Number(b.tier === "premium") - Number(a.tier === "premium") ||
+      (b.expiresAt ?? 0) - (a.expiresAt ?? 0) ||
+      Number(Boolean(b.subscriptionId)) - Number(Boolean(a.subscriptionId)))[0];
+  })().finally(() => inFlight.delete(cacheKey));
+  inFlight.set(cacheKey, task);
   return task;
 }
 

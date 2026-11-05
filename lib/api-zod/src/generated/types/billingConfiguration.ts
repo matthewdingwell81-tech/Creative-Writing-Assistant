@@ -12,4 +12,6 @@ export interface BillingConfiguration {
   entitlementIdentifier: string;
   receiptPublicKey: BillingConfigurationReceiptPublicKey;
   managementUrl: string;
+  /** Server-derived RevenueCat identity, using the linked Firebase UID when available */
+  revenueCatAppUserId: string;
 }

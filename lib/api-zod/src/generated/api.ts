@@ -64,7 +64,8 @@ export const GetBillingConfigurationResponse = zod.object({
   "androidApiKey": zod.string(),
   "entitlementIdentifier": zod.string(),
   "receiptPublicKey": zod.record(zod.string(), zod.unknown()),
-  "managementUrl": zod.string()
+  "managementUrl": zod.string(),
+  "revenueCatAppUserId": zod.string().describe('Server-derived RevenueCat identity, using the linked Firebase UID when available')
 })
 
 
