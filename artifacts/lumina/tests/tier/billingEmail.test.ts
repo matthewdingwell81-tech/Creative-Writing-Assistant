@@ -1,14 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@replit/connectors-sdk", () => ({ ReplitConnectors: class {} }));
-import { createPremiumAccessEmailService } from "../../../api-server/src/lib/billingEmail";
+import { createPremiumAccessEmailService, resolveBillingEmailSender } from "../../../api-server/src/lib/billingEmail";
 import type { VerifiedSubscription } from "../../../api-server/src/lib/subscriptions";
 
 const state: VerifiedSubscription = {
   accountId: "account", tier: "premium", status: "active", subscriptionId: "paid-subscription",
   expiresAt: Date.now() + 86400000, verifiedAt: Date.now(),
 };
-function fixture() {
+function fixture(sender: string | null = "onboarding@resend.dev") {
   const rows = new Map<string, "sending" | "pending" | "sent">();
   const send = vi.fn().mockResolvedValue("email-id");
   const verifiedEmail = vi.fn().mockResolvedValue("verified@example.test");
@@ -23,7 +23,7 @@ function fixture() {
     getVerifiedEmail: verifiedEmail, claim, send,
     markSent: async (_account, key) => { rows.set(key, "sent"); },
     markPending: async (_account, key) => { rows.set(key, "pending"); },
-    getSender: () => "billing@example.test",
+    getSender: () => sender,
     getWebAppUrl: () => "https://lumina.example.test/?not-an-unlock=true#ignored",
   });
   return { deliver, send, verifiedEmail, rows, claim };
@@ -37,7 +37,7 @@ describe("Premium confirmation email safety", () => {
     expect(f.send).toHaveBeenCalledOnce();
     expect(f.verifiedEmail).toHaveBeenCalledWith("verified-firebase-uid");
     expect(f.send.mock.calls[0][0]).toMatchObject({
-      to: "verified@example.test", webAppUrl: "https://lumina.example.test",
+      from: "onboarding@resend.dev", to: "verified@example.test", webAppUrl: "https://lumina.example.test",
     });
   });
   it("retries failures with the same provider idempotency key", async () => {
@@ -61,5 +61,28 @@ describe("Premium confirmation email safety", () => {
     const f = fixture();
     await f.deliver({ id: "account", firebaseUid: "uid" }, { ...state, subscriptionId: null, expiresAt: null });
     expect(f.claim.mock.calls[0][0].accessKey).toBe("manual-premium");
+  });
+  it("leaves delivery disabled when no sender is configured", async () => {
+    const f = fixture(null);
+    expect(await f.deliver({ id: "account", firebaseUid: "uid" }, state)).toBe("not-configured");
+    expect(f.send).not.toHaveBeenCalled();
+    expect(f.claim).not.toHaveBeenCalled();
+  });
+});
+
+describe("configurable sender and test-only Resend address", () => {
+  it("never substitutes a sender for missing configuration", () => {
+    expect(resolveBillingEmailSender(undefined, "production")).toBeNull();
+    expect(resolveBillingEmailSender("", "development")).toBeNull();
+  });
+  it("allows an explicitly configured Resend test sender only in development/test", () => {
+    expect(resolveBillingEmailSender("onboarding@resend.dev", "test")).toBe("onboarding@resend.dev");
+    expect(resolveBillingEmailSender("onboarding@resend.dev", "development")).toBe("onboarding@resend.dev");
+    expect(resolveBillingEmailSender("Lumina <onboarding@resend.dev>", "production")).toBeNull();
+    expect(resolveBillingEmailSender("onboarding@RESEND.DEV", undefined)).toBeNull();
+  });
+  it("retains the explicitly configured custom sender without inventing verification", () => {
+    expect(resolveBillingEmailSender(" Lumina <billing@example.test> ", "production"))
+      .toBe("Lumina <billing@example.test>");
   });
 });

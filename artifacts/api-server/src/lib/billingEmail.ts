@@ -25,6 +25,20 @@ type EmailServiceDependencies = {
   getWebAppUrl: () => string | null;
 };
 
+/** No guessed sender or automatic test-sender fallback is permitted. */
+export function resolveBillingEmailSender(
+  configuredSender: string | undefined,
+  environment: string | undefined,
+): string | null {
+  const sender = configuredSender?.trim();
+  if (!sender) return null;
+  const address = sender.match(/<\s*([^<>]+?)\s*>$/)?.[1]?.trim() ?? sender;
+  const domain = address.slice(address.lastIndexOf("@") + 1).toLowerCase();
+  const isResendTestSender = domain === "resend.dev" || domain.endsWith(".resend.dev");
+  if (isResendTestSender && environment !== "development" && environment !== "test") return null;
+  return sender;
+}
+
 function normalizeWebAppUrl(value: string | null): string | null {
   if (!value) return null;
   try {
@@ -159,7 +173,7 @@ export const deliverPremiumAccessEmail = createPremiumAccessEmailService({
   markSent,
   markPending,
   send: sendWithResend,
-  getSender: () => process.env.LUMINA_BILLING_EMAIL_FROM?.trim() || null,
+  getSender: () => resolveBillingEmailSender(process.env.LUMINA_BILLING_EMAIL_FROM, process.env.NODE_ENV),
   // Resolved from Replit's deployment metadata; override when the published domain changes.
   getWebAppUrl: () => process.env.LUMINA_WEB_APP_URL || "https://creative-writing-assistant.replit.app",
 });

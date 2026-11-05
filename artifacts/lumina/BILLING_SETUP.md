@@ -25,6 +25,10 @@
 8. Publish the updated backend/web app, then build/sync the Android app. Verify the native server URL points to that published app, not an outdated release. Preserve the existing seven-day app trial independently of store billing.
 9. Configure the non-secret `LUMINA_BILLING_EMAIL_FROM` with a sender authorized by the connected Resend account. The connection is send-only; it cannot list verified domains. Do not substitute an unverified sender or request a broader API key just to send mail.
 
+Leave that setting empty until an authorized production sender is available; there is no automatic sender fallback. Never invent an address on the Replit app URL or use a Gmail sender without explicit Resend verification. A web app hostname does not establish email-sending authorization.
+
+For isolated testing only, explicitly configure Resend's `onboarding@resend.dev` sender in a development/test environment and follow Resend's recipient restrictions. The app rejects `resend.dev` senders in production or an unspecified environment. Automated email tests use that sender with a mocked transport; they do not send email. Do not enable it globally for production Premium confirmations or treat a simulated delivery as proof of real inbox delivery.
+
 ## Firestore fields and independent manual access
 
 Existing fields are retained, without renames:
