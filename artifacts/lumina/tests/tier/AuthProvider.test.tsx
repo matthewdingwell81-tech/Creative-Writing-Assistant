@@ -7,7 +7,7 @@ import { AuthProvider, getGoogleSignInErrorMessage, useAuth, type UseAuthResult 
 import { getCurrentTierUser } from "@/lib/tierAccount";
 import { documentsQueryKey } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
-import { getUserTier, setUserTier } from "@/lib/userTier";
+import { getUserTier } from "@/lib/userTier";
 import { premiumStorageKey } from "@/hooks/useAdRewards";
 import SuggestionsSidebar from "@/components/SuggestionsSidebar";
 import AuthPage from "@/pages/AuthPage";
@@ -98,8 +98,8 @@ describe("AuthProvider tier lifecycle", () => {
     const listener = firebase.documentListeners[0];
     act(() => listener.next(snapshot({ tier: "premium" })));
     expect(getUserTier()).toBe("premium");
-    await act(async () => { await setUserTier("free"); });
-    expect(firebase.setDoc.mock.calls[0][0]).toEqual({ path: "users/firebase-a" });
+    act(() => listener.next(snapshot({ tier: "free" })));
+    expect(getUserTier()).toBe("free");
     view.unmount();
     expect(firebase.authListeners.at(-1).stop).toHaveBeenCalledOnce();
     expect(listener.stop).toHaveBeenCalledOnce();
@@ -451,8 +451,7 @@ describe("AuthProvider tier lifecycle", () => {
     await mount();
     await act(async () => { await currentAuth[method]({ username: "local-writer", password: "mock-password" }); });
     act(() => emitAuth(firebase.auth.currentUser));
-    await act(async () => { await setUserTier("premium"); });
-    expect(getUserTier()).toBe("premium");
+    expect(getUserTier()).toBe("free");
     expect(firebase.onSnapshot).not.toHaveBeenCalled();
     expect(firebase.setDoc).not.toHaveBeenCalled();
     expect(firebase.runTransaction).not.toHaveBeenCalled();

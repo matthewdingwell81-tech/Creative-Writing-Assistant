@@ -1,5 +1,5 @@
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { auth, firestore } from "./firebase";
 import { getCurrentTierUser, isCurrentTierUser } from "./tierAccount";
 import { isPremiumAccount, setPremiumAccountStatus } from "@/hooks/useAdRewards";
@@ -53,32 +53,6 @@ export function isPremium(): boolean {
   return getUserTier() === "premium";
 }
 
-/** Firebase accounts write to their user doc; server-only accounts remain local. */
-export async function setUserTier(tier: UserTier): Promise<void> {
-  if (tier !== "free" && tier !== "premium") throw new Error("Invalid user tier.");
-  const session = syncedSession;
-  const accountId = getCurrentTierUser()?.id;
-  if (!accountId) throw new Error("A signed-in account is required.");
-  await auth.authStateReady();
-  if (!isCurrentTierUser(accountId) || syncedSession !== session) {
-    throw new Error("The signed-in account changed.");
-  }
-  if (auth.currentUser && !session) throw new Error("Account tier synchronization is not ready.");
-  if (session && session.id === accountId && matchesFirebaseUser(session, auth.currentUser)) {
-    const firebaseUid = auth.currentUser.uid;
-    await setDoc(doc(firestore, "users", firebaseUid), { tier, updatedAt: serverTimestamp() }, { merge: true });
-    if (auth.currentUser?.uid !== firebaseUid) throw new Error("The signed-in account changed.");
-  }
-  if (!isCurrentTierUser(accountId) || syncedSession !== session) {
-    throw new Error("The signed-in account changed.");
-  }
-  setPremiumAccountStatus(accountId, tier === "premium");
-}
-
-// Short aliases for callers that prefer getTier/setTier.
-export const getTier = getUserTier;
-export const setTier = setUserTier;
-
 /** Keep the account-scoped device cache current; never bind an unrelated Firebase login. */
 export function syncUserTier(session: SessionUser | null): () => void {
   syncedSession = session;
@@ -102,7 +76,6 @@ export function syncUserTier(session: SessionUser | null): () => void {
       && isCurrentTierUser(session.id) && auth.currentUser?.uid === firebaseUser.uid;
     const reportDocumentError = () => { if (isActiveDocument()) reportError(); };
     const userDoc = doc(firestore, "users", firebaseUser.uid);
-    let provisioning = false;
     stopDocument = onSnapshot(userDoc, { includeMetadataChanges: true }, snapshot => {
       if (!isActiveDocument()) return;
       // A queued/offline write is not a confirmed cloud entitlement.
@@ -117,17 +90,7 @@ export function syncUserTier(session: SessionUser | null): () => void {
           setPremiumAccountStatus(session.id, tier === "premium" &&
             (typeof expiresAt !== "number" || expiresAt > Date.now()));
         } catch { reportDocumentError(); }
-      } else if (tier === undefined && !snapshot.metadata.fromCache && !provisioning) {
-        provisioning = true;
-        // Recheck in a transaction so initialization cannot overwrite a new purchase.
-        void runTransaction(firestore, async transaction => {
-          const latest = await transaction.get(userDoc);
-          if (!isActiveDocument()) return;
-          if (latest.data()?.tier === undefined) {
-            transaction.set(userDoc, { tier: "free", updatedAt: serverTimestamp() }, { merge: true });
-          }
-        }).catch(reportDocumentError).finally(() => { provisioning = false; });
-      } else if (snapshot.exists() && tier !== undefined) {
+      } else if (tier !== undefined) {
         reportDocumentError();
       }
     }, reportDocumentError);
