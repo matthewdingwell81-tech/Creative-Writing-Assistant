@@ -75,8 +75,8 @@ export const GetSubscriptionResponse = zod.object({
   "tier": zod.enum(['free', 'premium']),
   "status": zod.enum(['none', 'active', 'cancelled', 'expired']),
   "subscriptionId": zod.string().nullable(),
-  "expiresAt": zod.number().int().nullable(),
-  "verifiedAt": zod.number().int(),
+  "expiresAt": zod.int().nullable(),
+  "verifiedAt": zod.int(),
   "receipt": zod.string(),
   "firebaseSync": zod.enum(['not-linked', 'synced', 'unavailable'])
 })
@@ -95,8 +95,8 @@ export const RefreshSubscriptionResponse = zod.object({
   "tier": zod.enum(['free', 'premium']),
   "status": zod.enum(['none', 'active', 'cancelled', 'expired']),
   "subscriptionId": zod.string().nullable(),
-  "expiresAt": zod.number().int().nullable(),
-  "verifiedAt": zod.number().int(),
+  "expiresAt": zod.int().nullable(),
+  "verifiedAt": zod.int(),
   "receipt": zod.string(),
   "firebaseSync": zod.enum(['not-linked', 'synced', 'unavailable'])
 })
@@ -151,7 +151,7 @@ export const GetCoachHistoryResponse = zod.object({
   "content": zod.string().min(1).max(getCoachHistoryResponseMessagesItemContentMax)
 })),
   "draft": zod.string(),
-  "revision": zod.number().int(),
+  "revision": zod.int(),
   "updatedAt": zod.number().nullable()
 })
 
@@ -179,7 +179,7 @@ export const SaveCoachHistoryBody = zod.object({
   "content": zod.string().min(1).max(saveCoachHistoryBodyMessagesItemContentMax)
 })).max(saveCoachHistoryBodyMessagesMax),
   "draft": zod.string().max(saveCoachHistoryBodyDraftMax),
-  "revision": zod.number().int().min(saveCoachHistoryBodyRevisionMin),
+  "revision": zod.int().min(saveCoachHistoryBodyRevisionMin),
   "importedAt": zod.number().optional().describe('Original device timestamp, supplied only for explicitly approved import')
 })
 
@@ -193,7 +193,7 @@ export const SaveCoachHistoryResponse = zod.object({
   "content": zod.string().min(1).max(saveCoachHistoryResponseMessagesItemContentMax)
 })),
   "draft": zod.string(),
-  "revision": zod.number().int(),
+  "revision": zod.int(),
   "updatedAt": zod.number().nullable()
 })
 
@@ -218,7 +218,7 @@ export const DeleteCoachHistoryResponse = zod.object({
   "content": zod.string().min(1).max(deleteCoachHistoryResponseMessagesItemContentMax)
 })),
   "draft": zod.string(),
-  "revision": zod.number().int(),
+  "revision": zod.int(),
   "updatedAt": zod.number().nullable()
 })
 
@@ -264,13 +264,13 @@ export const ListStoryPlanningResponseItem = zod.object({
   "arc": zod.string().max(listStoryPlanningResponseOneArcMax),
   "category": zod.string().max(listStoryPlanningResponseOneCategoryMax),
   "timeLabel": zod.string().max(listStoryPlanningResponseOneTimeLabelMax),
-  "chapterId": zod.number().int().min(1).nullable(),
-  "characterId": zod.number().int().min(1).nullable(),
-  "relatedCharacterId": zod.number().int().min(1).nullable()
+  "chapterId": zod.int().min(1).nullable(),
+  "characterId": zod.int().min(1).nullable(),
+  "relatedCharacterId": zod.int().min(1).nullable()
 }).and(zod.object({
-  "id": zod.number().int(),
-  "documentId": zod.number().int(),
-  "position": zod.number().int(),
+  "id": zod.int(),
+  "documentId": zod.int(),
+  "position": zod.int(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 }))
@@ -318,9 +318,9 @@ export const CreateStoryPlanningBody = zod.object({
   "arc": zod.string().max(createStoryPlanningBodyOneArcMax).optional(),
   "category": zod.string().max(createStoryPlanningBodyOneCategoryMax).optional(),
   "timeLabel": zod.string().max(createStoryPlanningBodyOneTimeLabelMax).optional(),
-  "chapterId": zod.number().int().min(1).nullish(),
-  "characterId": zod.number().int().min(1).nullish(),
-  "relatedCharacterId": zod.number().int().min(1).nullish()
+  "chapterId": zod.int().min(1).nullish(),
+  "characterId": zod.int().min(1).nullish(),
+  "relatedCharacterId": zod.int().min(1).nullish()
 })
 
 export const createStoryPlanningResponseOneTitleMax = 200;
@@ -354,13 +354,13 @@ export const CreateStoryPlanningResponse = zod.object({
   "arc": zod.string().max(createStoryPlanningResponseOneArcMax),
   "category": zod.string().max(createStoryPlanningResponseOneCategoryMax),
   "timeLabel": zod.string().max(createStoryPlanningResponseOneTimeLabelMax),
-  "chapterId": zod.number().int().min(1).nullable(),
-  "characterId": zod.number().int().min(1).nullable(),
-  "relatedCharacterId": zod.number().int().min(1).nullable()
+  "chapterId": zod.int().min(1).nullable(),
+  "characterId": zod.int().min(1).nullable(),
+  "relatedCharacterId": zod.int().min(1).nullable()
 }).and(zod.object({
-  "id": zod.number().int(),
-  "documentId": zod.number().int(),
-  "position": zod.number().int(),
+  "id": zod.int(),
+  "documentId": zod.int(),
+  "position": zod.int(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 }))
@@ -381,7 +381,7 @@ export const OrderStoryPlanningParams = zod.object({
 
 export const OrderStoryPlanningBody = zod.object({
   "kind": zod.enum(['character', 'relationship', 'timeline', 'worldbuilding', 'note']),
-  "ids": zod.array(zod.number().int().min(1))
+  "ids": zod.array(zod.int().min(1))
 })
 
 export const orderStoryPlanningResponseOneTitleMax = 200;
@@ -415,13 +415,13 @@ export const OrderStoryPlanningResponseItem = zod.object({
   "arc": zod.string().max(orderStoryPlanningResponseOneArcMax),
   "category": zod.string().max(orderStoryPlanningResponseOneCategoryMax),
   "timeLabel": zod.string().max(orderStoryPlanningResponseOneTimeLabelMax),
-  "chapterId": zod.number().int().min(1).nullable(),
-  "characterId": zod.number().int().min(1).nullable(),
-  "relatedCharacterId": zod.number().int().min(1).nullable()
+  "chapterId": zod.int().min(1).nullable(),
+  "characterId": zod.int().min(1).nullable(),
+  "relatedCharacterId": zod.int().min(1).nullable()
 }).and(zod.object({
-  "id": zod.number().int(),
-  "documentId": zod.number().int(),
-  "position": zod.number().int(),
+  "id": zod.int(),
+  "documentId": zod.int(),
+  "position": zod.int(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 }))
@@ -471,9 +471,9 @@ export const UpdateStoryPlanningBody = zod.object({
   "arc": zod.string().max(updateStoryPlanningBodyOneArcMax).optional(),
   "category": zod.string().max(updateStoryPlanningBodyOneCategoryMax).optional(),
   "timeLabel": zod.string().max(updateStoryPlanningBodyOneTimeLabelMax).optional(),
-  "chapterId": zod.number().int().min(1).nullish(),
-  "characterId": zod.number().int().min(1).nullish(),
-  "relatedCharacterId": zod.number().int().min(1).nullish()
+  "chapterId": zod.int().min(1).nullish(),
+  "characterId": zod.int().min(1).nullish(),
+  "relatedCharacterId": zod.int().min(1).nullish()
 })
 
 export const updateStoryPlanningResponseOneTitleMax = 200;
@@ -507,13 +507,13 @@ export const UpdateStoryPlanningResponse = zod.object({
   "arc": zod.string().max(updateStoryPlanningResponseOneArcMax),
   "category": zod.string().max(updateStoryPlanningResponseOneCategoryMax),
   "timeLabel": zod.string().max(updateStoryPlanningResponseOneTimeLabelMax),
-  "chapterId": zod.number().int().min(1).nullable(),
-  "characterId": zod.number().int().min(1).nullable(),
-  "relatedCharacterId": zod.number().int().min(1).nullable()
+  "chapterId": zod.int().min(1).nullable(),
+  "characterId": zod.int().min(1).nullable(),
+  "relatedCharacterId": zod.int().min(1).nullable()
 }).and(zod.object({
-  "id": zod.number().int(),
-  "documentId": zod.number().int(),
-  "position": zod.number().int(),
+  "id": zod.int(),
+  "documentId": zod.int(),
+  "position": zod.int(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 }))
@@ -545,7 +545,7 @@ export const ListSafetyFlagsQueryParams = zod.object({
 
 export const ListSafetyFlagsResponse = zod.object({
   "flags": zod.array(zod.object({
-  "id": zod.number().int(),
+  "id": zod.int(),
   "userId": zod.string(),
   "username": zod.string(),
   "feature": zod.string(),
@@ -572,7 +572,7 @@ export const countPendingSafetyFlagsResponseCountMin = 0;
 
 
 export const CountPendingSafetyFlagsResponse = zod.object({
-  "count": zod.number().int().min(countPendingSafetyFlagsResponseCountMin)
+  "count": zod.int().min(countPendingSafetyFlagsResponseCountMin)
 })
 
 
@@ -596,7 +596,7 @@ export const ReviewSafetyFlagBody = zod.object({
 })
 
 export const ReviewSafetyFlagResponse = zod.object({
-  "id": zod.number().int(),
+  "id": zod.int(),
   "status": zod.string(),
   "reviewedAt": zod.coerce.date()
 })

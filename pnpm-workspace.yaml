@@ -28,7 +28,7 @@ catalog:
   tsx: ^4.23.15
   vite: ^7.3.7
   wouter: ^3.3.5
-  zod: ^3.25.76
+  zod: ^4.6.7
 
 # Supply-chain defense: retain the one-day release delay, including security updates.
 minimumReleaseAge: 1440
@@ -45,14 +45,8 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
-  # Windows build-tool optional packages must remain available: Android APKs
-  # are also synced/rebuilt on Windows, not only in the Linux workspace.
-  # Even latest Firebase pins grpc-js 1.9.16; stay on the patched 1.x API.
-  '@firebase/firestore>@grpc/grpc-js': ^1.14.6
-  # Latest Capacitor CLI still uses xcode 3; uuid 11 retains its CommonJS API.
-  'xcode>uuid': ^11.1.1
-  # Latest typography pins the vulnerable v6 parser; v7 keeps its selector API.
-  '@tailwindcss/typography>postcss-selector-parser': ^7.1.6
+  # Patched majors are required by the glob/minimatch and Zod advisories.
+  # Keep overrides bounded to a compatible major instead of audit's open ranges.
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-arm64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-x64': '-'
@@ -64,6 +58,8 @@ overrides:
   '@expo/ngrok-bin>@expo/ngrok-bin-sunos-x64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-win32-ia32': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-win32-x64': '-'
+  # Even latest Firebase pins grpc-js 1.9.16; stay on the patched 1.x API.
+  '@firebase/firestore>@grpc/grpc-js': ^1.14.6
   '@tailwindcss/oxide>@tailwindcss/oxide-android-arm64': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-darwin-arm64': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-darwin-x64': '-'
@@ -72,6 +68,9 @@ overrides:
   '@tailwindcss/oxide>@tailwindcss/oxide-linux-arm64-gnu': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-linux-arm64-musl': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-linux-x64-musl': '-'
+  # Latest typography pins the vulnerable v6 parser; v7 keeps its selector API.
+  '@tailwindcss/typography>postcss-selector-parser': ^7.1.6
+  body-parser@>=2.0.0 <2.4.0: ^2.4.0
   esbuild: 0.28.2
   esbuild>@esbuild/aix-ppc64: '-'
   esbuild>@esbuild/android-arm: '-'
@@ -95,6 +94,7 @@ overrides:
   esbuild>@esbuild/openbsd-x64: '-'
   esbuild>@esbuild/openharmony-arm64: '-'
   esbuild>@esbuild/sunos-x64: '-'
+  glob@>=9.0.0 <=14.0.1: ^14.0.2
   lightningcss>lightningcss-android-arm64: '-'
   lightningcss>lightningcss-darwin-arm64: '-'
   lightningcss>lightningcss-darwin-x64: '-'
@@ -103,6 +103,7 @@ overrides:
   lightningcss>lightningcss-linux-arm64-gnu: '-'
   lightningcss>lightningcss-linux-arm64-musl: '-'
   lightningcss>lightningcss-linux-x64-musl: '-'
+  minimatch@>=7.0.0 <11.0.1: ^11.0.1
   rollup>@rollup/rollup-android-arm-eabi: '-'
   rollup>@rollup/rollup-android-arm64: '-'
   rollup>@rollup/rollup-darwin-arm64: '-'
@@ -123,3 +124,7 @@ overrides:
   rollup>@rollup/rollup-linux-x64-musl: '-'
   rollup>@rollup/rollup-openbsd-x64: '-'
   rollup>@rollup/rollup-openharmony-arm64: '-'
+  undici@>=7.0.0 <7.30.1: ^7.30.1
+  # Preserve the CommonJS API for any remaining xcode 3 consumers.
+  xcode>uuid: ^11.1.1
+  zod@<4.6.6: ^4.6.7

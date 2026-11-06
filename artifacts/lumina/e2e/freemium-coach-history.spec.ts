@@ -98,7 +98,8 @@ test('Coach retains completed replies and drafts without replay across plans, do
   }, account);
 
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  // Background requests need not settle before the mocked editor is ready.
+  await expect(page.getByTestId('input-title')).toHaveValue('History document 91001');
   await selectDocument(91002); // Deliberately not the default first document.
   await page.getByTestId('textarea-coach-input').fill('Remember this completed question');
   await page.getByTestId('btn-coach-send').click();
