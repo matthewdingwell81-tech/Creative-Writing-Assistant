@@ -28,6 +28,7 @@ export interface SubscriptionContextValue {
   restore: () => Promise<void>;
   retry: () => Promise<void>;
   refresh: () => Promise<void>;
+  cancelSubscription: () => Promise<void>;
   manage: () => Promise<void>;
 }
 const context = createContext<SubscriptionContextValue | null>(null);
@@ -192,6 +193,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     nativeAvailable: nativePurchasesAvailable(), pendingVerification,
     purchase: () => run(purchasePremium), restore: () => run(restorePurchase, true),
     retry: () => run(retryVerification), refresh,
+    cancelSubscription: async () => {
+      try { await manageSubscription(); }
+      catch { setError("Could not open Google Play subscription settings. Please try again."); }
+    },
     manage: async () => { try { await manageSubscription(); } catch { setError("Could not open subscription management. Please try again."); } },
   } }, !authLoading && startupBlocked
     ? createElement(SubscriptionStartup, {

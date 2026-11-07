@@ -64,13 +64,24 @@ export function statusCopy(sub: ReturnType<typeof useSubscription>["subscription
   return "You’re on the Free plan.";
 }
 
-export function PurchaseActions({ upgradeLabel = "Upgrade", testIdPrefix = "pricing" }: { upgradeLabel?: string; testIdPrefix?: string }) {
+export function PurchaseActions({ upgradeLabel = "Upgrade", cancelSubscription = false, testIdPrefix = "pricing" }: {
+  upgradeLabel?: string;
+  cancelSubscription?: boolean;
+  testIdPrefix?: string;
+}) {
   const s = useSubscription();
   const blocked = s.busy || s.loading || !s.nativeAvailable;
   return (
     <div className="mt-6 flex flex-col gap-2 sm:flex-row">
       {s.isPremium ? (
-        <Button className="min-h-11" disabled={s.busy} onClick={() => void s.manage()} data-testid={`${testIdPrefix}-manage`}>Manage Subscription</Button>
+        <Button
+          className="min-h-11"
+          disabled={s.busy}
+          onClick={() => void (cancelSubscription ? s.cancelSubscription() : s.manage())}
+          data-testid={`${testIdPrefix}-${cancelSubscription ? "unsubscribe" : "manage"}`}
+        >
+          {cancelSubscription ? "Unsubscribe" : "Manage Subscription"}
+        </Button>
       ) : (
         <Button className="min-h-11" disabled={blocked} onClick={() => void s.purchase()} data-testid={`${testIdPrefix}-upgrade`}>
           {s.busy ? "Working..." : upgradeLabel}

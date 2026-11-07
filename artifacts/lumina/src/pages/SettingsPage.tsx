@@ -57,7 +57,16 @@ export default function SettingsPage() {
               <Button className="mt-3 min-h-11" disabled={blocked} onClick={() => void s.purchase()} data-testid="settings-remove-ads">Remove Ads</Button>
             </div>
           )}
-          <PurchaseActions upgradeLabel="Upgrade to Premium" testIdPrefix="settings" />
+          <PurchaseActions
+            upgradeLabel="Upgrade to Premium"
+            cancelSubscription={s.subscription?.status === "active"}
+            testIdPrefix="settings"
+          />
+          {s.isPremium && s.subscription?.status === "active" && (
+            <p className="mt-2 text-sm text-muted-foreground" data-testid="settings-unsubscribe-help">
+              Unsubscribe opens Google Play so you can confirm cancellation. Your Premium access stays active through any time you’ve already paid for.
+            </p>
+          )}
         </section>
         <section className="mt-6 rounded-xl border border-border bg-card p-6" aria-labelledby="tutorials-heading" data-testid="settings-tutorials">
           <h2 id="tutorials-heading" className="flex items-center gap-2 text-xl font-semibold">
