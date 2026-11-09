@@ -11,6 +11,30 @@ tags:
   - name: health
     description: Health operations
 paths:
+  /account:
+    delete:
+      operationId: deleteAccount
+      summary: Permanently delete the signed-in account and its Lumina data
+      description: Requires an explicit DELETE confirmation. Deleting a Lumina account does not cancel a Google Play subscription.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteAccountConfirmation"
+      responses:
+        "204":
+          description: Account, associated data, uploaded objects, and sessions deleted
+        "400":
+          description: Missing or invalid confirmation
+        "401":
+          description: Sign in required
+        "403":
+          description: Cross-origin deletion is not allowed
+        "404":
+          description: Account not found
+        "503":
+          description: Deletion could not be completed; retry
   /auth/me:
     get:
       operationId: getAuthMe
@@ -379,6 +403,14 @@ components:
             items:
               $ref: "#/components/schemas/PlanningRecord"
   schemas:
+    DeleteAccountConfirmation:
+      type: object
+      additionalProperties: false
+      required: [confirmation]
+      properties:
+        confirmation:
+          type: string
+          enum: [DELETE]
     SafetyFlagPhase:
       type: object
       required: [phase, category, reason]

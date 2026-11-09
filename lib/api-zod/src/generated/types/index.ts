@@ -13,6 +13,8 @@ export * from './coachHistoryInput';
 export * from './coachHistorySnapshot';
 export * from './coachMessage';
 export * from './coachMessageRole';
+export * from './deleteAccountConfirmation';
+export * from './deleteAccountConfirmationConfirmation';
 export * from './healthStatus';
 export * from './listSafetyFlagsParams';
 export * from './listSafetyFlagsStatus';

@@ -2,14 +2,16 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { cancelSubscriptionMock, useSubscriptionMock } = vi.hoisted(() => ({
+const { cancelSubscriptionMock, deleteAccountMock, useSubscriptionMock } = vi.hoisted(() => ({
   cancelSubscriptionMock: vi.fn(),
+  deleteAccountMock: vi.fn(),
   useSubscriptionMock: vi.fn(),
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({
     user: { id: "reader-id", email: "reader@example.com", username: "reader", firebaseUid: null },
+    deleteAccount: deleteAccountMock,
   }),
 }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: useSubscriptionMock }));
@@ -50,6 +52,14 @@ function subscriptionState(status: "active" | "cancelled") {
   };
 }
 
+function freeSubscriptionState() {
+  return {
+    ...subscriptionState("cancelled"),
+    subscription: { accountId: "reader-id", tier: "free", status: "none", expiresAt: null, verifiedAt: Date.now(), firebaseSync: "not-linked" },
+    isPremium: false,
+  };
+}
+
 function renderSettings() {
   const queryClient = new QueryClient();
   render(<QueryClientProvider client={queryClient}><SettingsPage /></QueryClientProvider>);
@@ -80,5 +90,23 @@ describe("subscription settings cancellation", () => {
     expect(section.getByRole("button", { name: "Manage Subscription" })).toBeTruthy();
     expect(section.queryByRole("button", { name: "Unsubscribe" })).toBeNull();
     expect(section.queryByTestId("settings-unsubscribe-help")).toBeNull();
+  });
+
+  it("lets a Free user reach and confirm permanent account deletion", async () => {
+    useSubscriptionMock.mockReturnValue(freeSubscriptionState());
+    deleteAccountMock.mockResolvedValue(undefined);
+    renderSettings();
+
+    fireEvent.click(screen.getByTestId("settings-delete-account-button"));
+    expect(screen.getByTestId("settings-delete-account-dialog")).toBeTruthy();
+    const confirm = screen.getByTestId("settings-delete-account-confirm") as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    expect(screen.getByText(/does not stop billing/)).toBeTruthy();
+
+    fireEvent.change(screen.getByTestId("settings-delete-account-confirmation"), { target: { value: "DELETE" } });
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+
+    await vi.waitFor(() => expect(deleteAccountMock).toHaveBeenCalledOnce());
   });
 });

@@ -82,6 +82,7 @@ beforeEach(() => {
     }
     if (url === "/api/auth/firebase-session") return new Response(JSON.stringify(accountA));
     if (url === "/api/auth/logout") return new Response(null, { status: 200 });
+    if (url === "/api/account") return new Response(null, { status: 204 });
     throw new Error(`Unexpected network request: ${url}`);
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -442,6 +443,32 @@ describe("AuthProvider tier lifecycle", () => {
     expect(nativeGoogleSignIn.signOut).toHaveBeenCalledOnce();
     expect(firebase.signOut).toHaveBeenCalledOnce();
     expect(screen.getByTestId("session").textContent).toBe("signed-out");
+  });
+
+  it("deletes the server account and clears only its local data", async () => {
+    await mount();
+    const accountKey = encodeURIComponent(accountA.id);
+    localStorage.setItem(`lumina_ai_daily_queries:${accountKey}`, "private usage");
+    localStorage.setItem(`lumina_coach_history:v1:${accountKey}:12`, "private draft");
+    localStorage.setItem(`lumina_ai_daily_queries:${encodeURIComponent(accountB.id)}`, "other account");
+    localStorage.setItem("unrelated-browser-data", "keep");
+    queryClient.setQueryData(documentsQueryKey(accountA.id), [{ id: 1, content: "private story" }]);
+
+    await act(async () => { await currentAuth.deleteAccount(); });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/account", {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation: "DELETE" }),
+    });
+    expect(firebase.signOut).toHaveBeenCalledOnce();
+    expect(screen.getByTestId("session").textContent).toBe("signed-out");
+    expect(localStorage.getItem(`lumina_ai_daily_queries:${accountKey}`)).toBeNull();
+    expect(localStorage.getItem(`lumina_coach_history:v1:${accountKey}:12`)).toBeNull();
+    expect(localStorage.getItem(`lumina_ai_daily_queries:${encodeURIComponent(accountB.id)}`)).toBe("other account");
+    expect(localStorage.getItem("unrelated-browser-data")).toBe("keep");
+    expect(queryClient.getQueryData(documentsQueryKey(accountA.id))).toBeUndefined();
   });
 
   it.each(["login", "register"] as const)("keeps username/password %s local with an unrelated Firebase user", async method => {

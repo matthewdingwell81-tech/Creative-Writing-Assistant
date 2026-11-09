@@ -38,6 +38,7 @@ const auth = {
   loginWithGoogle: vi.fn(),
   googleError: null,
   logout: vi.fn(),
+  deleteAccount: vi.fn(),
   loginError: null,
   registerError: null,
   isLoggingIn: false,

@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, BookOpen, Crown, FileText, ShieldAlert } from "lucide-react";
+import { ArrowLeft, BookOpen, Crown, FileText, ShieldAlert, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
 import { useTutorial } from "@/hooks/useTutorial";
@@ -9,9 +10,17 @@ import { DEVELOPER_IDS } from "@/lib/userTier";
 import { usePendingSafetyFlagCount } from "@/hooks/usePendingSafetyFlagCount";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PurchaseActions, SubscriptionFeedback, statusCopy } from "@/components/PricingPage";
+import {
+  AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, deleteAccount } = useAuth();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const {
     tutorialsEnabled, tutorialsReady, tutorialsLoadingError, tutorialsSaveError,
     tutorialsSaving, retryTutorialPreferences, setTutorialsEnabled,
@@ -27,6 +36,20 @@ export default function SettingsPage() {
   const blocked = s.busy || s.loading || !s.nativeAvailable;
   const label = s.isPremium ? (s.subscription?.status === "cancelled" ? "Premium (cancelled)" : "Premium (active)")
     : s.subscription?.status === "expired" ? "Free (Premium expired)" : "Free";
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation !== "DELETE" || deletingAccount) return;
+    setDeletingAccount(true);
+    setDeleteError(null);
+    try {
+      await deleteAccount();
+      setDeleteDialogOpen(false);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Account deletion could not be completed. Please retry.");
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
 
   return (
     <main className="min-h-[100dvh] bg-background px-4 py-8 text-foreground sm:px-8" data-testid="settings-page">
@@ -127,6 +150,61 @@ export default function SettingsPage() {
             </p>
           )}
         </section>
+        <section className="mt-6 rounded-xl border border-destructive/40 bg-card p-6" aria-labelledby="delete-account-heading" data-testid="settings-delete-account">
+          <h2 id="delete-account-heading" className="flex items-center gap-2 text-xl font-semibold text-destructive">
+            <Trash2 className="h-5 w-5" aria-hidden="true" />Delete account
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Available on Free and Premium. Permanently remove your Lumina account, stories, and saved data.
+          </p>
+          <Button
+            className="mt-4 min-h-11"
+            variant="destructive"
+            onClick={() => { setDeleteConfirmation(""); setDeleteError(null); setDeleteDialogOpen(true); }}
+            data-testid="settings-delete-account-button"
+          >
+            Delete account
+          </Button>
+        </section>
+        <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => {
+          if (deletingAccount) return;
+          setDeleteDialogOpen(open);
+          if (!open) { setDeleteConfirmation(""); setDeleteError(null); }
+        }}>
+          <AlertDialogContent data-testid="settings-delete-account-dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Permanently delete your account?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently removes your Lumina account, stories, chapters, saved Coach history, research, and uploaded files. It also signs you out on other devices.
+                {" "}Offline copies on other devices can’t be removed remotely.
+                {" "}If you have a Google Play subscription, cancel it in Google Play first; deleting your account does not stop billing.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <label htmlFor="delete-account-confirmation" className="text-sm font-medium">
+              Type DELETE to confirm
+            </label>
+            <Input
+              id="delete-account-confirmation"
+              autoComplete="off"
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              disabled={deletingAccount}
+              data-testid="settings-delete-account-confirmation"
+            />
+            {deleteError && <p className="text-sm text-destructive" role="alert" data-testid="settings-delete-account-error">{deleteError}</p>}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletingAccount}>Keep my account</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                disabled={deleteConfirmation !== "DELETE" || deletingAccount}
+                onClick={() => void handleDeleteAccount()}
+                data-testid="settings-delete-account-confirm"
+              >
+                {deletingAccount ? "Deleting…" : "Delete permanently"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <section className="mt-6 rounded-xl border border-border bg-card p-6" aria-labelledby="legal-heading" data-testid="settings-legal">
           <h2 id="legal-heading" className="flex items-center gap-2 text-xl font-semibold">
             <FileText className="h-5 w-5 text-primary" aria-hidden="true" />

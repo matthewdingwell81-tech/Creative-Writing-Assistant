@@ -9,6 +9,17 @@ import * as zod from 'zod';
 
 
 /**
+ * Requires an explicit DELETE confirmation. Deleting a Lumina account does not cancel a Google Play subscription.
+ * @summary Permanently delete the signed-in account and its Lumina data
+ */
+export const DeleteAccountBody = zod.object({
+  "confirmation": zod.enum(['DELETE'])
+})
+
+export const DeleteAccountResponse = zod.void()
+
+
+/**
  * Restore a server session or validate a Firebase Bearer ID token and establish the session required by other APIs.
  */
 export const GetAuthMeHeader = zod.object({

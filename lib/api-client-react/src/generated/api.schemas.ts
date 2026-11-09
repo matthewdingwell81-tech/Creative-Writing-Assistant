@@ -5,6 +5,17 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type DeleteAccountConfirmationConfirmation = typeof DeleteAccountConfirmationConfirmation[keyof typeof DeleteAccountConfirmationConfirmation];
+
+
+export const DeleteAccountConfirmationConfirmation = {
+  DELETE: 'DELETE',
+} as const;
+
+export interface DeleteAccountConfirmation {
+  confirmation: DeleteAccountConfirmationConfirmation;
+}
+
 export type SafetyFlagPhasePhase = typeof SafetyFlagPhasePhase[keyof typeof SafetyFlagPhasePhase];
 
 

@@ -19,6 +19,7 @@ import { auth, googleProvider, googleWebClientId } from "@/lib/firebase";
 import { setCurrentTierUser } from "@/services/userTierService";
 import { syncUserTier } from "@/lib/userTier";
 import { queryClient } from "@/lib/queryClient";
+import { clearAccountDataFromThisDevice } from "@/lib/accountData";
 
 let nativeGoogleSignInInitialization: Promise<void> | null = null;
 
@@ -66,6 +67,7 @@ export interface UseAuthResult {
   loginWithGoogle: () => Promise<void>;
   googleError: Error | null;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   loginError: null;
   registerError: null;
   isLoggingIn: boolean;
@@ -350,6 +352,28 @@ function useAuthState(): UseAuthResult {
     setUser(null);
   };
 
+  const deleteAccount = async () => {
+    if (!user) throw new Error("Sign in to delete your account.");
+    const accountId = user.id;
+    const response = await fetch("/api/account", {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation: "DELETE" }),
+    });
+    if (!response.ok) {
+      throw await parseApiError(response, "Account deletion could not be completed. Please retry.");
+    }
+
+    clearAccountDataFromThisDevice(accountId);
+    queryClient.clear();
+    setUser(null);
+    await signOut(auth).catch(() => undefined);
+    if (isNativeAndroid()) {
+      await GoogleSignIn.signOut().catch(() => undefined);
+    }
+  };
+
   return {
     user,
     isLoading,
@@ -358,6 +382,7 @@ function useAuthState(): UseAuthResult {
     loginWithGoogle,
     googleError,
     logout,
+    deleteAccount,
     loginError: null,
     registerError: null,
     isLoggingIn,

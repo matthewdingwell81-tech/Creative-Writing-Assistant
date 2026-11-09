@@ -19,3 +19,4 @@
 - [Cross-package test isolation](cross-package-test-isolation.md) — inject provider adapters; SDK mocks may miss another workspace package's dependency.
 - [Drizzle error causes](drizzle-error-causes.md) — PostgreSQL SQLSTATEs can be nested in Drizzle's cause chain; inspect wrapped errors in race handling.
 - [Neon suspend defaults](neon-suspend-defaults.md) — this account rejects custom compute suspend intervals; leave the provider default when creating projects.
+- [Account deletion policy](account-deletion-policy.md) — account deletion is available on every plan; deleting a Lumina account does not cancel store-managed subscriptions.

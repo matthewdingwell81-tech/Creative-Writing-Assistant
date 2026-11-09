@@ -35,6 +35,8 @@ function isPostgresUniqueViolation(error: unknown): boolean {
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
+  getAccountDeletionData(userId: string): Promise<{ firebaseUid: string | null; objectPaths: string[] } | undefined>;
+  deleteAccount(userId: string): Promise<boolean>;
   getTutorialsEnabled(userId: string): Promise<boolean | undefined>;
   updateTutorialsEnabled(userId: string, enabled: boolean): Promise<boolean | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -79,6 +81,34 @@ export class DatabaseStorage implements IStorage {
   async getUserById(id: string): Promise<User | undefined> {
     const [user] = await this.database.select().from(users).where(eq(users.id, id));
     return user;
+  }
+
+  async getAccountDeletionData(userId: string): Promise<{ firebaseUid: string | null; objectPaths: string[] } | undefined> {
+    const [user] = await this.database.select({ firebaseUid: users.firebaseUid })
+      .from(users).where(eq(users.id, userId));
+    if (!user) return undefined;
+    const uploads = await this.database.select({ objectPath: researchUploads.objectPath })
+      .from(researchUploads).where(eq(researchUploads.userId, userId));
+    const savedResearch = await this.database.select({ objectPath: research.objectPath })
+      .from(research).innerJoin(documents, eq(research.documentId, documents.id))
+      .where(eq(documents.userId, userId));
+    const pendingDeletions = await this.database.select({ objectPath: researchObjectDeletions.objectPath })
+      .from(researchObjectDeletions).where(eq(researchObjectDeletions.userId, userId));
+    const objectPaths = new Set([
+      ...uploads.map(({ objectPath }) => objectPath),
+      ...savedResearch.flatMap(({ objectPath }) => objectPath ? [objectPath] : []),
+      ...pendingDeletions.map(({ objectPath }) => objectPath),
+    ]);
+    return { firebaseUid: user.firebaseUid, objectPaths: [...objectPaths] };
+  }
+
+  async deleteAccount(userId: string): Promise<boolean> {
+    return this.database.transaction(async tx => {
+      // Revoke every session for this account, including other devices.
+      await tx.execute(sql`DELETE FROM "session" WHERE sess->>'userId' = ${userId}`);
+      const [deleted] = await tx.delete(users).where(eq(users.id, userId)).returning({ id: users.id });
+      return Boolean(deleted);
+    });
   }
 
   async getTutorialsEnabled(userId: string): Promise<boolean | undefined> {
